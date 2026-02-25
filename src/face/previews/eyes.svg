@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" width="120" height="80">
+  <rect width="120" height="80" fill="#060610"/>
+  <!-- Left eye -->
+  <ellipse cx="38" cy="40" rx="22" ry="20" fill="none" stroke="#0088ff" stroke-width="2.5"/>
+  <circle cx="38" cy="40" r="10" fill="#0088ff" opacity="0.8"/>
+  <circle cx="38" cy="40" r="5" fill="#00ffff"/>
+  <circle cx="41" cy="37" r="2" fill="white" opacity="0.7"/>
+  <!-- Right eye -->
+  <ellipse cx="82" cy="40" rx="22" ry="20" fill="none" stroke="#0088ff" stroke-width="2.5"/>
+  <circle cx="82" cy="40" r="10" fill="#0088ff" opacity="0.8"/>
+  <circle cx="82" cy="40" r="5" fill="#00ffff"/>
+  <circle cx="85" cy="37" r="2" fill="white" opacity="0.7"/>
+  <!-- Glow -->
+  <ellipse cx="38" cy="40" rx="22" ry="20" fill="none" stroke="#00ffff" stroke-width="1" opacity="0.3"/>
+  <ellipse cx="82" cy="40" rx="22" ry="20" fill="none" stroke="#00ffff" stroke-width="1" opacity="0.3"/>
+</svg>

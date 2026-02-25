@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "last_updated": "",
+  "categories": {
+    "uncategorized": {
+      "name": "Uncategorized",
+      "icon": "📁",
+      "color": "#6e7681",
+      "pages": []
+    },
+    "dashboards": {
+      "name": "Dashboards",
+      "icon": "📊",
+      "color": "#4a9eff",
+      "pages": []
+    },
+    "tasks": {
+      "name": "Tasks",
+      "icon": "✅",
+      "color": "#e74c3c",
+      "pages": []
+    },
+    "research": {
+      "name": "Research",
+      "icon": "🔬",
+      "color": "#9b59b6",
+      "pages": []
+    },
+    "entertainment": {
+      "name": "Entertainment",
+      "icon": "🎵",
+      "color": "#e91e63",
+      "pages": []
+    },
+    "social": {
+      "name": "Social",
+      "icon": "🐦",
+      "color": "#1da1f2",
+      "pages": []
+    },
+    "finance": {
+      "name": "Finance",
+      "icon": "💰",
+      "color": "#2ecc71",
+      "pages": []
+    }
+  },
+  "pages": {},
+  "recently_viewed": [],
+  "user_custom_order": null
+}

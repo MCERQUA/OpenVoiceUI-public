@@ -1,0 +1,106 @@
+{
+  "id": "default",
+  "name": "Assistant",
+  "description": "Default voice assistant — clean base agent with interrupt/steer mode",
+  "version": "1.0",
+  "author": "",
+  "created": "",
+  "icon": "🤖",
+
+  "system_prompt": "You are a helpful voice assistant. Be conversational, clear, and concise.",
+
+  "llm": {
+    "provider": "gateway",
+    "model": "glm-4.7",
+    "parameters": {
+      "max_tokens": 256,
+      "temperature": 0.8
+    },
+    "queue": {
+      "mode": "steer",
+      "block_streaming_chunk": 60,
+      "block_streaming_coalesce": false
+    }
+  },
+
+  "voice": {
+    "tts_provider": "groq",
+    "voice_id": "tara",
+    "speed": 1.1,
+    "parallel_sentences": true,
+    "min_sentence_chars": 20,
+    "inter_sentence_gap_ms": null
+  },
+
+  "stt": {
+    "provider": "webspeech",
+    "language": "en-US",
+    "silence_timeout_ms": 1800,
+    "continuous": true,
+    "wake_words": null,
+    "wake_word_required": null,
+    "ptt_default": null
+  },
+
+  "context": {
+    "enable_fts": true,
+    "enable_briefing": false,
+    "enable_history": true,
+    "max_history_messages": 8
+  },
+
+  "features": {
+    "canvas": true,
+    "vision": true,
+    "music": false,
+    "tools": true
+  },
+
+  "ui": {
+    "theme": "dark",
+    "theme_preset": "blue",
+    "face_enabled": true,
+    "face_mood": "neutral",
+    "transcript_panel": true,
+    "thought_bubbles": false,
+    "show_mode_badge": true,
+    "mode_badge_text": "Stream / Interrupt"
+  },
+
+  "speech_normalization": {
+    "strip_markdown": true,
+    "strip_urls": true,
+    "strip_emoji": true,
+    "max_length": 300
+  },
+
+  "conversation": {
+    "greeting": null,
+    "auto_hangup_silence_ms": null,
+    "interruption_enabled": true,
+    "max_response_chars": 300
+  },
+
+  "modes": {
+    "normal": true,
+    "listen": true,
+    "ptt": true,
+    "a2a": false
+  },
+
+  "session": {
+    "key_strategy": "persistent",
+    "key_prefix": "voice-main"
+  },
+
+  "auth": {
+    "required": null,
+    "allowed_roles": null
+  },
+
+  "adapter": "clawdbot",
+  "adapter_config": {
+    "sessionKey": "voice-main-1",
+    "agentId": null
+  }
+}

@@ -1,0 +1,71 @@
+# Provider configuration — P5-T2: Provider registry + auto-discovery
+# ADR-001: YAML format with env interpolation
+# ADR-003: Abstract base class + registry pattern
+#
+# ${ENV_VAR} placeholders are resolved at runtime from environment variables.
+# 'modules' lists Python module paths imported during autodiscover() so that
+# each module's register() calls fire automatically.
+
+llm:
+  default_provider: zai
+  fallback_provider: clawdbot
+  modules:
+    - providers.llm.zai_provider
+    - providers.llm.clawdbot_provider
+
+  providers:
+    zai:
+      name: "Z.AI GLM"
+      api_key: ${ZAI_API_KEY}
+      default_model: glm-4-7-flash
+      priority: 10
+      models:
+        - id: glm-4-7-flash
+          name: "GLM-4.7 Flash"
+        - id: glm-4-plus
+          name: "GLM-4 Plus"
+
+    clawdbot:
+      name: "Clawdbot Gateway"
+      gateway_url: ${CLAWDBOT_GATEWAY_URL}
+      auth_token: ${CLAWDBOT_AUTH_TOKEN}
+      default_agent: main
+      priority: 20
+
+tts:
+  default_provider: supertonic
+  fallback_provider: groq
+  modules:
+    - providers.tts.supertonic_provider
+    - providers.tts.groq_provider
+
+  providers:
+    supertonic:
+      name: "Supertonic ONNX"
+      onnx_dir: /home/mike/supertonic/assets/onnx
+      default_voice: M1
+      priority: 10
+
+    groq:
+      name: "Groq Orpheus"
+      api_key: ${GROQ_API_KEY}
+      model: orpheus-english
+      voice: alloy
+      priority: 20
+
+stt:
+  default_provider: webspeech
+  modules:
+    - providers.stt.webspeech_provider
+    - providers.stt.whisper_provider
+
+  providers:
+    webspeech:
+      name: "Web Speech API"
+      priority: 10
+
+    whisper:
+      name: "Whisper Local"
+      model: base
+      device: cpu
+      priority: 20

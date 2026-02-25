@@ -1,0 +1,291 @@
+/* ===== PartyFXVisualizer CSS ===== */
+/* Extracted from index.html - all styles for the Party FX music visualizer */
+
+/* Autoplay toggle */
+.autoplay-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 10px;
+}
+.autoplay-toggle label {
+    color: #888;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+.autoplay-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: var(--cyan);
+}
+.autoplay-toggle.enabled label {
+    color: var(--cyan);
+}
+
+/* Visualizer toggle */
+.visualizer-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 10px;
+}
+.visualizer-toggle label {
+    color: #888;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+.visualizer-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: #aa00ff;
+}
+.visualizer-toggle.enabled label {
+    color: #aa00ff;
+}
+
+/* ===== PARTY EFFECTS ===== */
+.party-effects-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.party-effects-container.active { opacity: 1; }
+
+/* Center Glow - pulses behind face with audio */
+.center-glow {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0, 136, 255, 0.15) 0%, rgba(0, 255, 255, 0.05) 40%, transparent 70%);
+    filter: blur(60px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Beat Flash - screen flash on bass hits */
+.beat-flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(0, 255, 255, 0.3), transparent 70%);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 1;
+}
+
+/* Screen shake on bass */
+.shake {
+    animation: screenShake 0.1s ease-out;
+}
+@keyframes screenShake {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(calc(var(--shake-amount, 5px) * -1), var(--shake-amount, 5px)); }
+    50% { transform: translate(var(--shake-amount, 5px), calc(var(--shake-amount, 5px) * -1)); }
+    75% { transform: translate(calc(var(--shake-amount, 5px) * -1), calc(var(--shake-amount, 5px) * -1)); }
+}
+
+/* Ripple container */
+.ripple-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.sound-ripple {
+    position: absolute;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    opacity: 0;
+    animation: ripple-expand 1s ease-out forwards;
+}
+@keyframes ripple-expand {
+    0% { width: 0; height: 0; opacity: 0.6; }
+    100% { width: 300px; height: 300px; opacity: 0; }
+}
+
+/* Explosion container */
+.explosion-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.explosion-particle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--orange);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* Fireworks container */
+.fireworks-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.firework-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* Particles - orbit around center */
+.party-particle-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.party-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: var(--cyan);
+    border-radius: 50%;
+    opacity: 0;
+    will-change: transform, opacity;
+}
+
+/* Disco Dots - orbit and react */
+.disco-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.disco-dot {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    background: white;
+    border-radius: 50%;
+    filter: blur(3px);
+    opacity: 0;
+    will-change: transform, opacity;
+}
+
+/* Waveform oscilloscope - FULL SCREEN background effect */
+.oscilloscope-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 0;
+    transition: opacity 0.3s;
+}
+.oscilloscope-container.active { opacity: 1; }
+#oscilloscope-canvas {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 30px var(--cyan)) drop-shadow(0 0 60px var(--blue));
+}
+
+/* ===== VISUALIZER BARS - Equalizer bars around face box ===== */
+
+/* Top/Bottom visualizers - attached to face box */
+.visualizer-container {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 3px;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.visualizer-container.active { opacity: 1; }
+.visualizer-container.top {
+    top: -8px;
+    transform: translateY(-100%);
+    align-items: flex-end;
+}
+.visualizer-container.bottom {
+    bottom: -8px;
+    transform: translateY(100%);
+    align-items: flex-start;
+}
+
+.visualizer-bar {
+    flex: 1;
+    max-width: 8px;
+    border-radius: 3px;
+    transition: height 0.05s ease;
+    box-shadow: 0 0 8px var(--cyan);
+}
+.visualizer-container.top .visualizer-bar {
+    background: linear-gradient(to top,
+        var(--cyan) 0%,
+        var(--blue) 40%,
+        #aa00ff 70%,
+        var(--red) 100%);
+    background-size: 100% 55px;
+    background-position: bottom;
+    background-repeat: no-repeat;
+}
+.visualizer-container.bottom .visualizer-bar {
+    background: linear-gradient(to bottom,
+        var(--cyan) 0%,
+        var(--blue) 40%,
+        #aa00ff 70%,
+        var(--red) 100%);
+    background-size: 100% 55px;
+    background-position: top;
+    background-repeat: no-repeat;
+}
+
+/* Side visualizers - attached to face box, full height */
+.side-visualizer {
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+.side-visualizer.active { opacity: 1; }
+.side-visualizer.left { right: 100%; margin-right: 8px; align-items: flex-end; }
+.side-visualizer.right { left: 100%; margin-left: 8px; align-items: flex-start; }
+
+.side-bar {
+    width: 80px;
+    height: 6px;
+    border-radius: 3px;
+    box-shadow: 0 0 8px var(--cyan);
+    transition: width 0.05s ease;
+}
+.side-visualizer.left .side-bar {
+    background: linear-gradient(to left,
+        var(--cyan) 0%,
+        var(--blue) 40%,
+        #aa00ff 70%,
+        var(--red) 100%);
+    background-size: 85px 100%;
+    background-position: right;
+    background-repeat: no-repeat;
+}
+.side-visualizer.right .side-bar {
+    background: linear-gradient(to right,
+        var(--cyan) 0%,
+        var(--blue) 40%,
+        #aa00ff 70%,
+        var(--red) 100%);
+    background-size: 85px 100%;
+    background-position: left;
+    background-repeat: no-repeat;
+}

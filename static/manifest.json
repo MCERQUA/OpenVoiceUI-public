@@ -1,0 +1,26 @@
+{
+  "name": "OpenVoiceUI",
+  "short_name": "OpenVoiceUI",
+  "description": "AI voice agent — open source voice UI platform",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#060610",
+  "theme_color": "#060610",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "permissions": ["microphone"]
+}

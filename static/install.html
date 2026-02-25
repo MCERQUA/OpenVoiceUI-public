@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Install OpenVoiceUI</title>
+<meta name="theme-color" content="#060610">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #060610;
+    color: #e0e8ff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px 48px;
+    text-align: center;
+  }
+
+  /* ── App Identity ── */
+  .icon {
+    width: 120px;
+    height: 120px;
+    border-radius: 28px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 0 40px rgba(0, 180, 255, 0.35);
+  }
+  .icon img { width: 100%; height: 100%; display: block; }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .tagline {
+    font-size: 1rem;
+    color: #7090b0;
+    margin-bottom: 40px;
+    line-height: 1.5;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 400px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Big install button (Android) ── */
+  .btn-install {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 18px;
+    background: linear-gradient(135deg, #0088ff, #00c8ff);
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-install:active { opacity: 0.85; transform: scale(0.98); }
+
+  .btn-secondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 16px;
+    background: rgba(255,255,255,0.06);
+    color: #c0d8f0;
+    font-size: 1rem;
+    font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-secondary:active { background: rgba(255,255,255,0.1); }
+
+  /* ── iOS Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 20px; text-align: left; }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .step-num {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #0066cc, #0099ff);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .step-body { flex: 1; padding-top: 4px; }
+
+  .step-body strong {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 3px;
+  }
+
+  .step-body span {
+    font-size: 0.85rem;
+    color: #7090b0;
+    line-height: 1.4;
+  }
+
+  .step-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin-top: 6px;
+  }
+
+  /* ── URL copy row ── */
+  .url-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .url-display {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    color: #7090b0;
+    word-break: break-all;
+    text-align: left;
+  }
+
+  .btn-copy {
+    flex-shrink: 0;
+    padding: 10px 16px;
+    background: rgba(0, 136, 255, 0.2);
+    border: 1px solid rgba(0, 136, 255, 0.4);
+    border-radius: 10px;
+    color: #00aaff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-copy.copied { background: rgba(0,200,100,0.2); border-color: rgba(0,200,100,0.4); color: #00cc66; }
+
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #405070;
+    margin-bottom: 18px;
+  }
+
+  /* ── Already installed ── */
+  .installed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,200,100,0.12);
+    border: 1px solid rgba(0,200,100,0.25);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    color: #00cc66;
+    margin-bottom: 24px;
+  }
+
+  /* ── Hidden by default, JS shows correct section ── */
+  .section { display: none; }
+  .section.visible { display: block; }
+
+  .divider {
+    width: 40px;
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    margin: 32px auto;
+  }
+
+  footer {
+    margin-top: 40px;
+    font-size: 0.75rem;
+    color: #304050;
+  }
+</style>
+</head>
+<body>
+
+<div class="icon">
+  <img src="/static/icons/icon-192.png" alt="OpenVoiceUI icon">
+</div>
+
+<h1>OpenVoiceUI</h1>
+<p class="tagline">AI voice agent — always ready,<br>no browser required.</p>
+
+<!-- ── Already installed ── -->
+<div id="section-installed" class="section">
+  <div class="installed-badge">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#00cc66" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="#00cc66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Already installed
+  </div>
+  <a id="open-app-btn" href="/" class="btn-install" style="max-width:400px;text-decoration:none;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/></svg>
+    Open OpenVoiceUI
+  </a>
+</div>
+
+<!-- ── Android: one-tap install ── -->
+<div id="section-android" class="section">
+  <div class="card">
+    <p class="section-title">Install the app</p>
+    <button id="android-install-btn" class="btn-install">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><rect x="3" y="16" width="18" height="4" rx="2"/></svg>
+      Add to Home Screen
+    </button>
+  </div>
+</div>
+
+<!-- ── iOS Safari: step guide ── -->
+<div id="section-ios-safari" class="section">
+  <div class="card">
+    <p class="section-title">Install in 3 taps</p>
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Tap the Share button</strong>
+          <span>It's the icon at the bottom of Safari</span>
+          <div class="step-icon">
+            <!-- Safari share icon -->
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0099ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 6H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-2"/>
+              <path d="M12 2v10M8 6l4-4 4 4"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Tap "Add to Home Screen"</strong>
+          <span>Scroll down in the share sheet to find it</span>
+          <div class="step-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0099ff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg>
+            <span style="color:#7090b0;font-size:0.75rem;margin-left:6px;">Add to Home Screen</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Tap "Add"</strong>
+          <span>OpenVoiceUI will appear on your home screen like any app</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── iOS Chrome / other browser ── -->
+<div id="section-ios-other" class="section">
+  <div class="card">
+    <p class="section-title">Open in Safari to install</p>
+    <p style="font-size:0.9rem;color:#7090b0;margin-bottom:20px;line-height:1.6;">
+      iPhone only lets you install apps through Safari.<br>
+      Copy the link below, open Safari, and paste it.
+    </p>
+    <div class="url-row">
+      <div class="url-display" id="current-url"></div>
+      <button class="btn-copy" id="copy-btn" onclick="copyUrl()">Copy</button>
+    </div>
+    <div style="margin-top:12px;">
+      <a id="safari-link" href="#" class="btn-secondary" style="margin-top:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v1M12 20v1M3 12h1M20 12h1"/><path d="M15 9l-3 3-3-3" opacity="0.4"/><path d="M12 12l3 3" opacity="0.4"/></svg>
+        Open in Safari
+      </a>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="card">
+    <p class="section-title">Then follow these steps in Safari</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Tap the Share button</strong>
+          <span>Bottom of Safari — the box with an arrow</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Tap "Add to Home Screen"</strong>
+          <span>Scroll down in the share sheet</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Tap "Add"</strong>
+          <span>Done — OpenVoiceUI is now installed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Desktop ── -->
+<div id="section-desktop" class="section">
+  <div class="card">
+    <p class="section-title">On your phone</p>
+    <p style="font-size:0.9rem;color:#7090b0;line-height:1.6;margin-bottom:20px;">
+      Open this link on your phone to install OpenVoiceUI as an app.
+    </p>
+    <div class="url-row">
+      <div class="url-display" id="desktop-url"></div>
+      <button class="btn-copy" id="desktop-copy-btn" onclick="copyUrlDesktop()">Copy</button>
+    </div>
+  </div>
+  <div style="margin-top:16px;">
+    <a href="/" class="btn-secondary" style="max-width:400px;">Open in browser anyway</a>
+  </div>
+</div>
+
+<footer>OpenVoiceUI Voice Agent</footer>
+
+<script>
+  // ── Detection ──────────────────────────────────────────────────────────────
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/.test(ua);
+  const isMobile = isIOS || isAndroid;
+  const isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  const isIOSOther = isIOS && !isSafari;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                    || window.navigator.standalone === true;
+
+  const installUrl = window.location.origin + '/install';
+
+  // ── Show correct section ───────────────────────────────────────────────────
+  function show(id) {
+    document.getElementById(id).classList.add('visible');
+  }
+
+  if (isStandalone) {
+    show('section-installed');
+  } else if (isAndroid) {
+    show('section-android');
+  } else if (isSafari) {
+    show('section-ios-safari');
+  } else if (isIOSOther) {
+    document.getElementById('current-url').textContent = installUrl;
+    document.getElementById('safari-link').href = 'x-web-search://?q=' + encodeURIComponent(installUrl);
+    show('section-ios-other');
+  } else {
+    // Desktop
+    document.getElementById('desktop-url').textContent = installUrl;
+    show('section-desktop');
+  }
+
+  // ── Android install prompt ─────────────────────────────────────────────────
+  let _deferredPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredPrompt = e;
+  });
+
+  document.getElementById('android-install-btn')?.addEventListener('click', async () => {
+    if (_deferredPrompt) {
+      _deferredPrompt.prompt();
+      const { outcome } = await _deferredPrompt.userChoice;
+      _deferredPrompt = null;
+      if (outcome === 'accepted') {
+        document.getElementById('section-android').classList.remove('visible');
+        show('section-installed');
+      }
+    } else {
+      // Prompt not available yet — send them to the app directly
+      window.location.href = '/';
+    }
+  });
+
+  // ── Copy helpers ───────────────────────────────────────────────────────────
+  function copyUrl() {
+    navigator.clipboard.writeText(installUrl).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  function copyUrlDesktop() {
+    navigator.clipboard.writeText(installUrl).then(() => {
+      const btn = document.getElementById('desktop-copy-btn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+</script>
+</body>
+</html>

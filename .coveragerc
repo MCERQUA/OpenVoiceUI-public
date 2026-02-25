@@ -1,0 +1,43 @@
+[run]
+source = .
+omit =
+    tests/*
+    backups/*
+    local-model/*
+    generate_dj_sounds.py
+    tools_health_check.py
+    test_supertonic.py
+    */migrations/*
+    */__pycache__/*
+    /home/mike/supertonic/*
+    setup*.py
+    # Excluded from coverage: old monolith being replaced by blueprints (Phase 2-3)
+    server.py
+    # Excluded: external service wrappers requiring live connections to test
+    services/gateway.py
+    services/tts.py
+    # Excluded: optional ElevenLabs feature (P7-T4/T5)
+    routes/elevenlabs_hybrid.py
+    # Excluded: standalone utility scripts
+    memory_client.py
+    supertonic_tts.py
+
+[report]
+omit =
+    tests/*
+    backups/*
+    local-model/*
+    generate_dj_sounds.py
+    tools_health_check.py
+    test_supertonic.py
+    */migrations/*
+    */__pycache__/*
+    /home/mike/supertonic/*
+    setup*.py
+    server.py
+    services/gateway.py
+    services/tts.py
+    routes/elevenlabs_hybrid.py
+    memory_client.py
+    supertonic_tts.py
+show_missing = True

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>OpenVoiceUI</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#060610">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- iOS PWA (Safari "Add to Home Screen") -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OpenVoiceUI">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+
+    <!-- iOS Safari Audio Fix — must run before any AudioContext usage -->
+    <script>(function(){var A=window.AudioContext||window.webkitAudioContext;if(!A)return;window.audioContext=new A();var u=false;function f(){if(u)return;var b=window.audioContext.createBuffer(1,1,22050),s=window.audioContext.createBufferSource();s.buffer=b;s.connect(window.audioContext.destination);(s.start||s.noteOn).call(s,0);window.audioContext.resume().then(function(){u=true;}).catch(function(){});}['touchstart','touchend','click','keydown'].forEach(function(e){document.addEventListener(e,f,{passive:true});});window.isAudioUnlocked=function(){return u;};}());
+    // Register PWA service worker
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js',{scope:'/'}).then(function(r){console.log('[SW] registered:',r.scope);}).catch(function(e){console.warn('[SW] registration failed:',e);});}
+    </script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="src/styles/theme-dark.css?v=3">
+    <link rel="stylesheet" href="src/styles/face.css?v=10">
+    <link rel="stylesheet" href="src/styles/base.css?v=9">
+    <link rel="stylesheet" href="src/ui/settings/SettingsPanel.css?v=3">
+    <!-- Pi performance overrides — loaded after base styles so !important wins -->
+    <link rel="stylesheet" href="src/styles/pi-overrides.css?v=2">
+
+    <!-- Mobile overrides — inlined to bypass any CSS file caching -->
+    <style>
+        @media (max-width: 500px) {
+            .eye-cap-top { top: -13px; }
+        }
+    </style>
+
+    <!-- Pi Mode setup — runs synchronously before app.js module loads -->
+    <script>
+    (function() {
+        window.__PI_MODE = true;
+        document.documentElement.setAttribute('data-pi', 'true');
+
+        // Cap requestAnimationFrame at ~30fps (33ms minimum between frames)
+        var _native = window.requestAnimationFrame.bind(window);
+        var _FRAME_MS = 33;
+        var _last = 0;
+        window.requestAnimationFrame = function(cb) {
+            return _native(function(ts) {
+                if (ts - _last >= _FRAME_MS) {
+                    _last = ts;
+                    cb(ts);
+                }
+                // If frame is dropped, the loop's own next requestAnimationFrame
+                // call reschedules it — no explicit retry needed here.
+            });
+        };
+        console.log('[Pi] Mode active: RAF@30fps, pi-overrides.css loaded');
+    })();
+    </script>
+
+    <!-- UI modules (global scripts — must load before app module) -->
+    <script src="src/ui/themes/ThemeManager.js"></script>
+    <script src="src/ui/face/FaceRenderer.js"></script>
+    <script src="src/ui/settings/SettingsPanel.js"></script>
+
+    <!-- Clerk Authentication -->
+    <script async crossorigin="anonymous"
+        data-clerk-publishable-key="pk_test_c21hcnQtc25hcHBlci04LmNsZXJrLmFjY291bnRzLmRldiQ"
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+    </script>
+</head>
+<body>
+    <!-- App entry point: injects DOM shell + initializes all modules -->
+    <script type="module" src="src/app.js?v=3"></script>
+</body>
+</html>

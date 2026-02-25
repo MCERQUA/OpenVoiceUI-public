@@ -1,0 +1,182 @@
+# Speech Normalization Configuration
+# Controls how text is cleaned and transformed before being sent to TTS providers.
+#
+# Rules are applied in order within each section.
+# Per-profile overrides can extend or replace these global rules.
+#
+# ADR-001: YAML format with comments
+# Referenced by: P5-T5 (Canvas Section 23 — Config-Driven Agent Packages)
+
+# ── Global defaults ────────────────────────────────────────────────────────────
+global:
+  # Strip markdown formatting that sounds awkward when spoken aloud
+  strip_markdown: true
+
+  # Remove URLs entirely (TTS reads them character-by-character otherwise)
+  strip_urls: true
+
+  # Remove emoji characters
+  strip_emoji: true
+
+  # Collapse multiple whitespace/newlines into a single space
+  collapse_whitespace: true
+
+  # Trim leading/trailing whitespace
+  trim: true
+
+  # Maximum text length sent to TTS (hard cap, prevents ONNX overflow)
+  max_length: 800
+
+# ── Abbreviation expansion ─────────────────────────────────────────────────────
+# Applied after markdown/URL stripping.
+# Keys are exact strings (case-sensitive); values are their spoken form.
+# Wrap with word boundaries in the normalizer so "API" doesn't match inside words.
+abbreviations:
+  # Technical
+  "API":    "A P I"
+  "APIs":   "A P Is"
+  "CPU":    "C P U"
+  "GPU":    "G P U"
+  "RAM":    "RAM"
+  "SSD":    "S S D"
+  "VPS":    "V P S"
+  "URL":    "U R L"
+  "URLs":   "U R Ls"
+  "HTML":   "H T M L"
+  "CSS":    "C S S"
+  "JS":     "J S"
+  "JSON":   "J SON"
+  "YAML":   "YAML"
+  "CLI":    "C L I"
+  "SSH":    "S S H"
+  "TTS":    "T T S"
+  "STT":    "S T T"
+  "LLM":    "L L M"
+  "LLMs":   "L L Ms"
+  "AI":     "A I"
+  "ML":     "M L"
+  "UI":     "U I"
+  "UX":     "U X"
+  "DB":     "database"
+  "SQL":    "sequel"
+  "NoSQL":  "no sequel"
+  "HTTP":   "H T T P"
+  "HTTPS":  "H T T P S"
+  "OS":     "O S"
+  "FTS":    "full-text search"
+  "ORM":    "O R M"
+  "SDK":    "S D K"
+  "CI":     "C I"
+  "CD":     "C D"
+  "PR":     "pull request"
+
+  # Common text abbreviations
+  "etc.":   "et cetera"
+  "e.g.":   "for example"
+  "i.e.":   "that is"
+  "vs.":    "versus"
+  "vs":     "versus"
+  "approx.": "approximately"
+  "mins":   "minutes"
+  "hrs":    "hours"
+  "sec":    "second"
+  "secs":   "seconds"
+
+# ── Markdown patterns ─────────────────────────────────────────────────────────
+# Regex patterns to strip or replace when strip_markdown is true.
+# Each entry: {pattern: regex, replacement: string}
+# Patterns are applied in order.
+markdown_patterns:
+  # Code blocks (``` ... ```)
+  - pattern: "```[\\s\\S]*?```"
+    replacement: ""
+
+  # Inline code (`...`)
+  - pattern: "`[^`]+`"
+    replacement: ""
+
+  # Headers (## Header → Header)
+  - pattern: "^#{1,6}\\s+"
+    replacement: ""
+    flags: "multiline"
+
+  # Bold (**text** or __text__)
+  - pattern: "\\*\\*(.+?)\\*\\*"
+    replacement: "\\1"
+
+  - pattern: "__(.+?)__"
+    replacement: "\\1"
+
+  # Italic (*text* or _text_)
+  - pattern: "\\*(.+?)\\*"
+    replacement: "\\1"
+
+  - pattern: "_(.+?)_"
+    replacement: "\\1"
+
+  # Strikethrough (~~text~~)
+  - pattern: "~~(.+?)~~"
+    replacement: "\\1"
+
+  # Horizontal rules
+  - pattern: "^[-*_]{3,}$"
+    replacement: ""
+    flags: "multiline"
+
+  # Markdown links [text](url) → text
+  - pattern: "\\[([^\\]]+)\\]\\([^)]+\\)"
+    replacement: "\\1"
+
+  # Bare markdown images ![alt](url)
+  - pattern: "!\\[[^\\]]*\\]\\([^)]+\\)"
+    replacement: ""
+
+  # Blockquotes (> text)
+  - pattern: "^>\\s*"
+    replacement: ""
+    flags: "multiline"
+
+  # Bullet list markers (-, *, +)
+  - pattern: "^[\\-\\*\\+]\\s+"
+    replacement: ""
+    flags: "multiline"
+
+  # Numbered list markers (1. 2. etc.)
+  - pattern: "^\\d+\\.\\s+"
+    replacement: ""
+    flags: "multiline"
+
+# ── URL pattern ───────────────────────────────────────────────────────────────
+# Applied when strip_urls is true.
+url_pattern: "https?://[^\\s]+"
+
+# ── Emoji pattern ─────────────────────────────────────────────────────────────
+# Unicode ranges for common emoji (applied when strip_emoji is true).
+# Uses a simplified set; the normalizer will use a broader regex.
+emoji_pattern: "[\\U0001F300-\\U0001FFFF\\u2600-\\u27BF]+"
+
+# ── Profile overrides ─────────────────────────────────────────────────────────
+# Per-profile settings that override the global defaults.
+# Profile IDs must match profiles/*.json "id" fields.
+profiles:
+  default:
+    strip_markdown: true
+    strip_urls: true
+    strip_emoji: true
+    max_length: 600
+    abbreviations: {}
+
+  developer:
+    strip_markdown: true
+    strip_urls: true
+    strip_emoji: true
+    max_length: 800
+    # Developer profile: spell out more technical terms
+    abbreviations:
+      "fn":   "function"
+      "var":  "variable"
+      "const": "constant"
+      "req":  "request"
+      "res":  "response"
+      "err":  "error"
+      "cb":   "callback"

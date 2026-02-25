@@ -1,0 +1,67 @@
+/* =============================================================
+   Theme: Dark (default)
+   CSS custom properties and global reset for the dark theme
+   ============================================================= */
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --blue: #0088ff;
+            --blue-dim: #0055aa;
+            --blue-bright: #00aaff;
+            --cyan: #00ffff;
+            --green: #00ff66;
+            --yellow: #ffdd00;
+            --orange: #ff6600;
+            --red: #ff2244;
+            --purple: #aa00ff;
+            --dark-bg: #050508;
+            --panel-bg: #0a0a12;
+        }
+
+        /* Global scrollbar theme — dark charcoal/blue matching app palette */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #1a2a3a #0a0a12;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a12;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1a2a3a;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #254060;
+        }
+        ::-webkit-scrollbar-corner {
+            background: #0a0a12;
+        }
+
+        body {
+            background: var(--dark-bg);
+            font-family: 'Courier New', monospace;
+            color: var(--blue);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
+                linear-gradient(rgba(0,136,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,136,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }

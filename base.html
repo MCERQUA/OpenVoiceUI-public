@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Agent Base</title>
+
+    <!-- iOS Safari Audio Fix - MUST BE FIRST SCRIPT -->
+    <script>
+    (function(){
+        window.AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!window.AudioContext) return;
+
+        window.audioContext = new window.AudioContext();
+        var audioUnlocked = false;
+
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            var buffer = window.audioContext.createBuffer(1, 1, 22050);
+            var source = window.audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(window.audioContext.destination);
+            source.start ? source.start(0) : source.noteOn(0);
+
+            window.audioContext.resume().then(function() {
+                audioUnlocked = true;
+                console.log('[iOS Fix] Audio unlocked');
+            }).catch(function(e) {
+                console.log('[iOS Fix] Resume failed:', e);
+            });
+        }
+
+        ['touchstart', 'touchend', 'click', 'keydown'].forEach(function(event) {
+            document.addEventListener(event, unlockAudio, { passive: true });
+        });
+
+        window.isAudioUnlocked = function() { return audioUnlocked; };
+    })();
+    </script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --blue: #0088ff;
+            --blue-dim: #0055aa;
+            --blue-bright: #00aaff;
+            --cyan: #00ffff;
+            --green: #00ff66;
+            --yellow: #ffdd00;
+            --orange: #ff6600;
+            --red: #ff2244;
+            --dark-bg: #050508;
+            --panel-bg: #0a0a12;
+        }
+
+        body {
+            background: var(--dark-bg);
+            font-family: 'Courier New', monospace;
+            color: var(--blue);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
+                linear-gradient(rgba(0,136,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,136,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Main face area */
+        .face-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* Eyes container */
+        .eyes-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            margin-bottom: 50px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .eye {
+            position: relative;
+            width: 120px;
+            height: 140px;
+        }
+
+        .eye-white {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #ffffff 0%, #e8e8e8 70%, #cccccc 100%);
+            border-radius: 50% 50% 45% 45%;
+            box-shadow: 0 0 30px rgba(0, 136, 255, 0.3), inset 0 -10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .pupil-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s ease-out;
+        }
+
+        .pupil {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle at 30% 30%, #333 0%, #000 70%);
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .pupil::before {
+            content: '';
+            position: absolute;
+            width: 15px; height: 15px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            top: 8px; left: 8px;
+        }
+
+        .pupil::after {
+            content: '';
+            position: absolute;
+            width: 8px; height: 8px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            top: 20px; right: 12px;
+        }
+
+        /* Eyelids */
+        .eyelid-top {
+            position: absolute;
+            width: 130%; height: 75%;
+            background: var(--dark-bg);
+            top: -60%; left: -15%;
+            border-radius: 0 0 50% 50%;
+            transition: transform 0.15s ease-in-out;
+            z-index: 10;
+        }
+
+        .eyelid-bottom {
+            position: absolute;
+            width: 130%; height: 40%;
+            background: var(--dark-bg);
+            bottom: -35%; left: -15%;
+            border-radius: 50% 50% 0 0;
+            transition: transform 0.15s ease-in-out;
+            z-index: 10;
+        }
+
+        .eye-cap-top {
+            position: absolute;
+            width: 120%; height: 27px;
+            background: var(--dark-bg);
+            top: -15px; left: -10%;
+            z-index: 11;
+        }
+
+        /* Blink animation */
+        .eye.blinking .eyelid-top { transform: translateY(90%); }
+        .eye.blinking .eyelid-bottom { transform: translateY(-30%); }
+
+        /* Mood: Angry */
+        .eye.angry .eyelid-top { transform: translateY(40%) rotate(var(--angry-rotate, 0deg)); }
+        .left-eye.angry .eyelid-top { --angry-rotate: 15deg; transform-origin: right center; }
+        .right-eye.angry .eyelid-top { --angry-rotate: -15deg; transform-origin: left center; }
+
+        /* Mood: Sad */
+        .eye.sad .eyelid-top { transform: translateY(30%) rotate(var(--sad-rotate, 0deg)); }
+        .left-eye.sad .eyelid-top { --sad-rotate: -10deg; transform-origin: left center; }
+        .right-eye.sad .eyelid-top { --sad-rotate: 10deg; transform-origin: right center; }
+
+        /* Mood: Happy */
+        .eye.happy .eyelid-bottom { transform: translateY(-60%); }
+
+        /* Mood: Thinking */
+        .eye.thinking .pupil-container { transform: translate(15px, -15px) !important; }
+        .left-eye.thinking .eyelid-top { transform: translateY(25%); }
+
+        /* Mood: Surprised */
+        .eye.surprised .eye-white { transform: scale(1.1); }
+        .eye.surprised .pupil { transform: scale(0.8); }
+
+        /* Mood: Listening */
+        .eye.listening .pupil { animation: listening-pulse 1.5s ease-in-out infinite; }
+        @keyframes listening-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Waveform mouth */
+        .mouth-container {
+            width: 200px;
+            height: 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        #waveform-canvas {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 10px var(--cyan));
+        }
+
+        /* Status indicator */
+        .status-indicator {
+            position: absolute;
+            top: 10px; right: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--panel-bg);
+            padding: 8px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--blue-dim);
+        }
+
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: var(--red);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected { background: var(--green); }
+        .status-dot.connecting { background: var(--yellow); }
+        .status-dot.speaking { background: var(--cyan); animation: none; }
+        .status-dot.listening { background: var(--green); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Control buttons */
+        .controls-container {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .call-button, .camera-button, .wake-button, .music-button {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            border: 2px solid var(--blue);
+            background: var(--panel-bg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.2s;
+        }
+
+        .call-button:hover, .camera-button:hover, .wake-button:hover, .music-button:hover {
+            background: var(--blue-dim);
+            transform: scale(1.1);
+        }
+
+        .call-button.active { background: var(--green); border-color: var(--green); }
+        .call-button.connecting { background: var(--yellow); border-color: var(--yellow); }
+        .camera-button.active { background: var(--blue); }
+        .wake-button.active { background: var(--cyan); border-color: var(--cyan); }
+        .music-button.active { background: var(--orange); border-color: var(--orange); }
+
+        /* Camera preview in button */
+        .camera-button { position: relative; overflow: hidden; }
+        .camera-button video {
+            position: absolute;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .camera-button.active video { opacity: 1; }
+        .camera-button.active .camera-icon { display: none; }
+
+        /* Error message */
+        .error-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid var(--red);
+            color: var(--red);
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .error-message.visible { display: block; }
+
+        /* Face notification */
+        .face-notification {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--panel-bg);
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 10px 20px;
+            border-radius: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+
+        .face-notification.visible { opacity: 1; }
+
+        /* Now Playing display */
+        .now-playing {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--panel-bg);
+            border: 1px solid var(--orange);
+            padding: 10px 15px;
+            border-radius: 10px;
+            display: none;
+            z-index: 100;
+        }
+
+        .now-playing.visible { display: flex; flex-direction: column; gap: 8px; }
+
+        .track-info { display: flex; flex-direction: column; }
+        .track-label { font-size: 10px; color: var(--orange); }
+        .track-name { font-size: 14px; color: white; }
+
+        .music-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .music-controls button {
+            background: none;
+            border: 1px solid var(--orange);
+            color: var(--orange);
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .music-controls button:hover { background: var(--orange); color: white; }
+
+        .volume-slider {
+            width: 100%;
+            accent-color: var(--orange);
+        }
+
+        /* Auth section */
+        #auth-section {
+            position: fixed;
+            top: 10px;
+            right: 80px;
+            z-index: 1000;
+        }
+
+        #login-btn {
+            background: var(--blue);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+
+        #login-btn:hover { background: var(--blue-bright); }
+    </style>
+
+    <!-- Clerk Authentication -->
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="pk_test_c21hcnQtc25hcHBlci04LmNsZXJrLmFjY291bnRzLmRldiQ"
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="text/javascript">
+    </script>
+</head>
+<body>
+    <!-- User Auth Section -->
+    <div id="auth-section">
+        <div id="user-button"></div>
+        <div id="sign-in-button" style="display: none;">
+            <button id="login-btn">Login</button>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="clerk-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div id="sign-in-container" style="background: var(--panel-bg); padding: 20px; border-radius: 10px; border: 1px solid var(--blue);"></div>
+    </div>
+
+    <!-- Status indicator -->
+    <div class="status-indicator">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">OFFLINE</span>
+    </div>
+
+    <!-- Main Face -->
+    <div class="face-container">
+        <div class="eyes-container">
+            <!-- Left Eye -->
+            <div class="eye left-eye" id="left-eye">
+                <div class="eye-white">
+                    <div class="pupil-container" id="left-pupil-container">
+                        <div class="pupil"></div>
+                    </div>
+                </div>
+                <div class="eyelid-top"></div>
+                <div class="eyelid-bottom"></div>
+                <div class="eye-cap-top"></div>
+            </div>
+
+            <!-- Right Eye -->
+            <div class="eye right-eye" id="right-eye">
+                <div class="eye-white">
+                    <div class="pupil-container" id="right-pupil-container">
+                        <div class="pupil"></div>
+                    </div>
+                </div>
+                <div class="eyelid-top"></div>
+                <div class="eyelid-bottom"></div>
+                <div class="eye-cap-top"></div>
+            </div>
+        </div>
+
+        <!-- Waveform Mouth -->
+        <div class="mouth-container">
+            <canvas id="waveform-canvas"></canvas>
+        </div>
+    </div>
+
+    <!-- Face notification -->
+    <div class="face-notification" id="face-notification"></div>
+
+    <!-- Error message -->
+    <div class="error-message" id="error-message"></div>
+
+    <!-- Control buttons -->
+    <div class="controls-container">
+        <button class="call-button" id="call-button" onclick="window.voiceAgent?.toggle()">
+            <span id="call-icon">📞</span>
+        </button>
+
+        <button class="wake-button" id="wake-button" onclick="window.toggleWakeWord?.()">
+            <span id="wake-icon">🎤</span>
+        </button>
+
+        <button class="camera-button" id="camera-button" onclick="window.cameraModule?.toggle()">
+            <span class="camera-icon">📷</span>
+            <video id="camera-video" autoplay playsinline muted></video>
+        </button>
+
+        <button class="music-button" id="music-button" onclick="window.musicPlayer?.toggle()">
+            <span id="music-icon">🎵</span>
+        </button>
+    </div>
+
+    <!-- Now Playing display -->
+    <div class="now-playing" id="now-playing">
+        <div class="track-info">
+            <span class="track-label">NOW PLAYING</span>
+            <span class="track-name" id="track-name">-</span>
+        </div>
+        <div class="music-controls">
+            <button onclick="window.musicPlayer?.prev()">⏮</button>
+            <button onclick="window.musicPlayer?.togglePlay()" id="play-pause-btn">⏸</button>
+            <button onclick="window.musicPlayer?.next()">⏭</button>
+        </div>
+        <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="85"
+               onchange="window.musicPlayer?.setVolume(this.value)">
+    </div>
+
+    <!-- Hidden elements -->
+    <audio id="music-player" style="display: none;"></audio>
+    <canvas id="capture-canvas" style="display: none;"></canvas>
+
+    <!-- ========== MODULAR JAVASCRIPT ========== -->
+    <script type="module">
+        // ===== CONFIGURATION =====
+        const CONFIG = {
+            serverUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://localhost:5001'
+                : 'http://localhost:5001',
+
+            // Voice adapter to use: 'hume', 'elevenlabs', 'openai', etc.
+            voiceAdapter: 'hume',
+
+            // Hume config
+            hume: {
+                configId: '3c824978-efa3-40df-bac2-023127b30e31'
+            },
+
+            // ElevenLabs config (for comparison)
+            elevenlabs: {
+                agentId: 'agent_0801kb2240vcea2ayx0a2qxmheha'
+            }
+        };
+
+        // ===== FACE MODULE =====
+        const FaceModule = {
+            leftEye: document.getElementById('left-eye'),
+            rightEye: document.getElementById('right-eye'),
+            leftPupil: document.getElementById('left-pupil-container'),
+            rightPupil: document.getElementById('right-pupil-container'),
+            currentMood: 'neutral',
+
+            setMood(mood) {
+                const validMoods = ['neutral', 'happy', 'sad', 'angry', 'thinking', 'surprised', 'listening'];
+                if (!validMoods.includes(mood)) mood = 'neutral';
+
+                // Remove all mood classes
+                validMoods.forEach(m => {
+                    this.leftEye.classList.remove(m);
+                    this.rightEye.classList.remove(m);
+                });
+
+                // Add new mood
+                if (mood !== 'neutral') {
+                    this.leftEye.classList.add(mood);
+                    this.rightEye.classList.add(mood);
+                }
+                this.currentMood = mood;
+            },
+
+            blink() {
+                this.leftEye.classList.add('blinking');
+                this.rightEye.classList.add('blinking');
+                setTimeout(() => {
+                    this.leftEye.classList.remove('blinking');
+                    this.rightEye.classList.remove('blinking');
+                }, 150);
+            },
+
+            updateEyePosition(x, y) {
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const maxOffset = 15;
+
+                const offsetX = ((x - centerX) / centerX) * maxOffset;
+                const offsetY = ((y - centerY) / centerY) * maxOffset;
+
+                const transform = `translate(${offsetX}px, ${offsetY}px)`;
+                this.leftPupil.style.transform = transform;
+                this.rightPupil.style.transform = transform;
+            },
+
+            startRandomBehavior() {
+                // Random blinking
+                const scheduleBlink = () => {
+                    setTimeout(() => {
+                        this.blink();
+                        scheduleBlink();
+                    }, 2000 + Math.random() * 4000);
+                };
+                scheduleBlink();
+
+                // Random looking
+                let lastMouseMove = Date.now();
+                document.addEventListener('mousemove', (e) => {
+                    lastMouseMove = Date.now();
+                    this.updateEyePosition(e.clientX, e.clientY);
+                });
+
+                const scheduleRandomLook = () => {
+                    setTimeout(() => {
+                        if (Date.now() - lastMouseMove > 2000) {
+                            const x = window.innerWidth * (0.2 + Math.random() * 0.6);
+                            const y = window.innerHeight * (0.15 + Math.random() * 0.5);
+                            this.updateEyePosition(x, y);
+                        }
+                        scheduleRandomLook();
+                    }, 1500 + Math.random() * 2500);
+                };
+                scheduleRandomLook();
+            }
+        };
+
+        // ===== WAVEFORM MODULE =====
+        const WaveformModule = {
+            canvas: document.getElementById('waveform-canvas'),
+            ctx: null,
+            amplitude: 0,
+            targetAmplitude: 0,
+            animationId: null,
+
+            init() {
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.width = 200;
+                this.canvas.height = 60;
+                this.animate();
+            },
+
+            setAmplitude(value) {
+                this.targetAmplitude = Math.min(1, Math.max(0, value));
+            },
+
+            animate() {
+                this.amplitude += (this.targetAmplitude - this.amplitude) * 0.1;
+
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.strokeStyle = '#00ffff';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+
+                const centerY = this.canvas.height / 2;
+                for (let x = 0; x < this.canvas.width; x++) {
+                    const wave = Math.sin(x * 0.1 + Date.now() * 0.005) * this.amplitude * 20;
+                    const y = centerY + wave;
+                    if (x === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                }
+
+                this.ctx.stroke();
+                this.animationId = requestAnimationFrame(() => this.animate());
+            }
+        };
+
+        // ===== STATUS MODULE =====
+        const StatusModule = {
+            dot: document.getElementById('status-dot'),
+            text: document.getElementById('status-text'),
+
+            update(status, label) {
+                this.dot.className = 'status-dot ' + status;
+                this.text.textContent = label || status.toUpperCase();
+            }
+        };
+
+        // ===== CAMERA MODULE =====
+        const CameraModule = {
+            video: document.getElementById('camera-video'),
+            button: document.getElementById('camera-button'),
+            canvas: document.getElementById('capture-canvas'),
+            stream: null,
+            frameInterval: null,
+            currentIdentity: null,
+
+            async toggle() {
+                if (this.stream) {
+                    this.stop();
+                } else {
+                    await this.start();
+                }
+            },
+
+            async start() {
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: 640, height: 480 }
+                    });
+                    this.video.srcObject = this.stream;
+                    this.button.classList.add('active');
+                    console.log('Camera enabled');
+
+                    // Start sending frames to server
+                    this.startFrameCapture();
+
+                    // Identify face after a moment
+                    setTimeout(() => this.identifyFace(), 1000);
+                } catch (error) {
+                    console.error('Camera error:', error);
+                    UIModule.showError('Camera access denied');
+                }
+            },
+
+            stop() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                this.video.srcObject = null;
+                this.button.classList.remove('active');
+                this.currentIdentity = null;
+                if (this.frameInterval) {
+                    clearInterval(this.frameInterval);
+                    this.frameInterval = null;
+                }
+                console.log('Camera disabled');
+            },
+
+            startFrameCapture() {
+                this.frameInterval = setInterval(() => {
+                    if (!this.stream) return;
+
+                    const ctx = this.canvas.getContext('2d');
+                    this.canvas.width = 640;
+                    this.canvas.height = 480;
+                    ctx.drawImage(this.video, 0, 0, 640, 480);
+
+                    const imageData = this.canvas.toDataURL('image/jpeg', 0.7);
+
+                    fetch(`${CONFIG.serverUrl}/api/frame`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: imageData })
+                    }).catch(e => console.error('Frame upload error:', e));
+                }, 2000);
+            },
+
+            async identifyFace() {
+                if (!this.stream) return;
+
+                const ctx = this.canvas.getContext('2d');
+                this.canvas.width = 640;
+                this.canvas.height = 480;
+                ctx.drawImage(this.video, 0, 0, 640, 480);
+
+                const imageData = this.canvas.toDataURL('image/jpeg', 0.8);
+
+                try {
+                    const response = await fetch(`${CONFIG.serverUrl}/api/identify`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: imageData })
+                    });
+                    const data = await response.json();
+
+                    if (data.name && data.name !== 'unknown') {
+                        this.currentIdentity = data;
+                        UIModule.showFaceNotification(`Recognized: ${data.name}`);
+                    }
+                } catch (error) {
+                    console.error('Face identification error:', error);
+                }
+            }
+        };
+
+        // ===== MUSIC MODULE =====
+        const MusicModule = {
+            audio: document.getElementById('music-player'),
+            button: document.getElementById('music-button'),
+            nowPlaying: document.getElementById('now-playing'),
+            trackName: document.getElementById('track-name'),
+            volumeSlider: document.getElementById('volume-slider'),
+            isPlaying: false,
+            currentTrack: null,
+            volume: 0.85,
+
+            toggle() {
+                if (this.isPlaying) {
+                    this.pause();
+                } else {
+                    this.play();
+                }
+            },
+
+            async play(trackName) {
+                try {
+                    const url = new URL(`${CONFIG.serverUrl}/api/music`);
+                    url.searchParams.set('action', 'play');
+                    if (trackName) url.searchParams.set('track', trackName);
+
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.track) {
+                        this.audio.src = `${CONFIG.serverUrl}/music/${data.track}`;
+                        this.audio.volume = this.volume;
+                        await this.audio.play();
+                        this.isPlaying = true;
+                        this.currentTrack = data.track;
+                        this.button.classList.add('active');
+                        this.nowPlaying.classList.add('visible');
+                        this.trackName.textContent = data.title || data.track;
+                    }
+                } catch (error) {
+                    console.error('Music play error:', error);
+                }
+            },
+
+            pause() {
+                this.audio.pause();
+                this.isPlaying = false;
+                this.button.classList.remove('active');
+            },
+
+            togglePlay() {
+                if (this.audio.paused) {
+                    this.audio.play();
+                    this.isPlaying = true;
+                    this.button.classList.add('active');
+                } else {
+                    this.pause();
+                }
+            },
+
+            next() {
+                this.play(); // Server returns random track
+            },
+
+            prev() {
+                // Could implement track history
+                this.play();
+            },
+
+            setVolume(value) {
+                this.volume = value / 100;
+                this.audio.volume = this.volume;
+            },
+
+            duck(shouldDuck) {
+                this.audio.volume = shouldDuck ? this.volume * 0.3 : this.volume;
+            }
+        };
+
+        // ===== UI MODULE =====
+        const UIModule = {
+            errorMessage: document.getElementById('error-message'),
+            faceNotification: document.getElementById('face-notification'),
+            callButton: document.getElementById('call-button'),
+            callIcon: document.getElementById('call-icon'),
+
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.classList.add('visible');
+                setTimeout(() => {
+                    this.errorMessage.classList.remove('visible');
+                }, 5000);
+            },
+
+            showFaceNotification(text) {
+                this.faceNotification.textContent = text;
+                this.faceNotification.classList.add('visible');
+                setTimeout(() => {
+                    this.faceNotification.classList.remove('visible');
+                }, 3000);
+            },
+
+            setCallButtonState(state) {
+                this.callButton.classList.remove('active', 'connecting');
+                if (state === 'connected') {
+                    this.callButton.classList.add('active');
+                    this.callIcon.textContent = '📵';
+                } else if (state === 'connecting') {
+                    this.callButton.classList.add('connecting');
+                    this.callIcon.textContent = '⏳';
+                } else {
+                    this.callIcon.textContent = '📞';
+                }
+            }
+        };
+
+        // ===== AUTH MODULE =====
+        const AuthModule = {
+            user: null,
+
+            async init() {
+                if (typeof Clerk === 'undefined') {
+                    console.log('Clerk not loaded, waiting...');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+
+                try {
+                    await Clerk.load();
+
+                    if (Clerk.user) {
+                        this.user = Clerk.user;
+                        Clerk.mountUserButton(document.getElementById('user-button'));
+                        document.getElementById('sign-in-button').style.display = 'none';
+                    } else {
+                        document.getElementById('sign-in-button').style.display = 'block';
+                        document.getElementById('login-btn').onclick = () => {
+                            const modal = document.getElementById('clerk-modal');
+                            modal.style.display = 'flex';
+                            Clerk.mountSignIn(document.getElementById('sign-in-container'));
+                        };
+                    }
+
+                    Clerk.addListener(({ user }) => {
+                        this.user = user;
+                        if (user) {
+                            document.getElementById('clerk-modal').style.display = 'none';
+                            Clerk.mountUserButton(document.getElementById('user-button'));
+                            document.getElementById('sign-in-button').style.display = 'none';
+                        }
+                    });
+                } catch (error) {
+                    console.error('Auth init error:', error);
+                }
+            },
+
+            isLoggedIn() {
+                return !!this.user;
+            },
+
+            getUser() {
+                return this.user;
+            }
+        };
+
+        // ===== VOICE ADAPTER INTERFACE =====
+        // This is the interface that different AI providers implement
+        class VoiceAdapter {
+            constructor(config) {
+                this.config = config;
+                this.isConnected = false;
+                this.isConnecting = false;
+                this.callbacks = {
+                    onConnect: () => {},
+                    onDisconnect: () => {},
+                    onSpeaking: () => {},
+                    onListening: () => {},
+                    onTranscript: (text, isUser) => {},
+                    onError: (error) => {}
+                };
+            }
+
+            setCallbacks(callbacks) {
+                this.callbacks = { ...this.callbacks, ...callbacks };
+            }
+
+            async connect() {
+                throw new Error('connect() must be implemented by adapter');
+            }
+
+            disconnect() {
+                throw new Error('disconnect() must be implemented by adapter');
+            }
+
+            async toggle() {
+                if (this.isConnected) {
+                    this.disconnect();
+                } else {
+                    await this.connect();
+                }
+            }
+        }
+
+        // ===== HUME ADAPTER =====
+        class HumeAdapter extends VoiceAdapter {
+            constructor(config) {
+                super(config);
+                this.socket = null;
+                this.mediaRecorder = null;
+                this.audioContext = null;
+                this.audioQueue = [];
+                this.isPlayingAudio = false;
+            }
+
+            async getAccessToken() {
+                const response = await fetch(`${this.config.serverUrl}/api/hume/token`);
+                if (!response.ok) throw new Error('Failed to get Hume access token');
+                const data = await response.json();
+                return data.access_token;
+            }
+
+            async connect() {
+                if (this.isConnecting || this.isConnected) return;
+                this.isConnecting = true;
+
+                try {
+                    const accessToken = await this.getAccessToken();
+                    const wsUrl = `wss://api.hume.ai/v0/evi/chat?config_id=${this.config.hume.configId}&access_token=${accessToken}`;
+
+                    this.socket = new WebSocket(wsUrl);
+
+                    this.socket.onopen = async () => {
+                        this.isConnected = true;
+                        this.isConnecting = false;
+                        this.callbacks.onConnect();
+                        await this.startAudioCapture();
+                    };
+
+                    this.socket.onmessage = (event) => {
+                        const message = JSON.parse(event.data);
+                        this.handleMessage(message);
+                    };
+
+                    this.socket.onerror = (error) => {
+                        console.error('Hume WebSocket error:', error);
+                        this.callbacks.onError('Connection error');
+                    };
+
+                    this.socket.onclose = () => {
+                        this.isConnected = false;
+                        this.isConnecting = false;
+                        this.stopAudioCapture();
+                        this.callbacks.onDisconnect();
+                    };
+                } catch (error) {
+                    this.isConnecting = false;
+                    this.callbacks.onError(error.message);
+                    throw error;
+                }
+            }
+
+            disconnect() {
+                if (this.socket) {
+                    this.socket.close();
+                    this.socket = null;
+                }
+                this.stopAudioCapture();
+                this.isConnected = false;
+            }
+
+            handleMessage(message) {
+                switch (message.type) {
+                    case 'user_message':
+                        if (message.message?.content) {
+                            this.callbacks.onTranscript(message.message.content, true);
+                        }
+                        this.callbacks.onListening();
+                        break;
+
+                    case 'assistant_message':
+                        if (message.message?.content) {
+                            this.callbacks.onTranscript(message.message.content, false);
+                        }
+                        break;
+
+                    case 'audio_output':
+                        if (message.data) {
+                            this.callbacks.onSpeaking();
+                            this.queueAudio(message.data);
+                        }
+                        break;
+
+                    case 'assistant_end':
+                        this.callbacks.onListening();
+                        break;
+
+                    case 'user_interruption':
+                        this.audioQueue = [];
+                        this.isPlayingAudio = false;
+                        break;
+
+                    case 'error':
+                        this.callbacks.onError(message.message || 'Unknown error');
+                        break;
+                }
+            }
+
+            async startAudioCapture() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
+                    });
+
+                    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                        ? 'audio/webm;codecs=opus' : 'audio/webm';
+
+                    this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+                    this.mediaRecorder.ondataavailable = async (event) => {
+                        if (event.data.size > 0 && this.socket?.readyState === WebSocket.OPEN) {
+                            const arrayBuffer = await event.data.arrayBuffer();
+                            const base64 = this.arrayBufferToBase64(arrayBuffer);
+                            this.socket.send(JSON.stringify({ type: 'audio_input', data: base64 }));
+                        }
+                    };
+
+                    this.mediaRecorder.start(100);
+                } catch (error) {
+                    console.error('Audio capture error:', error);
+                    this.callbacks.onError('Microphone access denied');
+                }
+            }
+
+            stopAudioCapture() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+            }
+
+            queueAudio(base64Data) {
+                this.audioQueue.push(base64Data);
+                if (!this.isPlayingAudio) this.playNextAudio();
+            }
+
+            async playNextAudio() {
+                if (this.audioQueue.length === 0) {
+                    this.isPlayingAudio = false;
+                    return;
+                }
+
+                this.isPlayingAudio = true;
+                const base64Data = this.audioQueue.shift();
+
+                try {
+                    if (!this.audioContext) {
+                        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+
+                    const audioData = this.base64ToArrayBuffer(base64Data);
+                    const audioBuffer = await this.audioContext.decodeAudioData(audioData);
+
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(this.audioContext.destination);
+                    source.onended = () => this.playNextAudio();
+                    source.start(0);
+                } catch (error) {
+                    console.error('Audio playback error:', error);
+                    this.playNextAudio();
+                }
+            }
+
+            arrayBufferToBase64(buffer) {
+                const bytes = new Uint8Array(buffer);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return btoa(binary);
+            }
+
+            base64ToArrayBuffer(base64) {
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes.buffer;
+            }
+        }
+
+        // ===== MAIN INITIALIZATION =====
+        async function init() {
+            console.log('Initializing AI Voice Agent Base...');
+
+            // Initialize modules
+            WaveformModule.init();
+            FaceModule.startRandomBehavior();
+            await AuthModule.init();
+
+            // Create voice adapter based on config
+            let voiceAdapter;
+            if (CONFIG.voiceAdapter === 'hume') {
+                voiceAdapter = new HumeAdapter(CONFIG);
+            }
+            // Add more adapters: else if (CONFIG.voiceAdapter === 'elevenlabs') { ... }
+
+            // Set up voice adapter callbacks
+            voiceAdapter.setCallbacks({
+                onConnect: () => {
+                    StatusModule.update('connected', 'CONNECTED');
+                    UIModule.setCallButtonState('connected');
+                    FaceModule.setMood('happy');
+                    FaceModule.blink();
+                    setTimeout(() => FaceModule.setMood('neutral'), 1000);
+                },
+                onDisconnect: () => {
+                    StatusModule.update('disconnected', 'OFFLINE');
+                    UIModule.setCallButtonState('disconnected');
+                    FaceModule.setMood('neutral');
+                    WaveformModule.setAmplitude(0);
+                },
+                onSpeaking: () => {
+                    StatusModule.update('speaking', 'SPEAKING');
+                    FaceModule.setMood('neutral');
+                    WaveformModule.setAmplitude(0.7);
+                    MusicModule.duck(true);
+                },
+                onListening: () => {
+                    StatusModule.update('listening', 'LISTENING');
+                    FaceModule.setMood('listening');
+                    WaveformModule.setAmplitude(0);
+                    MusicModule.duck(false);
+                },
+                onTranscript: (text, isUser) => {
+                    console.log(`${isUser ? 'User' : 'AI'}: ${text}`);
+                },
+                onError: (error) => {
+                    UIModule.showError(error);
+                    FaceModule.setMood('sad');
+                    setTimeout(() => FaceModule.setMood('neutral'), 2000);
+                }
+            });
+
+            // Expose to window for button onclick handlers
+            window.voiceAgent = voiceAdapter;
+            window.cameraModule = CameraModule;
+            window.musicPlayer = MusicModule;
+            window.faceModule = FaceModule;
+
+            console.log('AI Voice Agent Base initialized!');
+            console.log('Using voice adapter:', CONFIG.voiceAdapter);
+        }
+
+        // Start initialization
+        init().catch(console.error);
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-sock>=0.8.0
+websockets>=13.0
+python-dotenv>=1.0.0
+google-generativeai>=0.8.0
+psutil>=5.9.0
+# deepface and tf-keras are installed manually on VPS (not compatible with Netlify build)
+# pip install deepface tf-keras
+# Supertonic TTS dependencies
+onnxruntime>=1.23.1
+soundfile>=0.12.1
+librosa>=0.10.0
+# Clerk JWT authentication
+PyJWT>=2.8.0
+cryptography>=42.0.0
