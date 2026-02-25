@@ -1,143 +1,247 @@
-# OpenVoiceUI — v3.1
+# OpenVoiceUI
 
-A modular browser-based voice agent platform. Dual-mode: local free voice via OpenClaw Gateway, or premium voice via Hume EVI.
-
-| Mode | Agent | Backend | Use Case |
-|------|-------|---------|----------|
-| **Pi-Guy** (PRIMARY) | Clawdbot | OpenClaw Gateway + Z.AI GLM-4.7 | Free local voice agent |
-| **DJ-FoamBot** | DJ-FoamBot | Hume EVI v3 + custom voice | Secondary/premium mode |
+A plug-and-play browser-based voice agent platform. Connect any LLM, any TTS provider, and any AI framework — with a built-in music player, AI music generation, and a live web canvas display system.
 
 ---
 
-## Technology Stack
+## What It Is
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Flask (blueprint architecture) |
-| Frontend | ES modules (no framework) |
-| LLM | Z.AI GLM-4.7 via OpenClaw Gateway (WEBCHAT mode) |
-| STT | Web Speech API (3s silence timeout) |
-| TTS (primary) | Supertonic ONNX (local, free) |
-| TTS (cloud) | Groq Orpheus (`canopylabs/orpheus-v1-english`) |
-| TTS (alt) | Qwen3 via fal.ai |
-| Canvas | Fullscreen iframe + page manifest system |
-| Face/mood | Custom EyeFace + EmotionEngine |
+OpenVoiceUI is a modular voice UI shell. You bring the intelligence (LLM + TTS), it handles everything else:
+
+- **Voice I/O** — browser-based STT with push-to-talk, wake words, or continuous mode
+- **Animated Face** — responsive eye-face avatar with 7 mood states driven by emotion detection
+- **Web Canvas** — fullscreen iframe display system for AI-generated HTML pages, dashboards, and reports
+- **Music Player** — background music with crossfade, AI ducking, and AI trigger commands
+- **Music Generation** — AI-generated track support via Suno or fal.ai integrations
+- **Soundboard** — configurable sound effects with text-trigger detection
+- **Agent Profiles** — switch personas/providers without restart via JSON config
+- **Live Instruction Editor** — hot-reload system prompt from the admin panel
+- **Admin Dashboard** — session control, playlist editor, face picker, theme editor
+
+---
+
+## Plug-and-Play Architecture
+
+### LLM Providers
+Connect to any LLM via the gateway adapter or add your own provider:
+
+| Provider | Status |
+|----------|--------|
+| Any OpenClaw-compatible gateway | ✓ Built-in |
+| Z.AI (GLM models) | ✓ Built-in |
+| OpenAI-compatible APIs | ✓ Via adapter |
+| Ollama (local) | ✓ Via adapter |
+| Hume EVI | ✓ Built-in adapter |
+
+### TTS Providers
+| Provider | Type | Cost |
+|----------|------|------|
+| **Supertonic** | Local ONNX | Free |
+| **Groq Orpheus** | Cloud, fast | ~$0.05/min |
+| **Qwen3-TTS** | Cloud, expressive | ~$0.003/min |
+| **Hume EVI** | Cloud, emotion-aware | ~$0.032/min |
+
+### STT
+- Web Speech API (browser-native, no API key needed)
+- Whisper (local)
+- Hume EVI (full-duplex)
 
 ---
 
 ## Features
 
-- **Voice Conversation** — STT → LLM → parallel TTS pipeline, first audio ~1s after LLM done
-- **Animated Face** — 7 mood states driven by EmotionEngine
-- **Canvas System** — Fullscreen iframe display for AI-generated HTML pages
-- **Music Player** — Tracks with crossfade and ducking
-- **DJ Soundboard** — Air horns, scratches, clips, text triggers
-- **Profile Switching** — Switch agents without restart
-- **Live Instruction Editor** — Edit system prompt with hot-reload
-- **Admin Dashboard** — Session reset, playlist editor, face picker, theme editor
+### Voice Modes
+- **Continuous** — always listening, silence timeout triggers send
+- **Push-to-Talk** — hold button or configurable hotkey (keyboard/mouse)
+- **Listen** — passive monitoring mode
+- **Agent-to-Agent** — A2A communication panel
+
+### Canvas System
+- AI can open and display any HTML page in a fullscreen overlay
+- Manifest-based page discovery with search, categories, and starred pages
+- Triggered via `[CANVAS:page-id]` tags in AI responses
+- Real-time SSE updates from server
+
+### Music Player
+- Background playlist with crossfade (1.5s smooth transitions)
+- Auto-ducking during TTS (volume drops, restores after)
+- AI voice commands: play, stop, skip, volume up/down
+- Generated tracks (AI-composed) + custom playlists
+- Track history (back button, 20-track buffer)
+
+### Profile System
+Define agents in JSON — each profile configures:
+- LLM provider, model, parameters
+- TTS voice, speed, parallel sentence mode
+- STT silence timeout, PTT mode, wake words
+- UI theme, face mood, enabled features
+- Session key strategy
 
 ---
 
 ## Project Structure
 
 ```
-├── server.py               Entry point + Flask app
-├── app.py                  Flask app factory (create_app())
+├── server.py                   Entry point
+├── app.py                      Flask app factory
 ├── routes/
-│   ├── conversation.py     Voice conversation + parallel TTS streaming
-│   ├── canvas.py           Canvas display, manifest, proxy
-│   ├── instructions.py     Live instruction editor
-│   ├── music.py            Music control
-│   ├── admin.py            Admin + server stats
-│   ├── profiles.py         Agent profiles
-│   ├── theme.py            Theming
-│   └── static_files.py     Static file serving
+│   ├── conversation.py         Voice + parallel TTS streaming
+│   ├── canvas.py               Canvas display system
+│   ├── instructions.py         Live system prompt editor
+│   ├── music.py                Music control
+│   ├── profiles.py             Agent profile management
+│   ├── admin.py                Admin + server stats
+│   └── ...
 ├── services/
-│   ├── gateway.py          OpenClaw Gateway (persistent WebSocket)
-│   └── tts.py              TTS service wrapper
-├── tts_providers/
-│   ├── supertonic_provider.py
-│   ├── groq_provider.py
-│   ├── qwen3_provider.py
-│   └── providers_config.json
-├── profiles/               Agent profile JSON files
+│   ├── gateway.py              Gateway WebSocket connection
+│   └── tts.py                  TTS service wrapper
+├── tts_providers/              TTS provider implementations
+├── providers/                  LLM/STT provider implementations
+├── profiles/                   Agent profile JSON files
+│   └── default.json            Base agent (edit to personalize)
 ├── prompts/
-│   └── voice-system-prompt.md   Hot-reload system prompt
+│   └── voice-system-prompt.md  Hot-reload system prompt
 ├── config/
-│   ├── default.yaml
-│   └── flags.yaml
+│   ├── default.yaml            Server configuration
+│   └── speech_normalization.yaml
 ├── src/
-│   ├── app.js              Frontend
-│   ├── providers/WebSpeechSTT.js
-│   ├── ui/AppShell.js
-│   └── styles/base.css
-└── canvas-manifest.json    Canvas page registry
+│   ├── app.js                  Frontend core (~5900 lines)
+│   ├── adapters/               Adapter implementations
+│   │   ├── ClawdBotAdapter.js
+│   │   ├── hume-evi.js
+│   │   ├── elevenlabs-classic.js
+│   │   └── _template.js        Build your own adapter
+│   ├── core/                   EventBus, VoiceSession, EmotionEngine
+│   ├── features/               MusicPlayer, Soundboard
+│   ├── shell/                  Orchestrator, bridges, profile discovery
+│   ├── ui/                     AppShell, SettingsPanel, ThemeManager
+│   └── providers/              WebSpeechSTT, TTSPlayer
+├── sounds/                     Soundboard audio files
+├── music/                      Music playlist folder
+├── generated_music/            AI-generated tracks
+└── canvas-manifest.json        Canvas page registry
 ```
 
 ---
 
-## Setup
+## Quick Start
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env   # fill in your keys
+git clone https://github.com/MCERQUA/OpenVoiceUI-public
+cd OpenVoiceUI-public
+pip install -r backend/requirements.txt
+cp .env.example .env
+# Edit .env with your keys
 python3 server.py
 ```
 
+Open `http://localhost:5001` in your browser.
+
 ---
 
-## Environment Variables
+## Configuration
+
+### Environment Variables
 
 ```bash
-# OpenClaw Gateway (Pi-Guy mode)
-CLAWDBOT_AUTH_TOKEN=your-token
+# Gateway / LLM
 CLAWDBOT_GATEWAY_URL=ws://127.0.0.1:18791
+CLAWDBOT_AUTH_TOKEN=your-token
 
-# TTS
-GROQ_API_KEY=your-groq-key
-FAL_KEY=your-fal-key
+# TTS — choose one or more
+GROQ_API_KEY=your-groq-key          # Groq Orpheus TTS
+FAL_KEY=your-fal-key                # Qwen3-TTS via fal.ai
+SUPERTONIC_MODEL_PATH=/path/to/onnx # Local Supertonic TTS
 
-# Hume EVI (DJ-FoamBot mode — optional)
+# Hume EVI (optional full-duplex voice mode)
 HUME_API_KEY=your-hume-key
-HUME_SECRET_KEY=your-hume-secret
 HUME_CONFIG_ID=your-config-id
-HUME_VOICE_ID=your-voice-id
+
+# Auth (optional — uses Clerk)
+CLERK_PUBLISHABLE_KEY=pk_live_...
 
 # Server
-PORT=15001
+PORT=5001
 ```
+
+### Personalizing Your Agent
+
+Edit `profiles/default.json` to configure your agent:
+
+```json
+{
+  "name": "My Assistant",
+  "system_prompt": "You are a helpful voice assistant...",
+  "llm": { "provider": "gateway", "model": "glm-4.7" },
+  "voice": { "tts_provider": "groq", "voice_id": "tara" },
+  "features": { "canvas": true, "music": true, "tools": true }
+}
+```
+
+Edit `prompts/voice-system-prompt.md` to change the system prompt — changes are hot-reloaded with no restart.
 
 ---
 
-## API Quick Reference
+## API Reference
 
 ```bash
 # Health
 GET  /health/live
 GET  /health/ready
 
-# Voice conversation (streaming NDJSON)
+# Voice (streaming NDJSON)
 POST /api/conversation?stream=1
-     {"message": "Hello", "tts_provider": "groq", "voice": "daniel", "session_id": "test"}
+     {"message": "Hello", "tts_provider": "groq", "voice": "tara"}
 
 # Profiles
 GET  /api/profiles
-POST /api/profiles/activate  {"name": "pi-guy"}
+POST /api/profiles/activate  {"profile_id": "default"}
 
 # Canvas
 GET  /api/canvas/manifest
-POST /api/canvas/manifest/sync
 
 # Session
 POST /api/session/reset  {"type": "hard"}
+
+# TTS
+GET  /api/tts/providers
+POST /api/tts/generate  {"text": "Hello", "provider": "groq", "voice": "tara"}
 ```
 
 ---
 
-## Credits
+## Building an Adapter
 
-- [OpenClaw](https://github.com/openclaw) — Gateway / agent framework
-- [Z.AI](https://z.ai) — GLM-4.7 LLM
-- [Groq](https://groq.com) — Orpheus TTS
-- [Supertonic](https://github.com/supertonic) — Local ONNX TTS
-- [Hume AI](https://hume.ai) — EVI (optional secondary mode)
+To connect a new LLM or voice framework, use `src/adapters/_template.js` as a starting point. Adapters implement a simple interface:
+
+```js
+export class MyAdapter {
+  async init(bridge, config) { ... }
+  async start() { ... }
+  async stop() { ... }
+  async destroy() { ... }
+}
+```
+
+Register it in `src/shell/adapter-registry.js` and reference it in your profile JSON.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Backend | Python / Flask (blueprint architecture) |
+| Frontend | Vanilla JS ES modules (no framework) |
+| STT | Web Speech API / Whisper / Hume |
+| TTS | Supertonic / Groq Orpheus / Qwen3 / Hume EVI |
+| LLM | Any via gateway adapter |
+| Canvas | Fullscreen iframe + SSE manifest system |
+| Music Gen | Suno API / fal.ai |
+| Auth | Clerk (optional) |
+
+---
+
+## License
+
+MIT
