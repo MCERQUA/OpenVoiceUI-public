@@ -1934,23 +1934,36 @@ inject();
                 try {
                     await Clerk.load();
 
-                    if (Clerk.user) {
-                        this.user = Clerk.user;
-                        TranscriptPanel.userName = Clerk.user.firstName || Clerk.user.username || 'User';
+                    const _grantAccess = () => {
                         this._hideAuthGate();
                         this.renderUserMenu();
                         document.getElementById('sign-in-button').style.display = 'none';
+                    };
+
+                    if (Clerk.user) {
+                        this.user = Clerk.user;
+                        TranscriptPanel.userName = Clerk.user.firstName || Clerk.user.username || 'User';
+                        this._hideAuthGate();  // hide Clerk spinner immediately
+                        const allowed = await this._checkAllowlist();
+                        if (!allowed) { this._showWaitlistGate(Clerk.user); return; }
+                        _grantAccess();
                     } else {
                         // Show blocking gate — app does NOT continue until signed in
                         this._showAuthGate();
                         await new Promise(resolve => {
-                            const unsubscribe = Clerk.addListener(({ user }) => {
+                            const unsubscribe = Clerk.addListener(async ({ user }) => {
                                 if (user) {
                                     this.user = user;
                                     TranscriptPanel.userName = user.firstName || user.username || 'User';
-                                    this._hideAuthGate();
-                                    this.renderUserMenu();
-                                    document.getElementById('sign-in-button').style.display = 'none';
+                                    this._hideAuthGate();  // hide Clerk spinner immediately
+                                    const allowed = await this._checkAllowlist();
+                                    if (!allowed) {
+                                        this._showWaitlistGate(user);
+                                        unsubscribe?.();
+                                        resolve();
+                                        return;
+                                    }
+                                    _grantAccess();
                                     unsubscribe?.();
                                     resolve();
                                 }
@@ -1996,6 +2009,51 @@ inject();
             _hideAuthGate() {
                 const gate = document.getElementById('auth-gate');
                 if (gate) gate.style.display = 'none';
+            },
+
+            async _checkAllowlist() {
+                try {
+                    const token = await Clerk.session?.getToken();
+                    if (!token) return false;
+                    const resp = await fetch(`${CONFIG.serverUrl}/api/auth/check`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    return resp.ok;
+                } catch (e) {
+                    console.warn('Allowlist check failed:', e);
+                    return false;
+                }
+            },
+
+            _showWaitlistGate(user) {
+                const email = user?.primaryEmailAddress?.emailAddress || '';
+
+                let gate = document.getElementById('waitlist-gate');
+                if (!gate) {
+                    gate = document.createElement('div');
+                    gate.id = 'waitlist-gate';
+                    gate.style.cssText = [
+                        'position:fixed;inset:0;z-index:99999',
+                        'display:flex;align-items:center;justify-content:center',
+                        'background:#0d1117;flex-direction:column;gap:20px;padding:32px',
+                    ].join(';');
+                    document.body.appendChild(gate);
+                }
+                gate.style.display = 'flex';
+                gate.innerHTML = `
+                    <div style="text-align:center;max-width:440px">
+                        <div style="font-size:26px;font-weight:700;color:#58a6ff;letter-spacing:-0.5px;margin-bottom:20px">OpenVoiceUI</div>
+                        <div style="font-size:15px;font-weight:600;color:#e6edf3;margin-bottom:12px">We're still in development</div>
+                        <div style="color:#8b949e;font-size:14px;line-height:1.7;margin-bottom:24px">
+                            ${email ? `<strong style="color:#c9d1d9">${email}</strong> has been added to the waitlist.<br>` : ''}
+                            We'll reach out with updates as we get closer to launch.
+                        </div>
+                        <button onclick="Clerk.signOut().then(()=>location.reload())" style="
+                            background:#21262d;color:#8b949e;border:1px solid #30363d;
+                            padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;
+                        ">Sign out</button>
+                    </div>
+                `;
             },
 
             async getToken() {
@@ -2691,6 +2749,10 @@ inject();
                     // Helper: strip canvas and music tags from display text
                     const stripCanvasTags = (text) => {
                         return text
+                            .replace(/```html[\s\S]*?```/gi, '')  // complete html fences
+                            .replace(/```[\s\S]*?```/g, '')        // complete generic fences
+                            .replace(/```html[\s\S]*/gi, '')       // unclosed html fence (streaming)
+                            .replace(/```[\s\S]*/g, '')            // unclosed generic fence (streaming)
                             .replace(/\[CANVAS_MENU\]/gi, '')
                             .replace(/\[CANVAS:[^\]]*\]/gi, '')
                             .replace(/\[MUSIC_PLAY(?::[^\]]*)?\]/gi, '')
@@ -2698,6 +2760,7 @@ inject();
                             .replace(/\[MUSIC_NEXT\]/gi, '')
                             .replace(/\[SESSION_RESET\]/gi, '')
                             .replace(/\[SUNO_GENERATE:[^\]]*\]/gi, '')
+                            .replace(/\[SPOTIFY:[^\]]*\]/gi, '')
                             .trim();
                     };
 
@@ -2750,6 +2813,26 @@ inject();
                             canvasCommandsProcessed.add('SUNO_GENERATE');
                             const sunoPrompt = sunoMatch[1].trim();
                             window.sunoModule?.generate(sunoPrompt);
+                        }
+                        // Check for [SPOTIFY:track name|artist] — switches player to Spotify mode
+                        const spotifyMatch = text.match(/\[SPOTIFY:([^|\]]+)(?:\|([^\]]+))?\]/i);
+                        if (spotifyMatch && !canvasCommandsProcessed.has('SPOTIFY')) {
+                            canvasCommandsProcessed.add('SPOTIFY');
+                            const spotifyTrack = spotifyMatch[1].trim();
+                            const spotifyArtist = spotifyMatch[2]?.trim() || '';
+                            window.musicPlayer?.playSpotify(spotifyTrack, spotifyArtist);
+                        }
+                        // Early HTML canvas: as soon as </html> lands in the stream, save and show
+                        // Don't wait for text_done — avoids incomplete-response failures
+                        if (!canvasCommandsProcessed.has('HTML_CANVAS')) {
+                            const htmlEarlyMatch =
+                                text.match(/```html\s*(<!DOCTYPE\s+html[\s\S]*?<\/html>)/i) ||
+                                text.match(/```html\s*(<html[\s\S]*?<\/html>)/i);
+                            if (htmlEarlyMatch) {
+                                canvasCommandsProcessed.add('HTML_CANVAS');
+                                console.log('[Canvas] Complete HTML detected in stream, saving early...');
+                                this._saveAndShowHtml(htmlEarlyMatch[1].trim());
+                            }
                         }
                     };
 
@@ -2831,8 +2914,8 @@ inject();
                                         this.displayMessage('assistant', displayText);
                                     }
 
-                                    // Process any remaining canvas commands
-                                    this.handleCanvasCommands(cleanedResponse);
+                                    // Process any remaining canvas commands (pass processed set to avoid double-save)
+                                    this.handleCanvasCommands(cleanedResponse, canvasCommandsProcessed);
 
                                     this.callbacks.onMessage('assistant', displayText);
                                     TranscriptPanel.finalizeStreaming(displayText);
@@ -2987,7 +3070,45 @@ inject();
                 historyDiv.scrollTop = historyDiv.scrollHeight;
             }
 
-            handleCanvasCommands(text) {
+            _saveAndShowHtml(html) {
+                const titleMatch = html.match(/<title>([^<]*)<\/title>/i) ||
+                                   html.match(/<h1[^>]*>([^<]*)<\/h1>/i);
+                const title = titleMatch ? titleMatch[1].trim() : 'Canvas Page';
+                console.log('Canvas HTML detected, saving to server...');
+                fetch(`${CONFIG.serverUrl}/api/canvas/pages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html, title }),
+                })
+                .then(r => r.json())
+                .then(result => {
+                    if (result.url) {
+                        console.log('Canvas page saved:', result.url);
+                        const iframe = document.getElementById('canvas-iframe');
+                        if (iframe) {
+                            iframe.src = result.url;
+                            CanvasControl.show();
+                            localStorage.setItem('canvas_last_page', result.filename);
+                            this.notifyCanvasContext(result.url, title, html.substring(0, 200));
+                        }
+                        // Reload manifest so new page appears in canvas menu
+                        window.CanvasMenu?.loadManifest?.();
+                    }
+                })
+                .catch(err => {
+                    console.warn('Failed to save canvas page, using blob fallback:', err);
+                    const blob = new Blob([html], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const iframe = document.getElementById('canvas-iframe');
+                    if (iframe) {
+                        iframe.src = url;
+                        CanvasControl.show();
+                        this.notifyCanvasContext('inline-html', title, html.substring(0, 200));
+                    }
+                });
+            }
+
+            handleCanvasCommands(text, processedSet = null) {
                 // NOTE: [CANVAS:page-id] and [CANVAS_MENU] tags are already handled
                 // by checkCanvasInStream() during streaming. This function only handles
                 // legacy JSON/HTML block patterns that aren't checked during streaming.
@@ -3014,27 +3135,26 @@ inject();
                     }
                 }
 
+                // Skip HTML canvas if already handled during streaming
+                if (processedSet?.has('HTML_CANVAS')) return;
+
                 // Also check for canvas.update API calls in the response
                 const htmlRegex = /```html\s*([\s\S]*?)```/g;
                 let htmlMatch;
                 while ((htmlMatch = htmlRegex.exec(text)) !== null) {
                     const html = htmlMatch[1].trim();
                     if (html.startsWith('<!DOCTYPE') || html.startsWith('<html') || html.startsWith('<h1')) {
-                        console.log('Canvas HTML detected, loading into canvas');
-                        const blob = new Blob([html], { type: 'text/html' });
-                        const url = URL.createObjectURL(blob);
-                        const iframe = document.getElementById('canvas-iframe');
-                        if (iframe) {
-                            iframe.src = url;
-                            CanvasControl.show();
-
-                            // Extract title from HTML for context
-                            const titleMatch = html.match(/<title>([^<]*)<\/title>/i) ||
-                                               html.match(/<h1[^>]*>([^<]*)<\/h1>/i);
-                            const title = titleMatch ? titleMatch[1].trim() : 'Canvas Page';
-                            this.notifyCanvasContext('inline-html', title, html.substring(0, 200));
-                        }
+                        this._saveAndShowHtml(html);
+                        return; // handled
                     }
+                }
+
+                // Fallback: catch raw HTML pasted without code fences
+                // (agent sometimes outputs HTML directly without ```html``` wrapping)
+                const rawHtmlMatch = text.match(/(<!DOCTYPE\s+html[\s\S]*?<\/html>)/i) ||
+                                     text.match(/(<html[\s\S]*?<\/html>)/i);
+                if (rawHtmlMatch) {
+                    this._saveAndShowHtml(rawHtmlMatch[1].trim());
                 }
             }
 

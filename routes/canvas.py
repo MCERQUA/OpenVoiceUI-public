@@ -22,11 +22,16 @@ from flask import Blueprint, Response, jsonify, redirect, request, send_file
 # Constants
 # ---------------------------------------------------------------------------
 
-CANVAS_MANIFEST_PATH = Path(__file__).parent.parent / 'canvas-manifest.json'
-CANVAS_PAGES_DIR = Path(os.getenv('CANVAS_PAGES_DIR', '/var/www/canvas-display/pages/'))
+_APP_ROOT = Path(__file__).parent.parent
+CANVAS_MANIFEST_PATH = _APP_ROOT / 'canvas-manifest.json'
+# Default: per-instance pages dir inside the app root, so each deployment has its own pages.
+# Override with CANVAS_PAGES_DIR in .env if you want a custom location.
+CANVAS_PAGES_DIR = Path(os.getenv('CANVAS_PAGES_DIR', str(_APP_ROOT / 'canvas-pages')))
 CANVAS_SSE_PORT = int(os.getenv('CANVAS_SSE_PORT', '3030'))
 CANVAS_SESSION_PORT = int(os.getenv('CANVAS_SESSION_PORT', '3002'))
 BRAIN_EVENTS_PATH = Path('/tmp/piguy-voice-events.jsonl')
+# Self-hosted installs: auth is disabled by default. Set CANVAS_REQUIRE_AUTH=true to enable Clerk JWT checks.
+CANVAS_REQUIRE_AUTH = os.getenv('CANVAS_REQUIRE_AUTH', 'false').lower() == 'true'
 
 CATEGORY_KEYWORDS = {
     'dashboards': ['dashboard', 'monitor', 'status', 'overview', 'control panel', 'panel'],
@@ -130,7 +135,7 @@ def extract_canvas_page_content(page_path: str, max_chars: int = 1000) -> str:
     try:
         if page_path.startswith('/pages/'):
             page_path = page_path[7:]
-        full_path = Path(f'/var/www/canvas-display/pages/{page_path}')
+        full_path = CANVAS_PAGES_DIR / page_path
         if not full_path.exists():
             return ''
         html_raw = full_path.read_text(errors='ignore')
@@ -539,28 +544,27 @@ def canvas_pages_proxy(path):
     """Serve files from Canvas pages directory.
 
     Access control:
-    - Pages with is_public=True are served to anyone.
-    - All other pages require a valid Clerk session token.
+    - If CANVAS_REQUIRE_AUTH=true: pages with is_public=False require a valid Clerk session token.
+    - Default (self-hosted): all pages served without auth.
     """
     try:
-        # Check page visibility before serving
-        page_id = Path(path).stem
-        manifest = load_canvas_manifest()
-        page_meta = manifest.get('pages', {}).get(page_id, {})
-        is_public = page_meta.get('is_public', False)
-
-        if not is_public:
-            from auth.middleware import get_token_from_request, verify_clerk_token
-            token = get_token_from_request()
-            user_id = verify_clerk_token(token) if token else None
-            if not user_id:
-                # Redirect browser to login; return 401 for XHR
-                if request.headers.get('Accept', '').startswith('text/html'):
-                    return redirect('/?redirect=/pages/' + path)
-                return 'Unauthorized', 401
+        # Auth check — only when explicitly enabled (opt-in for self-hosted deployments)
+        if CANVAS_REQUIRE_AUTH:
+            page_id = Path(path).stem
+            manifest = load_canvas_manifest()
+            page_meta = manifest.get('pages', {}).get(page_id, {})
+            is_public = page_meta.get('is_public', False)
+            if not is_public:
+                from auth.middleware import get_token_from_request, verify_clerk_token
+                token = get_token_from_request()
+                user_id = verify_clerk_token(token) if token else None
+                if not user_id:
+                    if request.headers.get('Accept', '').startswith('text/html'):
+                        return redirect('/?redirect=/pages/' + path)
+                    return 'Unauthorized', 401
 
         # P7-T3 security: prevent path traversal
-        resolved = _safe_canvas_path('/var/www/canvas-display/pages', path)
+        resolved = _safe_canvas_path(str(CANVAS_PAGES_DIR), path)
         if resolved is None:
             return 'Invalid path', 400
         if resolved.exists():
@@ -570,10 +574,10 @@ def canvas_pages_proxy(path):
                 # Inject padding to clear UI chrome (side buttons: 44px, top tab: 24px)
                 _padding_css = (
                     b'<style id="canvas-ui-clearance">'
-                    b'html,body{margin:0!important;'
-                    b'padding-top:12px!important;'
-                    b'padding-left:16px!important;'
-                    b'padding-right:13px!important;'
+                    b'html,body{'
+                    b'padding-top:15px!important;'
+                    b'padding-left:15px!important;'
+                    b'padding-right:15px!important;'
                     b'box-sizing:border-box!important;}'
                     b'</style>'
                 )
@@ -827,10 +831,58 @@ def track_access(page_id):
     return jsonify({'status': 'ok'})
 
 
+@canvas_bp.route('/api/canvas/pages', methods=['POST'])
+def create_canvas_page():
+    """
+    Save a new canvas page from HTML content.
+    POST /api/canvas/pages
+    Body: {"filename": "my-page.html", "html": "<html>...</html>", "title": "My Page"}
+    Returns: {"filename": "my-page.html", "page_id": "my-page", "url": "/pages/my-page.html"}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'html' not in data:
+            return jsonify({'error': 'Missing html content'}), 400
+
+        html_content = data['html']
+        title = data.get('title', 'Canvas Page')
+
+        # Derive filename from title if not provided
+        raw_filename = data.get('filename', '')
+        if not raw_filename:
+            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+            raw_filename = f'{slug}.html'
+
+        # Sanitize: strip directory traversal, ensure .html
+        filename = Path(raw_filename).name
+        if not filename.endswith('.html'):
+            filename += '.html'
+
+        CANVAS_PAGES_DIR.mkdir(parents=True, exist_ok=True)
+        filepath = CANVAS_PAGES_DIR / filename
+
+        filepath.write_text(html_content, encoding='utf-8')
+        logger.info(f'Canvas page saved: {filename} ({len(html_content)} bytes)')
+
+        page_meta = add_page_to_manifest(filename, title, content=html_content[:500])
+        _notify_brain('canvas_page_created', filename=filename, title=title)
+
+        return jsonify({
+            'filename': filename,
+            'page_id': Path(filename).stem,
+            'url': f'/pages/{filename}',
+            'title': title,
+            'category': page_meta.get('category', 'uncategorized'),
+        })
+    except Exception as exc:
+        logger.error(f'Canvas page create error: {exc}')
+        return jsonify({'error': str(exc)}), 500
+
+
 @canvas_bp.route('/api/canvas/mtime/<path:filename>', methods=['GET'])
 def canvas_mtime(filename):
     """Return last modified time of a canvas page (frontend uses to detect changes)."""
-    canvas_dir = Path('/var/www/canvas-display/pages')
+    canvas_dir = CANVAS_PAGES_DIR
     filepath = canvas_dir / filename
     if not filepath.exists() or not filepath.is_file():
         return jsonify({'error': 'not found'}), 404
