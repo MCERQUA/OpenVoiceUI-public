@@ -3235,7 +3235,10 @@ inject();
                     if (window._sleepAfterResponse) {
                         window._sleepAfterResponse = false;
                         console.log('[Sleep] Farewell audio done — returning to wake-word mode');
-                        setTimeout(() => this.disconnect(), 600);
+                        setTimeout(() => {
+                            ModeManager.clawdbotMode?.stopVoiceInput();
+                            UIModule.setCallButtonState('disconnected');
+                        }, 600);
                     }
                     return;
                 }
