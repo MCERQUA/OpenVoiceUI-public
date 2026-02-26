@@ -83,3 +83,4 @@ docs/session-*.md
 # Personal/server-specific session notes
 setup-notes-*.md
 setup-base-sudo.sh
+*.bak
