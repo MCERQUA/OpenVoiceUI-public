@@ -23,7 +23,7 @@ OpenVoiceUI is a modular voice UI shell. You bring the intelligence (LLM + TTS),
 ## Plug-and-Play Architecture
 
 ### LLM Providers
-Connect to any LLM via the gateway adapter or add your own provider:
+Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are drop-in:
 
 | Provider | Status |
 |----------|--------|
@@ -32,6 +32,7 @@ Connect to any LLM via the gateway adapter or add your own provider:
 | OpenAI-compatible APIs | ✓ Via adapter |
 | Ollama (local) | ✓ Via adapter |
 | Hume EVI | ✓ Built-in adapter |
+| LangChain, AutoGen, custom LLM | ✓ Via gateway plugin |
 
 ### TTS Providers
 | Provider | Type | Cost |
@@ -93,10 +94,16 @@ Define agents in JSON — each profile configures:
 │   ├── admin.py                Admin + server stats
 │   └── ...
 ├── services/
-│   ├── gateway.py              Gateway WebSocket connection
+│   ├── gateway_manager.py      Gateway registry + plugin loader + router
+│   ├── gateways/
+│   │   ├── base.py             GatewayBase abstract class
+│   │   └── openclaw.py         OpenClaw gateway implementation
 │   └── tts.py                  TTS service wrapper
 ├── tts_providers/              TTS provider implementations
 ├── providers/                  LLM/STT provider implementations
+├── plugins/                    Gateway plugins (gitignored, drop-in)
+│   ├── README.md               Plugin authoring guide
+│   └── example-gateway/        Reference implementation
 ├── profiles/                   Agent profile JSON files
 │   └── default.json            Base agent (edit to personalize)
 ├── prompts/
@@ -198,7 +205,7 @@ OpenVoiceUI connects to an [OpenClaw](https://openclaw.dev) gateway via persiste
 
 **OpenClaw ≥ 2026.2.24**: Requires Ed25519 device identity signing. OpenVoiceUI handles this automatically — a `.device-identity.json` file is generated on first run (never committed to git). The gateway auto-approves local loopback clients on first connect.
 
-**Without OpenClaw**: The voice pipeline won't work. The frontend will load but all `/api/conversation` calls will fail with a gateway error.
+**Without a configured gateway**: The frontend will load but `/api/conversation` calls will fail. OpenClaw is the default — or drop in any gateway plugin as a replacement.
 
 ---
 
@@ -287,6 +294,44 @@ export class MyAdapter {
 ```
 
 Register it in `src/shell/adapter-registry.js` and reference it in your profile JSON.
+
+---
+
+## Gateway Plugins
+
+The backend uses a plugin system for LLM gateways. Drop a folder into `plugins/`, restart — it's live.
+
+```
+plugins/
+  my-gateway/
+    plugin.json   ← manifest (id, provides, requires_env)
+    gateway.py    ← class Gateway(GatewayBase)
+```
+
+**plugin.json:**
+```json
+{
+  "id": "my-gateway",
+  "provides": "gateway",
+  "gateway_class": "Gateway",
+  "requires_env": ["MY_API_KEY"]
+}
+```
+
+**gateway.py** subclasses `services.gateways.base.GatewayBase` and implements `stream_to_queue()`.
+
+To route a profile to your gateway, add `gateway_id` to its `adapter_config`:
+```json
+"adapter_config": { "gateway_id": "my-gateway", "sessionKey": "my-1" }
+```
+
+Gateways can also call each other for inter-agent delegation:
+```python
+from services.gateway_manager import gateway_manager
+result = gateway_manager.ask("openclaw", "Summarise this: " + text, session_key)
+```
+
+Full guide: [`plugins/README.md`](plugins/README.md)
 
 ---
 

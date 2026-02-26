@@ -6,7 +6,7 @@ Thanks for your interest in contributing. This is a voice agent platform — con
 
 ## Before You Start
 
-OpenVoiceUI requires a running [OpenClaw](https://openclaw.dev) gateway to function. You can't test the voice pipeline without one. If you don't have one, you can still contribute to:
+The voice pipeline requires a running gateway. The default is [OpenClaw](https://openclaw.dev), but any gateway plugin works — including the `example-gateway` stub for offline development. If you don't have a gateway, you can still contribute to:
 
 - Frontend UI (the face, settings panel, music player)
 - TTS provider implementations (unit-testable in isolation)
@@ -34,17 +34,25 @@ Open `http://localhost:5001` in your browser.
 ## Project Structure
 
 ```
-routes/         Flask blueprints — one file per feature area
-services/       Backend services (gateway WS connection, TTS wrapper)
-tts_providers/  TTS provider implementations
-src/            Frontend (vanilla JS ES modules)
-  adapters/     LLM/voice framework adapters
-  core/         EventBus, VoiceSession, EmotionEngine
-  features/     MusicPlayer, Soundboard
-  ui/           AppShell, SettingsPanel, ThemeManager
-profiles/       Agent configuration JSON files
-prompts/        System prompt (hot-reloaded, no restart needed)
-config/         Server config YAML
+routes/             Flask blueprints — one file per feature area
+services/           Backend services
+  gateway_manager.py  Gateway registry, plugin loader, router
+  gateways/           Gateway implementations
+    base.py           GatewayBase abstract class
+    openclaw.py       OpenClaw implementation
+  tts.py            TTS service wrapper
+tts_providers/      TTS provider implementations
+plugins/            Gateway plugins (gitignored, drop-in)
+  example-gateway/  Reference implementation
+  README.md         Plugin authoring guide
+src/                Frontend (vanilla JS ES modules)
+  adapters/         LLM/voice framework adapters
+  core/             EventBus, VoiceSession, EmotionEngine
+  features/         MusicPlayer, Soundboard
+  ui/               AppShell, SettingsPanel, ThemeManager
+profiles/           Agent configuration JSON files
+prompts/            System prompt (hot-reloaded, no restart needed)
+config/             Server config YAML
 ```
 
 ---
@@ -65,6 +73,20 @@ config/         Server config YAML
 2. Implement the four lifecycle methods: `init`, `start`, `stop`, `destroy`
 3. Register it in `src/shell/adapter-registry.js`
 4. Document required config keys in your adapter's comments
+
+---
+
+## Adding a Gateway Plugin
+
+Gateway plugins connect the server to any LLM backend (LangChain, AutoGen, direct API calls, etc.) and run alongside OpenClaw simultaneously.
+
+1. Copy `plugins/example-gateway/` to `plugins/my-gateway/`
+2. Edit `plugin.json` — set your `id` and any required env vars in `requires_env`
+3. Implement `gateway.py` — subclass `GatewayBase`, implement `stream_to_queue()`
+4. Restart the server — it auto-discovers plugins on startup
+5. Set `"gateway_id": "my-gateway"` in a profile's `adapter_config` to route traffic to it
+
+See [`plugins/README.md`](plugins/README.md) for the full event protocol and `gateway_manager.ask()` for inter-gateway calls.
 
 ---
 

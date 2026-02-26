@@ -37,8 +37,12 @@ server.py (thin orchestrator)
   │     ├── static_files.py   /sounds, /music, /src
   │     └── elevenlabs_hybrid.py
   └── services/
-  │     ├── gateway.py        GatewayConnection (persistent WebSocket to OpenClaw)
-  │     └── tts.py            TTS service wrapper
+  │     ├── gateway_manager.py  GatewayManager — registry, plugin loader, router, inter-agent ask()
+  │     ├── gateway.py          Backwards-compat shim (re-exports gateway_manager)
+  │     ├── gateways/
+  │     │     ├── base.py       GatewayBase abstract class
+  │     │     └── openclaw.py   OpenClaw implementation (persistent WebSocket)
+  │     └── tts.py              TTS service wrapper
   └── tts_providers/          Concrete TTS provider implementations
   │     ├── base_provider.py
   │     ├── supertonic_provider.py
@@ -81,7 +85,7 @@ systemctl status openvoiceui
 1. User speaks → `WebSpeechSTT` transcribes in browser
 2. Silence timeout (1800ms) → sends to `/api/conversation`
 3. POST `/api/conversation?stream=1` with `{message, tts_provider, voice, session_id}`
-4. `routes/conversation.py` → `services/gateway.py` → persistent Gateway WS (WEBCHAT mode)
+4. `routes/conversation.py` → `services/gateway_manager.py` → routes to named gateway (default: openclaw)
 5. Gateway: LLM processes, uses tools if needed, streams response
 6. Server collects full response, runs `clean_for_tts()`, splits into sentences
 7. All sentences submitted to TTS threads simultaneously (parallel)
@@ -92,11 +96,13 @@ systemctl status openvoiceui
 
 ```
 Browser → POST /api/conversation → routes/conversation.py
-  → services/gateway.py (GatewayConnection singleton, persistent WebSocket)
-  → OpenClaw Gateway (CLAWDBOT_GATEWAY_URL) in WEBCHAT mode
-  → LLM with full tools
+  → services/gateway_manager.py (routes by gateway_id, default: 'openclaw')
+  → services/gateways/openclaw.py (persistent WebSocket to CLAWDBOT_GATEWAY_URL)
+  → OpenClaw Gateway in WEBCHAT mode → LLM with full tools
   → response streamed → sentences TTS'd in parallel → JSON chunks returned
 ```
+
+**Plugin gateways**: Drop a folder in `plugins/`, restart. The manager auto-discovers and registers it. Set `gateway_id` in a profile's `adapter_config` to route to it. See `plugins/README.md`.
 
 **DO NOT switch to direct API calls.** No tools, hits rate limits.
 
@@ -195,4 +201,4 @@ Switch profiles via the Settings panel in the UI or `POST /api/profiles/<id>/act
 | TTS streaming | Parallel sentences post-LLM |
 | STT silence | 1800ms (profile-configurable) |
 | Session key | Persistent, prefix configurable per profile |
-| Gateway | OpenClaw WEBCHAT mode |
+| Gateway | Pluggable — OpenClaw default, others via plugins/
