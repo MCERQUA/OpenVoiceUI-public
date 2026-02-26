@@ -65,7 +65,7 @@ class TestMusicHelpers:
 
     def test_load_playlist_order_returns_list(self):
         from routes.music import load_playlist_order
-        order = load_playlist_order("sprayfoam")
+        order = load_playlist_order("library")
         assert isinstance(order, list)
 
 

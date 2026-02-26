@@ -29,8 +29,8 @@ class TestCanvasHelpers:
         update_canvas_context("/pages/test.html", title="Test Page")
 
     def test_get_canvas_context_returns_string(self):
-        from routes.canvas import get_canvas_context_for_piguy
-        result = get_canvas_context_for_piguy()
+        from routes.canvas import get_canvas_context
+        result = get_canvas_context()
         assert isinstance(result, str)
 
     def test_get_current_canvas_page_for_worker(self):
@@ -61,7 +61,7 @@ class TestCanvasHelpers:
 
     def test_generate_voice_aliases_returns_list(self):
         from routes.canvas import generate_voice_aliases
-        aliases = generate_voice_aliases("Pi Guy's Dashboard")
+        aliases = generate_voice_aliases("Voice Agent Dashboard")
         assert isinstance(aliases, list)
         assert len(aliases) > 0
 

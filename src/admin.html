@@ -4,10 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenUI Admin</title>
-<!-- Clerk Authentication -->
-<script async crossorigin="anonymous"
-    data-clerk-publishable-key="pk_test_c21hcnQtc25hcHBlci04LmNsZXJrLmFjY291bnRzLmRldiQ"
-    src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+<!-- Clerk Authentication (optional — loaded dynamically if configured) -->
+<script>
+    fetch('/api/config').then(r=>r.json()).then(cfg=>{
+        if(cfg.clerkPublishableKey){
+            const s=document.createElement('script');
+            s.async=true;s.crossOrigin='anonymous';
+            s.dataset.clerkPublishableKey=cfg.clerkPublishableKey;
+            s.src='https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+            document.head.appendChild(s);
+        }
+    }).catch(()=>{});
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -390,7 +397,7 @@ select{cursor:pointer}
   <!-- MUSIC AGENT (coming soon) -->
   <div class="panel" id="panel-djtools">
     <div class="panel-inner">
-      <div class="ph"><div class="ph-title">Music Agent</div><div class="ph-sub">DJ-FoamBot configuration &mdash; tracks, prompt, sound effects, and music scheduling</div></div>
+      <div class="ph"><div class="ph-title">Music Agent</div><div class="ph-sub">Music configuration &mdash; tracks, prompt, sound effects, and music scheduling</div></div>
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:40px;text-align:center;margin-top:20px">
         <div style="font-size:40px;margin-bottom:16px;opacity:.4">🎵</div>
         <div style="font-size:16px;font-weight:600;color:var(--bright);margin-bottom:8px">Music Agent Settings</div>
@@ -672,7 +679,7 @@ const Builder = {
       '<div style="display:flex;gap:8px">'+
         '<button class="btn btn-p" onclick="Builder.save(\''+esc(id)+'\')">&#x1F4BE; Save Changes</button>'+
         '<button class="btn btn-o" onclick="Builder.selectAgent(\''+esc(id)+'\')">&#8634; Discard</button>'+
-        (id!=='pi-guy'?'<button class="btn btn-d" onclick="Builder.delete(\''+esc(id)+'\')">&#x1F5D1; Delete</button>':'')+
+        (id!=='default'?'<button class="btn btn-d" onclick="Builder.delete(\''+esc(id)+'\')">&#x1F5D1; Delete</button>':'')+
       '</div>';
   },
 

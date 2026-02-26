@@ -390,7 +390,7 @@ class GatewayConnection:
           {'type': 'text_done', 'response': str|None, 'actions': list}
           {'type': 'error', 'error': str}
 
-        agent_id: optional OpenClaw agent ID to route to (e.g. 'pi-guy').
+        agent_id: optional OpenClaw agent ID to route to (e.g. 'default').
                   Omit to use the default agent ('main').
         """
         prev_text_len = 0
@@ -800,7 +800,7 @@ class GatewayConnection:
             session_key:      Gateway session key (e.g. 'voice-main-7')
             captured_actions: list to append tool/lifecycle actions to;
                               created internally if None
-            agent_id:         optional OpenClaw agent ID (e.g. 'pi-guy').
+            agent_id:         optional OpenClaw agent ID (e.g. 'default').
                               Omit to route to the default 'main' agent.
         """
         if captured_actions is None:

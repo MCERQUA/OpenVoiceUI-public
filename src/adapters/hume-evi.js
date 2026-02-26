@@ -19,7 +19,7 @@
  *   orchestrator.register('hume-evi', HumeEVIAdapter, {
  *       serverUrl: 'http://localhost:5001',
  *       configId: '<hume-config-id>',  // Optional override
- *       voiceName: 'DJ-FoamBot'
+ *       voiceName: 'MyVoice'
  *   });
  */
 

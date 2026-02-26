@@ -19,7 +19,7 @@
  *
  * Canvas side-channel: OpenClaw embeds {canvas:present,url:...} markers in
  * its responses.  The server strips them from the spoken text before
- * returning to ElevenLabs (so Pi-Guy doesn't read HTML aloud) and stores
+ * returning to ElevenLabs (so the agent doesn't read HTML aloud) and stores
  * them in a queue.  This adapter polls /api/canvas-pending every second and
  * emits CANVAS_CMD events so the shell loads the iframe.
  *

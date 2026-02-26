@@ -35,7 +35,7 @@ APP_FILES = {
     },
 }
 
-# OpenClaw workspace files (read-only from Pi-Guy's perspective — agent writes these)
+# OpenClaw workspace files (read-only from the voice agent's perspective — agent writes these)
 _OPENCLAW_DIR = Path(
     os.path.expanduser(config.get('paths.openclaw_workspace', '~/.openclaw/workspace'))
 )

@@ -182,14 +182,13 @@ sudo journalctl -u openvoiceui -f
 
 ## Authentication
 
-OpenVoiceUI uses **Clerk** for JWT auth. Without Clerk keys, all `/api/*` endpoints return 401 (the frontend still loads).
+Auth is **opt-in**. By default, OpenVoiceUI runs with no authentication — all endpoints are accessible. This is the right setting for self-hosted single-user deployments.
 
-To **disable auth** for local/trusted use: leave `VITE_CLERK_PUBLISHABLE_KEY` unset in `.env`.
-
-To **enable auth**:
+To **enable Clerk JWT auth** (for multi-user or public-facing deployments):
 1. Create a Clerk app at [clerk.com](https://clerk.com)
-2. Add `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` to `.env`
-3. Set `ALLOWED_USER_IDS=user_yourclerkid` — find your ID in server logs after first login
+2. Add `CLERK_PUBLISHABLE_KEY=pk_live_...` to `.env`
+3. Set `CANVAS_REQUIRE_AUTH=true` in `.env`
+4. Set `ALLOWED_USER_IDS=user_yourclerkid` — find your user ID in server logs after first login
 
 ---
 
@@ -288,6 +287,39 @@ export class MyAdapter {
 ```
 
 Register it in `src/shell/adapter-registry.js` and reference it in your profile JSON.
+
+---
+
+## Hosting Multiple Users (Hetzner VPS)
+
+OpenVoiceUI is designed so you can host a single VPS and serve multiple clients, each with their own voice agent instance.
+
+**Recommended workflow:**
+
+1. **Set up your base account** — install OpenVoiceUI on a Hetzner VPS under a base Linux user. Configure all API keys in `.env`. Verify everything works.
+
+2. **For each new client**, create a new Linux user on the same VPS:
+   ```bash
+   adduser clientname
+   cp -r /home/base/OpenVoiceUI-public /home/clientname/OpenVoiceUI-public
+   chown -R clientname:clientname /home/clientname/OpenVoiceUI-public
+   ```
+
+3. **Edit their `.env`** with their API keys and a unique port:
+   ```bash
+   PORT=15004          # different port per user
+   CLAWDBOT_AUTH_TOKEN=their-openclaw-token
+   GROQ_API_KEY=their-groq-key
+   ```
+
+4. **Run `setup-sudo.sh`** for their domain — creates systemd service, nginx vhost, and SSL cert automatically.
+
+5. **Each client** gets their own domain, their own agent session, and their own canvas/music library.
+
+**Quick server requirements:**
+- Ubuntu 22.04+
+- Nginx + Certbot (Let's Encrypt)
+- Python 3.10+, `venv` per user
 
 ---
 

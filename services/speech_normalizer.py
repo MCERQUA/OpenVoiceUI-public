@@ -8,7 +8,7 @@ Usage:
     from services.speech_normalizer import SpeechNormalizer
 
     normalizer = SpeechNormalizer()
-    clean_text = normalizer.normalize("Hello **world**! Check https://example.com", profile_id="pi-guy")
+    clean_text = normalizer.normalize("Hello **world**! Check https://example.com", profile_id="default")
 
 The normalizer supports per-profile rule overrides defined in
 config/speech_normalization.yaml under the `profiles:` key.

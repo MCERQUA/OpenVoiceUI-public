@@ -51,7 +51,7 @@ export class MusicPlayer {
         this._skipHistoryPush = false;
 
         // Playlist
-        this.currentPlaylist = 'sprayfoam';
+        this.currentPlaylist = 'library';
 
         // AI text triggers
         this.playTriggers = ['spinning up', 'playing now', 'here comes', 'drop the beat', 'hit it', 'music time', 'lets play', "let's play", 'start the music', 'cue the music'];
@@ -60,26 +60,8 @@ export class MusicPlayer {
         this.volumeUpTriggers = ['turn it up', 'louder', 'crank it', 'pump it up'];
         this.volumeDownTriggers = ['turn it down', 'quieter', 'lower the volume', 'too loud'];
 
-        this.trackTriggers = {
-            'mrs sprayfoam': 'Call-Me-Mrs.Sprayfoam.mp3',
-            'mrs. sprayfoam': 'Call-Me-Mrs.Sprayfoam.mp3',
-            'karen': 'Call-Me-Mrs.Sprayfoam.mp3',
-            'augusta': 'Call-Me-Mrs.Sprayfoam.mp3',
-            'foam it': 'Foam-It-we-insulate-you-right.mp3',
-            'foamit': 'Foam-It-we-insulate-you-right.mp3',
-            'moe': 'Foam-It-we-insulate-you-right.mp3',
-            'toronto': 'Foam-It-we-insulate-you-right.mp3',
-            'mississauga': 'Foam-It-we-insulate-you-right.mp3',
-            'foam everything': 'Foam-Everything.mp3',
-            'hey diddle': 'Hey-Diddle-Diddle.mp3',
-            'diddle diddle': 'Hey-Diddle-Diddle.mp3',
-            'nursery rhyme': 'Hey-Diddle-Diddle.mp3',
-            'polyurethane gang': 'Polyurethane-Gang.mp3',
-            'og polyurethane': 'OG-Polyurthane-gang.mp3',
-            'espuma': 'Espuma-Calidez-2.mp3',
-            'spanish': 'Spanish-ComfyLife.mp3',
-            'comfy life': 'Spanish-ComfyLife.mp3'
-        };
+        // Track name triggers - populated dynamically from server metadata
+        this.trackTriggers = {};
 
         // Wire up EventBus for TTS ducking
         if (eventBus) {
@@ -287,7 +269,7 @@ export class MusicPlayer {
         try {
             const url = new URL(`${this.serverUrl}/api/music`);
             url.searchParams.set('action', 'play');
-            url.searchParams.set('playlist', this.currentPlaylist || 'sprayfoam');
+            url.searchParams.set('playlist', this.currentPlaylist || 'library');
             if (trackName) url.searchParams.set('track', trackName);
 
             const response = await fetch(url);

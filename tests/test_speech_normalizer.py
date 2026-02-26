@@ -128,8 +128,8 @@ class TestProfileOverrides:
         result = normalizer.normalize(long_text, profile_id="unknown-profile")
         assert isinstance(result, str)
 
-    def test_pi_guy_expands_rpi(self, normalizer):
-        result = normalizer.normalize("Running on RPi hardware.", profile_id="pi-guy")
+    def test_default_expands_rpi(self, normalizer):
+        result = normalizer.normalize("Running on RPi hardware.", profile_id="default")
         assert "raspberry pie" in result
 
     def test_unknown_profile_uses_globals(self, normalizer):
@@ -172,7 +172,7 @@ class TestConvenienceFunction:
         assert "Bold text" in result
 
     def test_normalize_for_tts_with_profile(self):
-        result = normalize_for_tts("The API is ready.", profile_id="pi-guy")
+        result = normalize_for_tts("The API is ready.", profile_id="default")
         assert "A P I" in result
 
 

@@ -12,7 +12,7 @@ export class HumeProvider extends BaseTTSProvider {
         this.serverUrl = config.serverUrl || '';
         this.configId = config.hume?.configId || '';
         this.voiceId = config.hume?.voiceId || '';
-        this.voiceName = config.hume?.voiceName || 'DJ-FoamBot';
+        this.voiceName = config.hume?.voiceName || 'Default';
         this.voices = [this.voiceName];  // Hume uses configured voice
         this.currentVoice = this.voiceName;
 

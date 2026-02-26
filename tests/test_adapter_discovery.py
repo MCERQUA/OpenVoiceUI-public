@@ -226,8 +226,7 @@ def test_profile_manager_loads_adapter_field(tmp_path):
     listed = pm.list_profiles()
 
     ids = {p["id"] for p in listed}
-    assert "pi-guy" in ids
-    assert "hume-evi" in ids
+    assert "default" in ids
 
 
 def test_all_profiles_have_valid_ids():

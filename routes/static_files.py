@@ -189,7 +189,7 @@ def handle_dj_sound():
             'sounds': sounds_list,
             'count': len(sounds_list),
             'response': (
-                f"DJ-FoamBot soundboard loaded! {len(sounds_list)} effects ready. "
+                f"Soundboard loaded! {len(sounds_list)} effects ready. "
                 "I got air horns, sirens, scratches, crowd effects, and more!"
             ),
         })

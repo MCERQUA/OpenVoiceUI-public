@@ -1,29 +1,29 @@
 # Supertonic TTS Integration - Complete Setup
 
-Welcome to the Supertonic TTS integration for DJ-FoamBot! This document provides an index to all setup documentation and files.
+Welcome to the Supertonic TTS integration for OpenVoiceUI! This document provides an index to all setup documentation and files.
 
 ## Quick Navigation
 
 ### Getting Started
-- **New to Supertonic TTS?** Start with [SUPERTONIC_SETUP.md](./SUPERTONIC_SETUP.md)
-- **Want code details?** See [INTEGRATION_DETAILS.md](./INTEGRATION_DETAILS.md)
+- **New to Supertonic TTS?** Start with [supertonic-integration.md](./supertonic-integration.md)
+- **Want code details?** See [integration-details.md](./integration-details.md)
 - **Ready to test?** Run `python3 test_supertonic.py`
 
 ### Key Files Created
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `supertonic_tts.py` | Main TTS module (18 KB, 499 lines) | ✓ Ready |
-| `test_supertonic.py` | Test/verification script (2.1 KB) | ✓ Ready |
-| `SUPERTONIC_SETUP.md` | Quick start guide | ✓ Ready |
-| `INTEGRATION_DETAILS.md` | Technical documentation | ✓ Ready |
+| `supertonic_tts.py` | Main TTS module (18 KB, 499 lines) | Ready |
+| `test_supertonic.py` | Test/verification script (2.1 KB) | Ready |
+| `supertonic-integration.md` | Quick start guide | Ready |
+| `integration-details.md` | Technical documentation | Ready |
 
 ### Modified Files
 
 | File | Changes | Status |
 |------|---------|--------|
-| `server.py` | Added TTS init + /api/supertonic-tts endpoint | ✓ Verified |
-| `requirements.txt` | Already has dependencies | ✓ Verified |
+| `server.py` | Added TTS init + /api/supertonic-tts endpoint | Verified |
+| `requirements.txt` | Already has dependencies | Verified |
 
 ## Features
 
@@ -53,7 +53,7 @@ Returns: WAV audio file (audio/wav)
 
 ### 1. Install Dependencies
 ```bash
-cd /path/to/websites/ai-eyes2
+cd /path/to/OpenVoiceUI
 pip install -r requirements.txt
 ```
 
@@ -84,7 +84,7 @@ SUCCESS: All tests passed!
 
 ### 3. Restart Server
 ```bash
-sudo systemctl restart pi-guy
+sudo systemctl restart openvoiceui
 ```
 
 ### 4. Test API
@@ -104,7 +104,7 @@ ffplay speech.wav  # Listen to the generated audio
 from supertonic_tts import SupertonicTTS
 
 tts = SupertonicTTS()
-audio = tts.generate_speech("Hello DJ-FoamBot!", lang='en')
+audio = tts.generate_speech("Hello OpenVoiceUI!", lang='en')
 
 with open('output.wav', 'wb') as f:
     f.write(audio)
@@ -116,7 +116,7 @@ const response = await fetch('/api/supertonic-tts', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    text: "Welcome to Spray Foam Radio",
+    text: "Welcome to OpenVoiceUI!",
     voice_style: "M1"
   })
 });
@@ -136,7 +136,7 @@ curl -X POST http://localhost:5001/api/supertonic-tts \
 ## Documentation Index
 
 ### Setup & Usage
-1. **SUPERTONIC_SETUP.md** - Complete setup guide with:
+1. **supertonic-integration.md** - Complete setup guide with:
    - Installation steps
    - Python API examples
    - cURL examples
@@ -147,7 +147,7 @@ curl -X POST http://localhost:5001/api/supertonic-tts \
    - Performance notes
 
 ### Technical Details
-2. **INTEGRATION_DETAILS.md** - Implementation details with:
+2. **integration-details.md** - Implementation details with:
    - Code snippets from server.py
    - Integration architecture
    - Error handling reference
@@ -157,8 +157,7 @@ curl -X POST http://localhost:5001/api/supertonic-tts \
    - Monitoring guide
 
 ### Project Overview
-3. This file (README_SUPERTONIC.md)
-4. Original setup summary available in project logs
+3. This file (supertonic-setup.md)
 
 ## Voice Styles
 
@@ -182,7 +181,7 @@ curl -X POST http://localhost:5001/api/supertonic-tts \
 
 ## Model Information
 
-Located at: `/home/mike/supertonic/assets/`
+Located at: `$SUPERTONIC_MODEL_PATH` (set in `.env`)
 
 ### ONNX Models
 - Duration Predictor (1.5 MB)
@@ -249,11 +248,11 @@ pip install onnxruntime>=1.23.1
 ```
 
 **FileNotFoundError: models not found**
-- Verify `/home/mike/supertonic/assets/onnx/` exists
+- Verify your `$SUPERTONIC_MODEL_PATH` points to the correct directory
 - Check all 4 .onnx files are present
 
 **503 Service Unavailable**
-- Check server logs: `sudo journalctl -u pi-guy -f`
+- Check server logs: `sudo journalctl -u openvoiceui -f`
 - First request takes 5-10 seconds
 - Verify 4+ GB free RAM available
 
@@ -261,24 +260,23 @@ pip install onnxruntime>=1.23.1
 - Normal for first request (models load)
 - Can reduce `total_step` for faster output
 
-See [SUPERTONIC_SETUP.md](./SUPERTONIC_SETUP.md) for more troubleshooting.
+See [supertonic-integration.md](./supertonic-integration.md) for more troubleshooting.
 
 ## Integration Points
 
-### For DJ-FoamBot
+### For OpenVoiceUI
 The TTS can be used to:
 1. Generate AI announcements
-2. Create dynamic DJ intro/outro
-3. Synthesize DJ remarks
+2. Create dynamic intro/outro segments
+3. Synthesize spoken remarks
 4. Generate promotional messages
 5. Create station IDs
 
-### With Hume EVI
+### With Other Providers
 The endpoint can be called from:
 1. Frontend JavaScript
-2. Backend tools in Hume config
-3. DJ prompts (future)
-4. External services via REST
+2. Backend tools
+3. External services via REST
 
 ## Next Steps
 
@@ -286,30 +284,26 @@ The endpoint can be called from:
 2. **Deploy it**: Restart the server
 3. **Use it**: Make API calls to `/api/supertonic-tts`
 4. **Explore it**: Try different voices and languages
-5. **Integrate it**: Add to DJ-FoamBot workflows
+5. **Integrate it**: Add to OpenVoiceUI workflows
 
 ## Support
 
 For questions or issues:
-1. Check [SUPERTONIC_SETUP.md](./SUPERTONIC_SETUP.md) troubleshooting section
-2. Review [INTEGRATION_DETAILS.md](./INTEGRATION_DETAILS.md) technical docs
-3. Check server logs: `sudo journalctl -u pi-guy -f`
+1. Check [supertonic-integration.md](./supertonic-integration.md) troubleshooting section
+2. Review [integration-details.md](./integration-details.md) technical docs
+3. Check server logs: `sudo journalctl -u openvoiceui -f`
 4. Review code comments in `supertonic_tts.py`
 
 ## References
 
-- Supertonic Repository: `/home/mike/supertonic/`
-- Reference Implementation: `/home/mike/supertonic/py/helper.py`
 - ONNX Runtime Docs: https://onnxruntime.ai/
 - SoundFile Docs: https://soundfile.readthedocs.io/
 
 ## Summary
 
-The Supertonic TTS integration is a complete, production-ready text-to-speech system for DJ-FoamBot. It provides high-quality local synthesis with multiple voices and languages through a simple REST API.
+The Supertonic TTS integration is a complete, production-ready text-to-speech system for OpenVoiceUI. It provides high-quality local synthesis with multiple voices and languages through a simple REST API.
 
-**Status**: ✓ Ready for deployment
+**Status**: Ready for deployment
 **Files Created**: 3 new files, 2 modified
 **Tests**: Provided and verified
 **Documentation**: Complete
-
-Enjoy your new TTS capabilities!

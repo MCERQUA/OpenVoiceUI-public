@@ -21,7 +21,8 @@ class SupertonicProvider(TTSProvider):
 
     def __init__(self, config: Dict[str, Any] = None) -> None:
         super().__init__(config)
-        self.onnx_dir = self._config.get("onnx_dir", "/home/mike/supertonic/assets/onnx")
+        import os
+        self.onnx_dir = self._config.get("onnx_dir", os.environ.get("SUPERTONIC_ONNX_DIR", os.path.expanduser("~/supertonic/assets/onnx")))
         self.default_voice = self._config.get("default_voice", "M1")
         self._delegate = None
 

@@ -9,7 +9,7 @@ omit =
     test_supertonic.py
     */migrations/*
     */__pycache__/*
-    /home/mike/supertonic/*
+    */supertonic/*
     setup*.py
     # Excluded from coverage: old monolith being replaced by blueprints (Phase 2-3)
     server.py
@@ -32,7 +32,7 @@ omit =
     test_supertonic.py
     */migrations/*
     */__pycache__/*
-    /home/mike/supertonic/*
+    */supertonic/*
     setup*.py
     server.py
     services/gateway.py

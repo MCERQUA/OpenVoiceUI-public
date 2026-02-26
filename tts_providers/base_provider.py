@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Base TTS Provider Abstract Class for DJ-FoamBot.
+Base TTS Provider Abstract Class for OpenVoiceUI.
 
 This module defines the abstract interface that all TTS providers must implement.
 It provides a consistent API for generating speech, listing available voices,
 and retrieving provider information.
 
-Author: DJ-FoamBot Integration
+Author: OpenVoiceUI
 Date: 2026-02-11
 """
 
@@ -22,7 +22,7 @@ class TTSVoice:
 
     Attributes:
         id: Unique identifier for the voice (e.g., 'M1', 'your-hume-voice-id')
-        name: Human-readable name (e.g., 'Male Voice 1', 'DJ-FoamBot')
+        name: Human-readable name (e.g., 'Male Voice 1', 'Custom Voice')
         language: Language code (e.g., 'en-US', 'en', 'es')
         gender: Gender of the voice ('male', 'female', 'neutral', or None)
         description: Optional description of the voice characteristics

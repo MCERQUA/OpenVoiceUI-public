@@ -1,5 +1,5 @@
 """
-Memory Client for Pi-Guy Voice App
+Memory Client for OpenVoiceUI
 
 Direct access to clawdbot's memory system:
 - SQLite FTS5 full-text search
@@ -10,6 +10,7 @@ Direct access to clawdbot's memory system:
 This gives the voice agent the same memory access as the Discord agent.
 """
 
+import os
 import sqlite3
 import json
 import logging
@@ -19,10 +20,11 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Paths to clawdbot data
-MEMORY_DB = Path('/home/mike/.clawdbot/memory/main.sqlite')
-SESSIONS_DIR = Path('/home/mike/.clawdbot/agents/main/sessions/')
-VOICE_EVENTS = Path('/tmp/piguy-voice-events.jsonl')
+# Paths to clawdbot data (configure via env vars or leave empty if not using memory features)
+_home = Path.home()
+MEMORY_DB = Path(os.getenv('CLAWDBOT_MEMORY_DB', str(_home / '.clawdbot/memory/main.sqlite')))
+SESSIONS_DIR = Path(os.getenv('CLAWDBOT_SESSIONS_DIR', str(_home / '.clawdbot/agents/main/sessions/')))
+VOICE_EVENTS = Path('/tmp/openvoiceui-events.jsonl')
 
 # Ambient transcripts directory
 AMBIENT_DIR = Path(__file__).parent / "ambient_transcripts"

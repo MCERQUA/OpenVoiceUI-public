@@ -46,8 +46,8 @@ class TestSaveHelpers:
         from routes import music as music_mod
         monkeypatch.setattr(music_mod, "MUSIC_DIR", tmp_path)
         order = ["b.mp3", "a.mp3", "c.mp3"]
-        music_mod.save_playlist_order("sprayfoam", order)
-        loaded = music_mod.load_playlist_order("sprayfoam")
+        music_mod.save_playlist_order("library", order)
+        loaded = music_mod.load_playlist_order("library")
         assert loaded == order
 
     def test_save_playlist_order_generated(self, tmp_path, monkeypatch):
@@ -62,7 +62,7 @@ class TestSaveHelpers:
         from routes import music as music_mod
         monkeypatch.setattr(music_mod, "MUSIC_DIR", tmp_path)
         # No order.json exists
-        result = music_mod.load_playlist_order("sprayfoam")
+        result = music_mod.load_playlist_order("library")
         assert result == []
 
     def test_load_music_metadata_invalid_json(self, tmp_path, monkeypatch):

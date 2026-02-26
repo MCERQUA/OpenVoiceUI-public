@@ -42,7 +42,7 @@ tts:
   providers:
     supertonic:
       name: "Supertonic ONNX"
-      onnx_dir: /home/mike/supertonic/assets/onnx
+      onnx_dir: ""  # Set SUPERTONIC_ONNX_DIR env var or configure path here
       default_voice: M1
       priority: 10
 

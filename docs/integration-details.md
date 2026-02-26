@@ -20,9 +20,9 @@ def get_supertonic_tts():
                 voice_style_path="${SUPERTONIC_MODEL_PATH}/../voice_styles/M1.json",
                 use_gpu=False
             )
-            print("✓ Supertonic TTS initialized")
+            print("Supertonic TTS initialized")
         except Exception as e:
-            print(f"⚠ Warning: Failed to initialize Supertonic TTS: {e}")
+            print(f"Warning: Failed to initialize Supertonic TTS: {e}")
             return None
     return supertonic_tts
 ```
@@ -40,7 +40,7 @@ def get_supertonic_tts():
 def supertonic_tts_endpoint():
     """
     Generate speech from text using Supertonic TTS.
-    
+
     Request JSON:
     {
         "text": "Text to synthesize",
@@ -48,7 +48,7 @@ def supertonic_tts_endpoint():
         "speed": 1.05 (optional, default: 1.05),
         "voice_style": "M1" (optional, default: M1 - can be M1-M5, F1-F5)
     }
-    
+
     Returns:
         WAV audio file or JSON error
     """
@@ -57,40 +57,40 @@ def supertonic_tts_endpoint():
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
-        
+
         # 2. Extract and validate text
         text = data.get('text', '').strip()
         if not text:
             return jsonify({"error": "Text cannot be empty"}), 400
-        
+
         # 3. Extract and validate language
         lang = data.get('lang', 'en').lower()
         if lang not in ['en', 'ko', 'es', 'pt', 'fr']:
             return jsonify({"error": f"Invalid language: {lang}. Supported: en, ko, es, pt, fr"}), 400
-        
+
         # 4. Extract and validate speed
         speed = float(data.get('speed', 1.05))
         if speed < 0.5 or speed > 2.0:
             return jsonify({"error": "Speed must be between 0.5 and 2.0"}), 400
-        
+
         # 5. Extract and validate voice style
         voice_style = data.get('voice_style', 'M1').upper()
         valid_voices = ['M1', 'M2', 'M3', 'M4', 'M5', 'F1', 'F2', 'F3', 'F4', 'F5']
         if voice_style not in valid_voices:
             return jsonify({"error": f"Invalid voice: {voice_style}. Available: {', '.join(valid_voices)}"}), 400
-        
+
         voice_style_path = f"${SUPERTONIC_MODEL_PATH}/../voice_styles/{voice_style}.json"
-        
+
         # 6. Get or initialize TTS
         tts = get_supertonic_tts()
         if tts is None:
             return jsonify({"error": "TTS service not available"}), 503
-        
+
         # 7. Initialize TTS with requested voice
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"Generating speech: {text[:50]}... (lang={lang}, speed={speed})")
-        
+
         try:
             from supertonic_tts import SupertonicTTS
             tts_instance = SupertonicTTS(
@@ -101,7 +101,7 @@ def supertonic_tts_endpoint():
         except Exception as e:
             logger.error(f"Failed to initialize TTS with voice {voice_style}: {e}")
             return jsonify({"error": f"Failed to load voice style: {e}"}), 500
-        
+
         # 8. Generate speech
         try:
             audio_bytes = tts_instance.generate_speech(
@@ -113,7 +113,7 @@ def supertonic_tts_endpoint():
         except Exception as e:
             logger.error(f"Speech synthesis failed: {e}")
             return jsonify({"error": f"Speech synthesis failed: {e}"}), 500
-        
+
         # 9. Return WAV audio file
         from flask import make_response
         response = make_response(audio_bytes)
@@ -121,7 +121,7 @@ def supertonic_tts_endpoint():
         response.headers['Content-Length'] = len(audio_bytes)
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return response
-        
+
     except ValueError as e:
         return jsonify({"error": f"Invalid input: {e}"}), 400
     except Exception as e:
@@ -179,7 +179,7 @@ def supertonic_tts_endpoint():
 import requests
 
 response = requests.post('http://localhost:${PORT}/api/supertonic-tts', json={
-    'text': 'Welcome to DJ-FoamBot',
+    'text': 'Welcome to OpenVoiceUI',
     'lang': 'en',
     'speed': 1.05,
     'voice_style': 'M1'
@@ -205,13 +205,13 @@ async function synthesize(text) {
             voice_style: 'M1'
         })
     });
-    
+
     if (!response.ok) {
         const error = await response.json();
         console.error('TTS Error:', error.error);
         return null;
     }
-    
+
     const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
@@ -246,7 +246,7 @@ To test different voices:
 ```python
 for voice in ['M1', 'M2', 'F1', 'F2']:
     response = requests.post('http://localhost:${PORT}/api/supertonic-tts', json={
-        'text': 'Hello, my name is DJ-FoamBot',
+        'text': 'Hello from OpenVoiceUI',
         'voice_style': voice
     })
     if response.ok:
@@ -259,7 +259,7 @@ for voice in ['M1', 'M2', 'F1', 'F2']:
 1. **Caching**: Store common phrases to avoid re-synthesis
 2. **Streaming**: Support chunked/streaming responses
 3. **Format Options**: Support MP3, OGG output
-4. **Hume Integration**: Add as callable tool in Hume EVI
+4. **Tool Integration**: Add as callable tool in agent config
 5. **Quality Settings**: Expose total_step in API
 6. **GPU Support**: Enable CUDA acceleration option
 7. **Batch Processing**: Support multiple texts in single request
@@ -277,7 +277,7 @@ The endpoint logs to the server's logger:
 
 Key log messages:
 - `Generating speech: ...` - Synthesis started
-- `✓ Supertonic TTS initialized` - TTS ready
+- `Supertonic TTS initialized` - TTS ready
 - `Failed to initialize TTS with voice` - Voice load error
 - `Speech synthesis failed` - Inference error
 - `TTS endpoint error` - Unexpected error

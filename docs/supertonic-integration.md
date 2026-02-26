@@ -1,8 +1,8 @@
-# Supertonic TTS Integration Guide for DJ-FoamBot
+# Supertonic TTS Integration Guide
 
 ## Quick Start
 
-This document describes the Supertonic TTS backend integration for DJ-FoamBot.
+This document describes the Supertonic TTS backend integration for OpenVoiceUI.
 
 ## What Was Added
 
@@ -49,9 +49,9 @@ Dependencies are already in `requirements.txt`:
 pip install -r requirements.txt
 ```
 
-Models are pre-downloaded at:
-- `/home/mike/supertonic/assets/onnx/` (ONNX models)
-- `/home/mike/supertonic/assets/voice_styles/` (voice styles)
+Models should be downloaded to a local directory and configured via the `SUPERTONIC_MODEL_PATH` environment variable in `.env`:
+- `$SUPERTONIC_MODEL_PATH/` (ONNX models)
+- `$SUPERTONIC_MODEL_PATH/../voice_styles/` (voice styles)
 
 ## Usage Examples
 
@@ -61,13 +61,13 @@ from supertonic_tts import SupertonicTTS
 
 # Initialize (loads models)
 tts = SupertonicTTS(
-    onnx_dir="/home/mike/supertonic/assets/onnx",
-    voice_style_path="/home/mike/supertonic/assets/voice_styles/M1.json"
+    onnx_dir="$SUPERTONIC_MODEL_PATH",
+    voice_style_path="$SUPERTONIC_MODEL_PATH/../voice_styles/M1.json"
 )
 
 # Generate speech
 audio_bytes = tts.generate_speech(
-    text="Welcome to Spray Foam Radio!",
+    text="Welcome to the show!",
     lang='en',
     speed=1.05,
     total_step=5
@@ -83,7 +83,7 @@ with open('speech.wav', 'wb') as f:
 curl -X POST http://localhost:5001/api/supertonic-tts \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "This is DJ-FoamBot speaking",
+    "text": "Hello from OpenVoiceUI",
     "lang": "en",
     "speed": 1.05,
     "voice_style": "M1"
@@ -104,7 +104,7 @@ async function generateSpeech(text) {
       voice_style: "M1"
     })
   });
-  
+
   const audioBlob = await response.blob();
   const url = URL.createObjectURL(audioBlob);
   const audio = new Audio(url);
@@ -145,13 +145,13 @@ async function generateSpeech(text) {
 - **Speed parameter**: Higher = faster speech but may be less clear
 - **Inference steps**: 5 is good balance; can reduce to 3 for faster output
 
-## Integration with DJ-FoamBot
+## Integration with OpenVoiceUI
 
 The TTS is integrated into the Flask server and can be called:
 
-1. **From Hume EVI tools** (future): Add a tool that calls the endpoint
+1. **From tools** (future): Add a tool that calls the endpoint
 2. **From frontend**: Direct API calls to `/api/supertonic-tts`
-3. **From DJ prompts**: Could extend DJ prompts to use TTS for announcements
+3. **From prompts**: Could extend prompts to use TTS for announcements
 
 ## Troubleshooting
 
@@ -159,13 +159,13 @@ The TTS is integrated into the Flask server and can be called:
 ```
 FileNotFoundError: .../onnx/duration_predictor.onnx
 ```
-Check that Supertonic models are in `/home/mike/supertonic/assets/onnx/`
+Check that Supertonic models are at the path specified by `SUPERTONIC_MODEL_PATH` in your `.env`.
 
 ### Voice style not found
 ```
 FileNotFoundError: .../voice_styles/M1.json
 ```
-Check that voice styles are in `/home/mike/supertonic/assets/voice_styles/`
+Check that voice styles are in the `voice_styles/` directory alongside your ONNX models.
 
 ### OnnxRuntime error
 ```
@@ -183,7 +183,7 @@ Normal for first request. Verify system has ~4GB free RAM.
 
 Run the test script:
 ```bash
-cd /path/to/websites/ai-eyes2
+cd /path/to/OpenVoiceUI
 python3 test_supertonic.py
 ```
 
@@ -194,13 +194,13 @@ Testing Supertonic TTS Integration
 ============================================================
 
 [1/3] Initializing SupertonicTTS...
-✓ SupertonicTTS initialized successfully
+  SupertonicTTS initialized successfully
 
 [2/3] Generating speech from text...
-✓ Generated XXXXX bytes of audio
+  Generated XXXXX bytes of audio
 
 [3/3] Saving audio to file...
-✓ Saved to /tmp/test_supertonic.wav
+  Saved to /tmp/test_supertonic.wav
 
 ============================================================
 SUCCESS: All tests passed!
@@ -218,20 +218,20 @@ SUCCESS: All tests passed!
 
 ```
 Request to /api/supertonic-tts
-    ↓
+    |
 Flask endpoint validates input
-    ↓
+    |
 SupertonicTTS.generate_speech()
-    ↓
+    |
 TextToSpeech inference pipeline:
   1. UnicodeProcessor normalizes text with language tags
   2. Duration predictor estimates phoneme durations
   3. Text encoder creates embeddings
   4. Vector estimator generates latent representation
   5. Vocoder synthesizes waveform
-    ↓
+    |
 Convert NumPy array to WAV bytes
-    ↓
+    |
 Return audio/wav response
 ```
 
@@ -240,15 +240,9 @@ Return audio/wav response
 1. **GPU Acceleration**: Enable CUDA providers for faster inference
 2. **Caching**: Cache common phrases to speed up responses
 3. **Streaming**: Support chunked responses for real-time playback
-4. **Hume Tool Integration**: Add as callable tool in Hume EVI config
+4. **Tool Integration**: Add as callable tool in agent config
 5. **Quality Settings**: Expose total_step parameter in API
 6. **Format Support**: Support MP3, OGG output formats
-
-## Related Code
-
-- Helper functions: `/home/mike/supertonic/py/helper.py`
-- Example usage: `/home/mike/supertonic/py/example_onnx.py`
-- Supertonic repo: `/home/mike/supertonic/`
 
 ## References
 

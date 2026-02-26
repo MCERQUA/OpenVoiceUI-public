@@ -2,7 +2,7 @@
  * PlaylistEditor — Upload, reorder, and manage music tracks (P4-T2)
  *
  * Features:
- *   - Playlist tabs (sprayfoam / generated)
+ *   - Playlist tabs (library / generated)
  *   - Track list with drag-and-drop reordering
  *   - Upload new tracks (file picker + drag-and-drop zone)
  *   - Delete tracks with confirmation
@@ -29,7 +29,7 @@
 export class PlaylistEditor {
     constructor() {
         this._root = null;
-        this._playlist = 'sprayfoam';
+        this._playlist = 'library';
         this._tracks = [];
         this._uploading = false;
     }
@@ -58,7 +58,7 @@ export class PlaylistEditor {
     _render() {
         this._root.innerHTML = `
             <div class="pe-tabs">
-                <button class="pe-tab active" data-playlist="sprayfoam">Sprayfoam</button>
+                <button class="pe-tab active" data-playlist="library">Library</button>
                 <button class="pe-tab" data-playlist="generated">Generated</button>
             </div>
             <div class="pe-upload-zone" id="pe-upload-zone">

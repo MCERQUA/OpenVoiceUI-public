@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 DB_PATH = Path(__file__).parent.parent / 'usage.db'
-BRAIN_EVENTS_PATH = Path('/tmp/piguy-voice-events.jsonl')
+BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
 VOICE_SESSION_FILE = str(Path(__file__).parent.parent / '.voice-session-counter')
 MAX_HISTORY_MESSAGES = 20
 
@@ -446,7 +446,7 @@ def _conversation_inner():
     session_id = data.get('session_id', 'default')
     ui_context = data.get('ui_context', {})
     identified_person = data.get('identified_person') or None
-    agent_id = data.get('agent_id') or None  # e.g. 'pi-guy'; None = default 'main'
+    agent_id = data.get('agent_id') or None  # e.g. 'default'; None = default 'main'
     max_response_chars = data.get('max_response_chars') or None  # profile cap, truncates at sentence boundary
     metrics['session_id'] = session_id
     metrics['user_message_len'] = len(user_message)
@@ -506,13 +506,12 @@ def _conversation_inner():
             '[MUSIC CONTROL: You can control the music player with text tags. '
             '[MUSIC_PLAY] plays a random track, [MUSIC_PLAY:track name] plays a '
             'specific track, [MUSIC_STOP] stops music, [MUSIC_NEXT] skips to next. '
-            'Tracks: Mrs Sprayfoam, Foam It, Foam Everything, Espuma, Hey Diddle, '
-            'OG Polyurethane, Polyurethane Gang, Comfy Life. Only use when asked.]'
+            'Tracks are loaded from the music library. Only use when asked.]'
         )
         context_parts.append(
             '[SONG GENERATION: To create a new AI song, include '
             '[SUNO_GENERATE:description of the song] in your response. '
-            'Example: [SUNO_GENERATE:upbeat hip hop track about spray foam insulation] '
+            'Example: [SUNO_GENERATE:upbeat pop track about summer vibes] '
             'The frontend handles the Suno API (~45s) and shows a notification when done. '
             'Song generation and the music player are independent — use [MUSIC_PLAY] '
             'separately if you want to open the player. '

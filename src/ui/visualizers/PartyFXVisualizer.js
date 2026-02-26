@@ -24,7 +24,7 @@ window.VisualizerModule = {
     // State
     enabled: localStorage.getItem('visualizerEnabled') !== 'false',
     autoplayEnabled: localStorage.getItem('musicAutoplay') === 'true',
-    currentPlaylist: 'sprayfoam',
+    currentPlaylist: 'library',
 
     // Beat detection
     bassHistory: [],

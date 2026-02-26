@@ -136,7 +136,7 @@ class ProfileDiscovery {
      * profile as an orchestrator mode.
      *
      * Profile → orchestrator mode mapping:
-     *   - mode key  = profile.id            (e.g. 'pi-guy', 'hume-evi')
+     *   - mode key  = profile.id            (e.g. 'default', 'hume-evi')
      *   - adapter   = profile.adapter       (e.g. 'clawdbot', 'hume-evi')
      *   - config    = profile.adapter_config (adapter-specific params from JSON)
      *     plus serverUrl and profileId injected automatically.

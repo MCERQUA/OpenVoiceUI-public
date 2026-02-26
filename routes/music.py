@@ -1,5 +1,5 @@
 """
-routes/music.py — DJ Pi-Guy Music System Blueprint (P2-T4)
+routes/music.py — Music System Blueprint (P2-T4)
 
 Extracted from server.py during Phase 2 blueprint split.
 Registers routes:
@@ -49,7 +49,7 @@ current_music_state = {
     "reserved_track": None,
     "reserved_at": None,
     "reservation_id": None,
-    "current_playlist": "sprayfoam",  # 'sprayfoam' | 'generated'
+    "current_playlist": "library",  # 'library' | 'generated'
 }
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ current_music_state = {
 # ---------------------------------------------------------------------------
 
 def reserve_track(track):
-    """Reserve a track Pi-Guy has announced; expires after 30 s."""
+    """Reserve a track the agent has announced; expires after 30 s."""
     current_music_state["reserved_track"] = track
     current_music_state["reserved_at"] = time.time()
     current_music_state["reservation_id"] = str(uuid.uuid4())[:8]
@@ -92,7 +92,7 @@ def clear_reservation():
 # ---------------------------------------------------------------------------
 
 def load_music_metadata():
-    """Load sprayfoam playlist metadata from JSON file."""
+    """Load library playlist metadata from JSON file."""
     metadata_file = MUSIC_DIR / "music_metadata.json"
     if metadata_file.exists():
         try:
@@ -116,7 +116,7 @@ def load_generated_music_metadata():
 
 
 def save_music_metadata(metadata):
-    """Persist sprayfoam playlist metadata."""
+    """Persist library playlist metadata."""
     metadata_file = MUSIC_DIR / "music_metadata.json"
     with open(metadata_file, "w") as f:
         json.dump(metadata, f, indent=2)
@@ -150,10 +150,10 @@ def save_playlist_order(playlist, order):
         json.dump(order, f, indent=2)
 
 
-def get_music_files(playlist="sprayfoam"):
+def get_music_files(playlist="library"):
     """
     Return list of track dicts for the given playlist.
-    playlist: 'sprayfoam' | 'generated' | 'spotify'
+    playlist: 'library' | 'generated' | 'spotify'
     Respects saved order from order.json if present.
     """
     if playlist == "spotify":
@@ -170,7 +170,7 @@ def get_music_files(playlist="sprayfoam"):
         music_dir = MUSIC_DIR
         metadata = load_music_metadata()
         url_prefix = "/music/"
-        default_artist = "DJ FoamBot"
+        default_artist = "AI DJ"
 
     files = []
     for f in music_dir.iterdir():
@@ -202,7 +202,7 @@ def get_music_files(playlist="sprayfoam"):
                     "title": f.stem,
                     "artist": default_artist,
                     "duration_seconds": 120,
-                    "description": "A certified banger from the foam vault!" if playlist == "sprayfoam" else "An AI-generated original!",
+                    "description": "A track from the music library!" if playlist == "library" else "An AI-generated original!",
                     "phone_number": None,
                     "ad_copy": "",
                     "fun_facts": [],
@@ -262,7 +262,7 @@ _AUDIO_MIME_TYPES = {
 
 @music_bp.route("/music/<filename>")
 def serve_music_file(filename):
-    """Serve sprayfoam music files."""
+    """Serve library music files."""
     safe_filename = "".join(c for c in filename if c.isalnum() or c in "._- ")
     music_path = MUSIC_DIR / safe_filename
     if not music_path.exists():
@@ -285,22 +285,22 @@ def serve_generated_music_file(filename):
 @music_bp.route("/api/music", methods=["GET"])
 def handle_music():
     """
-    All-in-one music endpoint (DJ Pi-Guy).
+    All-in-one music endpoint.
     Query params:
       action   : list | play | pause | resume | stop | skip | next | next_up |
                  volume | status | shuffle | sync | confirm
       track    : track name or filename (for play)
       volume   : 0-100 (for volume action)
-      playlist : 'sprayfoam' | 'generated'
+      playlist : 'library' | 'generated'
     """
     action = request.args.get("action", "list")
     track_param = request.args.get("track", "")
     volume_param = request.args.get("volume", "")
     playlist = request.args.get(
-        "playlist", current_music_state.get("current_playlist", "sprayfoam")
+        "playlist", current_music_state.get("current_playlist", "library")
     )
 
-    if playlist in ("sprayfoam", "generated", "spotify"):
+    if playlist in ("library", "generated", "spotify"):
         current_music_state["current_playlist"] = playlist
 
     # ── SPOTIFY ───────────────────────────────────────────────────────────
@@ -341,7 +341,7 @@ def handle_music():
                     "tracks": [],
                     "count": 0,
                     "playlist": "spotify",
-                    "available_playlists": ["sprayfoam", "generated", "spotify"],
+                    "available_playlists": ["library", "generated", "spotify"],
                     "source": "spotify",
                     "response": "Spotify streaming mode. Ask me to play any song, album, or playlist on Spotify.",
                 })
@@ -350,7 +350,7 @@ def handle_music():
                     "tracks": [],
                     "count": 0,
                     "playlist": playlist,
-                    "available_playlists": ["sprayfoam", "generated", "spotify"],
+                    "available_playlists": ["library", "generated", "spotify"],
                     "response": "I don't have any music yet! Upload some MP3s to my music folder and I'll spin them for you.",
                 })
             track_names = [t["name"] for t in music_files]
@@ -358,7 +358,7 @@ def handle_music():
                 "tracks": music_files,
                 "count": len(music_files),
                 "playlist": playlist,
-                "available_playlists": ["sprayfoam", "generated", "spotify"],
+                "available_playlists": ["library", "generated", "spotify"],
                 "response": (
                     f"I've got {len(music_files)} track{'s' if len(music_files) != 1 else ''} ready to spin: "
                     f"{', '.join(track_names[:5])}{'...' if len(track_names) > 5 else ''}"
@@ -404,7 +404,7 @@ def handle_music():
                 "duration_seconds": duration,
                 "dj_hints": _build_dj_hints(selected),
                 "reservation_id": reservation_id,
-                "response": f"DJ-FoamBot spinning up '{title}'! {description if description else 'Lets gooo!'}",
+                "response": f"Now playing '{title}'! {description if description else 'Lets gooo!'}",
             })
 
         # ── PAUSE ─────────────────────────────────────────────────────────
@@ -671,7 +671,7 @@ def handle_dj_transition():
 
 @music_bp.route("/api/music/upload", methods=["POST"])
 def upload_music():
-    """Upload a music file to the sprayfoam playlist."""
+    """Upload a music file to the library playlist."""
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
@@ -705,7 +705,7 @@ def upload_music():
 def list_playlists():
     """List all available playlists with track counts and total sizes."""
     playlists = []
-    for name, music_dir in (("sprayfoam", MUSIC_DIR), ("generated", GENERATED_MUSIC_DIR)):
+    for name, music_dir in (("library", MUSIC_DIR), ("generated", GENERATED_MUSIC_DIR)):
         music_extensions = {".mp3", ".wav", ".ogg", ".m4a", ".webm"}
         tracks = [f for f in music_dir.iterdir() if f.is_file() and f.suffix.lower() in music_extensions]
         playlists.append({
@@ -733,7 +733,7 @@ def delete_track(playlist, filename):
         music_dir = GENERATED_MUSIC_DIR
         load_meta = load_generated_music_metadata
         save_meta = save_generated_music_metadata
-    elif playlist == "sprayfoam":
+    elif playlist == "library":
         music_dir = MUSIC_DIR
         load_meta = load_music_metadata
         save_meta = save_music_metadata
@@ -772,7 +772,7 @@ def playlist_order(playlist):
     GET : Return the saved track order for the playlist (list of filenames).
     POST: Save a new track order.  Body: {"order": ["file1.mp3", "file2.mp3", ...]}
     """
-    if playlist not in ("sprayfoam", "generated"):
+    if playlist not in ("library", "generated"):
         return jsonify({"error": f"Unknown playlist '{playlist}'"}), 400
 
     if request.method == "GET":
@@ -794,7 +794,7 @@ def update_track_metadata(playlist, filename):
         load_meta = load_generated_music_metadata
         save_meta = save_generated_music_metadata
         music_dir = GENERATED_MUSIC_DIR
-    elif playlist == "sprayfoam":
+    elif playlist == "library":
         load_meta = load_music_metadata
         save_meta = save_music_metadata
         music_dir = MUSIC_DIR

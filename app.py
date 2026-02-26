@@ -44,11 +44,14 @@ def create_app(config_override: dict = None):
     )
 
     # Core Flask config
-    secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
-    if secret_key == 'dev-secret-key-change-in-prod':
+    secret_key = os.getenv('SECRET_KEY')
+    if not secret_key:
+        import secrets as _secrets
+        secret_key = _secrets.token_hex(32)
         logger.warning(
-            'SECRET_KEY is using the insecure default value. '
-            'Set the SECRET_KEY environment variable in production.'
+            'No SECRET_KEY set — generated a random key for this session. '
+            'Sessions will NOT persist across restarts. '
+            'Set SECRET_KEY in .env for production.'
         )
     app.config['SECRET_KEY'] = secret_key
     app.config['MAX_CONTENT_LENGTH'] = _MAX_UPLOAD_BYTES

@@ -30,8 +30,7 @@ export class Soundboard {
             'lets_go':           { file: 'lets_go.mp3',          triggers: ["let's go!", 'lets go!', "let's goooo", 'here we go'] },
             'gunshot':           { file: 'gunshot.mp3',          triggers: ['gunshot', 'gun shot', 'bang bang', 'shots fired', 'pow pow', 'blat blat'] },
             'bruh':              { file: 'bruh.mp3',             triggers: ['bruh', 'bruhhh'] },
-            'sad_trombone':      { file: 'sad_trombone.mp3',     triggers: ['sad trombone', 'womp womp', 'fail', 'wah wah'] },
-            'foam-it-up-lets-go':{ file: 'foam-it-up-lets-go.mp3', triggers: ['foam it up'] }
+            'sad_trombone':      { file: 'sad_trombone.mp3',     triggers: ['sad trombone', 'womp womp', 'fail', 'wah wah'] }
         };
 
         /** @type {Object.<string, HTMLAudioElement>} */

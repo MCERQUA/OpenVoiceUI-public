@@ -1,21 +1,21 @@
-# TTS Provider System for DJ-FoamBot
+# TTS Provider System
 
 > Multi-provider Text-to-Speech architecture for flexible, cost-effective voice synthesis
 
 ## Overview
 
-The TTS Provider System is a modular architecture that allows DJ-FoamBot to use multiple Text-to-Speech backends interchangeably.
+The TTS Provider System is a modular architecture that allows OpenVoiceUI to use multiple Text-to-Speech backends interchangeably.
 
 Currently supported providers:
-- **Supertonic TTS** (Active, Free) - Local ONNX-based TTS  
+- **Supertonic TTS** (Active, Free) - Local ONNX-based TTS
 - **Hume EVI** (Inactive) - Emotion-aware TTS with custom voice cloning
 
 ## Provider Comparison
 
 | Provider | Status | Cost/Min | Quality | Latency | Voices | Languages |
 |----------|--------|----------|---------|---------|--------|-----------|
-| **Supertonic** | ✅ Active | $0.00 | High | Very Fast | 10 | 5 |
-| **Hume EVI** | ❌ Inactive | $0.032 | High | Medium | 1 | 1 |
+| **Supertonic** | Active | $0.00 | High | Very Fast | 10 | 5 |
+| **Hume EVI** | Inactive | $0.032 | High | Medium | 1 | 1 |
 
 ### Cost Examples
 
@@ -40,7 +40,7 @@ curl http://localhost:5001/api/tts/providers
 curl -X POST http://localhost:5001/api/tts/generate \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "This is DJ-FoamBot!",
+    "text": "Hello from OpenVoiceUI!",
     "provider": "supertonic",
     "voice": "M1",
     "lang": "en",
@@ -76,10 +76,10 @@ class YourProvider(TTSProvider):
     def generate_speech(self, text: str, **kwargs) -> bytes:
         # Your implementation
         return audio_bytes
-    
+
     def list_voices(self):
         return ['voice1', 'voice2']
-    
+
     def get_info(self):
         return {'name': 'YourProvider', 'status': 'active'}
 ```
@@ -118,8 +118,8 @@ _PROVIDERS = {
 ### Provider Not Available
 Check registration in `__init__.py` and restart server.
 
-### Audio Generation Fails  
-Check logs: `journalctl -u pi-guy -f`
+### Audio Generation Fails
+Check logs: `journalctl -u openvoiceui -f`
 
 ### Voice Not Found
 Use `provider.list_voices()` to see available voices.
@@ -136,5 +136,5 @@ Generate speech from text. Returns WAV audio.
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: 2026-02-11
+**Version**: 1.0.0
+**Author**: OpenVoiceUI

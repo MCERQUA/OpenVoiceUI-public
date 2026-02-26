@@ -178,7 +178,7 @@ class WebSpeechSTT {
 }
 
 // ===== WAKE WORD DETECTOR =====
-// Listens for wake words ('hey dj', 'dj foambot', 'foam bot') in passive mode
+// Listens for wake words in passive mode
 class WakeWordDetector {
     constructor() {
         this.recognition = null;
@@ -186,7 +186,7 @@ class WakeWordDetector {
         this.onWakeWordDetected = null;
 
         // Wake words to listen for
-        this.wakeWords = ['hey dj', 'dj foambot', 'foam bot', 'pi guy', 'pie guy', 'hey pi guy', 'hey pie guy'];
+        this.wakeWords = ['hey assistant', 'hey voice', 'hey computer', 'hello'];
 
         // Check browser support
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;

@@ -75,6 +75,7 @@ transcripts/*
 !uploads/.gitkeep
 !transcripts/.gitkeep
 !generated_music/.gitkeep
+canvas-manifest.json
 canvas-manifest.bak
 .coverage
 .pytest_cache/
@@ -85,3 +86,18 @@ docs/session-*.md
 setup-notes-*.md
 setup-base-sudo.sh
 *.bak
+
+# Dev/test files (not for public repo)
+stt-test.html
+index-pi.html
+base.html
+test_supertonic.py
+tools_health_check.py
+job_runner.sh
+pi_notes/
+
+# Legacy doc locations (moved to docs/)
+README_SUPERTONIC.md
+SUPERTONIC_SETUP.md
+INTEGRATION_DETAILS.md
+TTS_PROVIDERS.md

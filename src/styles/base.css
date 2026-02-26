@@ -310,7 +310,7 @@
         .a2a-msg { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
         .a2a-msg:last-child { border-bottom: none; margin-bottom: 0; }
         .a2a-msg-who { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-        .a2a-msg-who.pi-guy { color: #60a5fa; }
+        .a2a-msg-who.assistant { color: #60a5fa; }
         .a2a-msg-who.pgai { color: #c084fc; }
         .a2a-msg-who.human { color: #4ade80; }
         .a2a-msg-text { color: #cdd9e5; }

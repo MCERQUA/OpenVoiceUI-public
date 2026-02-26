@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Supertonic TTS wrapper for DJ-FoamBot.
+Supertonic TTS wrapper for OpenVoiceUI.
 
 This module provides a clean interface to the Supertonic Text-to-Speech engine,
 wrapping the helper.py functionality for use in Flask applications.
 
-Author: DJ-FoamBot Integration
+Author: OpenVoiceUI
 Date: 2026-02-11
 """
 
@@ -19,7 +19,7 @@ import numpy as np
 import soundfile as sf
 
 # Add the Supertonic helper.py directory to the path
-SUPERTONIC_HELPER_PATH = "/home/mike/supertonic/py"
+SUPERTONIC_HELPER_PATH = os.environ.get("SUPERTONIC_HELPER_PATH", os.path.expanduser("~/supertonic/py"))
 if SUPERTONIC_HELPER_PATH not in sys.path:
     sys.path.insert(0, SUPERTONIC_HELPER_PATH)
 
@@ -53,16 +53,16 @@ class SupertonicTTS:
 
     Example:
         >>> tts = SupertonicTTS(
-        ...     onnx_dir="/home/mike/supertonic/assets/onnx",
-        ...     voice_style_path="/home/mike/supertonic/assets/voice_styles/M1.json"
+        ...     onnx_dir="~/supertonic/assets/onnx",
+        ...     voice_style_path="~/supertonic/assets/voice_styles/M1.json"
         ... )
         >>> audio_bytes = tts.generate_speech("Hello world, this is a test")
         >>> # audio_bytes contains WAV format audio data
     """
 
-    # Default paths
-    DEFAULT_ONNX_DIR = "/home/mike/supertonic/assets/onnx"
-    DEFAULT_VOICE_STYLES_DIR = "/home/mike/supertonic/assets/voice_styles"
+    # Default paths (use SUPERTONIC_MODEL_PATH env var or ~/supertonic)
+    DEFAULT_ONNX_DIR = os.environ.get("SUPERTONIC_ONNX_DIR", os.path.expanduser("~/supertonic/assets/onnx"))
+    DEFAULT_VOICE_STYLES_DIR = os.environ.get("SUPERTONIC_VOICE_STYLES_DIR", os.path.expanduser("~/supertonic/assets/voice_styles"))
 
     # Available voice styles
     AVAILABLE_VOICE_STYLES = {
@@ -377,7 +377,7 @@ if __name__ == "__main__":
     try:
         # Initialize TTS
         tts = SupertonicTTS(
-            onnx_dir="/home/mike/supertonic/assets/onnx",
+            onnx_dir=os.environ.get("SUPERTONIC_ONNX_DIR", os.path.expanduser("~/supertonic/assets/onnx")),
             voice_style_name="M1"
         )
 

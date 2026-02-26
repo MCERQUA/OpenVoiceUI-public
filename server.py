@@ -80,7 +80,7 @@ from routes.canvas import (
     canvas_context,
     update_canvas_context,
     extract_canvas_page_content,
-    get_canvas_context_for_piguy,
+    get_canvas_context,
     load_canvas_manifest,
     save_canvas_manifest,
     add_page_to_manifest,
@@ -305,10 +305,12 @@ def serve_index():
     import pathlib
     html = pathlib.Path("index.html").read_text()
     server_url = os.environ.get("AGENT_SERVER_URL", "").strip().rstrip("/")
-    if server_url:
-        config_block = f'<script>window.AGENT_CONFIG={{serverUrl:"{server_url}"}};</script>'
-    else:
-        config_block = "<script>window.AGENT_CONFIG={serverUrl:window.location.origin};</script>"
+    clerk_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
+    config_parts = []
+    config_parts.append(f'serverUrl:"{server_url}"' if server_url else 'serverUrl:window.location.origin')
+    if clerk_key:
+        config_parts.append(f'clerkPublishableKey:"{clerk_key}"')
+    config_block = f'<script>window.AGENT_CONFIG={{{",".join(config_parts)}}};</script>'
     html = html.replace("</head>", f"  {config_block}\n</head>", 1)
     resp = Response(html, mimetype="text/html")
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

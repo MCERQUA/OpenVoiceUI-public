@@ -26,12 +26,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Derived from publishable key: pk_test_c21hcnQtc25hcHBlci04LmNsZXJrLmFjY291bnRzLmRldiQ
-# base64 decode → "smart-snapper-8.clerk.accounts.dev$"
-_CLERK_FRONTEND_DOMAIN = os.getenv(
-    'CLERK_FRONTEND_API',
-    'smart-snapper-8.clerk.accounts.dev'
-)
+_CLERK_FRONTEND_DOMAIN = os.getenv('CLERK_FRONTEND_API', '')
 _JWKS_URL = f'https://{_CLERK_FRONTEND_DOMAIN}/.well-known/jwks.json'
 _JWKS_CACHE_TTL = 3600  # refresh keys every 60 minutes
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Supertonic TTS Provider for DJ-FoamBot.
+Supertonic TTS Provider for OpenVoiceUI.
 
 This provider wraps the existing supertonic_tts.py module, implementing
 the TTSProvider interface for seamless integration with the TTS provider system.
@@ -8,7 +8,7 @@ the TTSProvider interface for seamless integration with the TTS provider system.
 Supertonic is a local ONNX-based Text-to-Speech engine that supports multiple
 voice styles (M1-M5 for male, F1-F5 for female voices) and multiple languages.
 
-Author: DJ-FoamBot Integration
+Author: OpenVoiceUI
 Date: 2026-02-11
 """
 

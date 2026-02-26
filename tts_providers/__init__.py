@@ -18,7 +18,7 @@ Usage:
     >>> # List all providers
     >>> providers = list_providers()
 
-Author: DJ-FoamBot Integration
+Author: OpenVoiceUI
 Date: 2026-02-11
 """
 

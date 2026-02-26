@@ -39,10 +39,17 @@
     <script src="src/ui/face/FaceRenderer.js"></script>
     <script src="src/ui/settings/SettingsPanel.js"></script>
 
-    <!-- Clerk Authentication -->
-    <script async crossorigin="anonymous"
-        data-clerk-publishable-key="pk_test_c21hcnQtc25hcHBlci04LmNsZXJrLmFjY291bnRzLmRldiQ"
-        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+    <!-- Clerk Authentication (optional — set CLERK_PUBLISHABLE_KEY in .env) -->
+    <script>
+        // Only load Clerk if a key is injected by the server
+        if (window.AGENT_CONFIG?.clerkPublishableKey) {
+            const s = document.createElement('script');
+            s.async = true;
+            s.crossOrigin = 'anonymous';
+            s.dataset.clerkPublishableKey = window.AGENT_CONFIG.clerkPublishableKey;
+            s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+            document.head.appendChild(s);
+        }
     </script>
 </head>
 <body>

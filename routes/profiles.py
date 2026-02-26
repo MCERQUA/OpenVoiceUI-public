@@ -137,8 +137,8 @@ def activate_profile():
     """
     Activate a profile.
 
-    Request body: {"profile_id": "pi-guy"}
-    Response:     {"ok": true, "active": "pi-guy", "profile": {...}}
+    Request body: {"profile_id": "default"}
+    Response:     {"ok": true, "active": "default", "profile": {...}}
     """
     global _active_profile_id
 
@@ -201,7 +201,7 @@ def update_profile(profile_id):
 @profiles_bp.route("/api/profiles/<profile_id>", methods=["DELETE"])
 def delete_profile(profile_id):
     """
-    Delete a profile.  The default profile ('pi-guy') cannot be deleted.
+    Delete a profile.  The default profile ('default') cannot be deleted.
     Returns 204 on success, 400 if protected, 404 if not found.
     """
     manager = get_profile_manager()

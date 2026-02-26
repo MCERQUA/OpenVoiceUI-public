@@ -16,7 +16,7 @@ AI (voice layer) and OpenClaw / Clawdbot Gateway (brain layer):
         Side-channel for canvas commands extracted from OpenClaw responses.
         Returns and clears the pending canvas command queue so the frontend
         adapter (ElevenLabsHybridAdapter._startCanvasPolling) can load the
-        correct iframe without Pi-Guy reading HTML aloud.
+        correct iframe without the agent reading HTML aloud.
 
 Architecture:
     Browser (ElevenLabs SDK)

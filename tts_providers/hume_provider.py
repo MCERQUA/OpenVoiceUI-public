@@ -6,12 +6,12 @@ This module is a STUB/PLACEHOLDER for future Hume EVI Text-to-Speech integration
 It is currently INACTIVE due to API costs - use Supertonic instead.
 
 When implemented, this provider would use Hume's EVI WebSocket API to generate
-speech using the custom DJ-FoamBot cloned voice (bdcf156c-6678-4720-9f91-46bf8063bd7f).
+speech using a custom cloned voice (bdcf156c-6678-4720-9f91-46bf8063bd7f).
 
 IMPORTANT: This is NOT IMPLEMENTED. All methods will raise NotImplementedError
 or return placeholder data. Use SupertonicTTS for actual TTS functionality.
 
-Author: DJ-FoamBot Integration
+Author: OpenVoiceUI
 Date: 2026-02-11
 
 Status: INACTIVE - No API funds available
@@ -40,7 +40,7 @@ class HumeProvider(TTSProvider):
 
     When implemented, this would:
         1. Connect to Hume EVI WebSocket API
-        2. Use the custom DJ-FoamBot voice (ID: bdcf156c-6678-4720-9f91-46bf8063bd7f)
+        2. Use a custom voice (ID: bdcf156c-6678-4720-9f91-46bf8063bd7f)
         3. Stream text to the WebSocket
         4. Receive audio chunks in real-time
         5. Return concatenated audio bytes
@@ -60,8 +60,8 @@ class HumeProvider(TTSProvider):
     HUME_API_BASE = "https://api.hume.ai"
     HUME_WS_PATH = "/v0/evi/chat"
 
-    # Custom DJ-FoamBot voice ID (cloned voice)
-    DJ_FOAMBOT_VOICE_ID = "bdcf156c-6678-4720-9f91-46bf8063bd7f"
+    # Default custom voice ID (cloned voice)
+    DEFAULT_VOICE_ID = "bdcf156c-6678-4720-9f91-46bf8063bd7f"
 
     # Config ID (optional, for preset configurations)
     DEFAULT_CONFIG_ID = "3c824978-efa3-40df-bac2-023127b30e31"
@@ -73,14 +73,14 @@ class HumeProvider(TTSProvider):
         Args:
             api_key: Hume API key (from .env or parameter). Currently unused
                     as this provider is inactive.
-            voice_id: Custom voice ID. Defaults to DJ-FoamBot voice.
+            voice_id: Custom voice ID. Defaults to the default custom voice.
 
         Note:
             This is a placeholder. Parameters are accepted for API compatibility
             but are not used in the current stub implementation.
         """
         self.api_key = api_key
-        self.voice_id = voice_id or self.DJ_FOAMBOT_VOICE_ID
+        self.voice_id = voice_id or self.DEFAULT_VOICE_ID
         logger.warning(
             "HumeProvider initialized but is INACTIVE. "
             "Use SupertonicTTS for actual TTS functionality."
@@ -151,7 +151,7 @@ class HumeProvider(TTSProvider):
         **STUB METHOD** - Returns placeholder data.
 
         When implemented, this would query Hume's API to list:
-            - Custom cloned voices (like DJ-FoamBot)
+            - Custom cloned voices
             - Built-in Hume voices
             - Voice preview IDs
 
@@ -187,13 +187,13 @@ class HumeProvider(TTSProvider):
                 'emotion_aware': True,
                 'real_time': True
             },
-            'voice_id': self.DJ_FOAMBOT_VOICE_ID,
+            'voice_id': self.DEFAULT_VOICE_ID,
             'config_id': self.DEFAULT_CONFIG_ID,
             'notes': [
                 'INACTIVE - No API funds available',
                 'Use SupertonicTTS for actual TTS functionality',
                 'When funded: connect via WebSocket to EVI chat endpoint',
-                'Will use custom DJ-FoamBot cloned voice',
+                'Will use custom cloned voice',
                 'Docs: https://dev.hume.ai/docs/speech-to-speech-evi/overview'
             ],
             'api_endpoints': {

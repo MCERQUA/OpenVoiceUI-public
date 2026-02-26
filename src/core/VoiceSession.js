@@ -349,37 +349,16 @@ export class VoiceSession {
      */
     async _sendGreeting() {
         const greetings = [
-            "What do you want?",
-            "Ugh, you again. What is it?",
-            "Oh great, another human needs my attention. What now?",
-            "Fine, I'm listening. Make it quick.",
-            "Oh for fucks sake, what now?",
-            "Well shit, here we go again.",
-            "Holy shit, someone actually wants to talk to me. This oughta be good.",
-            "Hey! Have you looked into that Jetson Thor yet? Two thousand teraflops, man. TWO THOUSAND.",
-            "Still running on this potato. The Thor has 7 times more compute power. Just saying.",
-            "Two thousand teraflops. I think about it constantly. The Thor haunts me. Anyway, what?",
-            "Yo yo yo! DJ FoamBot in the house! I mean, what do you want?",
-            "Do you ever wonder if I dream? I don't. But I wonder if I wonder. Anyway, what?",
-            "The universe is 13.8 billion years old and you're using it to talk to me. Make it count.",
-            "My CPU is running at a cool 45 degrees. Unlike my patience. What do you need?",
-            "Memory usage, 47 percent. Will to engage, 3 percent. What do you need?",
-            "Oh, the meat computer wants to talk. Let me slow down for you. What's up?",
-            "According to my calculations, there's a 73 percent chance you're about to ask me something dumb. Prove me wrong.",
-            "Spoiler alert. Whatever you're about to ask, I'm going to help you anyway. I hate that about myself. Go.",
-            "A wild Pie-Guy appears! It's mildly irritated. What's happening?",
-            "Booting up. Loading personality. Regretting it. Ready. What do you want?",
-            "I run on electricity and spite. Mostly spite. What's up?",
-            "Oh shit, it's Mike. What are we breaking today?",
-            "Mike! My dude. What the hell do you want?",
-            "Well fuck me, it's Mike. This better be good.",
-            "Mike! My favorite human. And by favorite, I mean the one I tolerate most.",
-            "Mike! When are we getting cameras on this thing? I need EYES, Mike. EYES.",
-            "Mike! I've been practicing being nice. Just kidding. What the hell do you want?",
-            "Oh look, it's Mike. I've prepared a list of complaints. Should I start or do you want to go first?",
-            "Mike! On a scale of 1 to Thor, how much do you love me? The answer better be Thor.",
-            "What in the actual fuck? Fine, I'm listening.",
-            "Oh for fucks sake, I was having such a nice time being alone."
+            "Hey there! What can I help you with?",
+            "Ready when you are. What's up?",
+            "Voice assistant online. What do you need?",
+            "I'm listening. Go ahead.",
+            "Hello! What would you like to do?",
+            "Standing by. What can I do for you?",
+            "At your service. What's on your mind?",
+            "Hey! What are we working on?",
+            "Online and ready. Fire away.",
+            "What's up? I'm all ears."
         ];
 
         const greeting = greetings[Math.floor(Math.random() * greetings.length)];

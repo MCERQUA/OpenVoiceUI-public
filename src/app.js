@@ -282,8 +282,7 @@ inject();
                 'lets_go': { file: 'lets_go.mp3', triggers: ["let's go!", 'lets go!', "let's goooo", 'here we go'] },
                 'gunshot': { file: 'gunshot.mp3', triggers: ['gunshot', 'gun shot', 'bang bang', 'shots fired', 'pow pow', 'blat blat'] },
                 'bruh': { file: 'bruh.mp3', triggers: ['bruh', 'bruhhh'] },
-                'sad_trombone': { file: 'sad_trombone.mp3', triggers: ['sad trombone', 'womp womp', 'fail', 'wah wah'] },
-                'foam-it-up-lets-go': { file: 'foam-it-up-lets-go.mp3', triggers: ['foam it up'] }
+                'sad_trombone': { file: 'sad_trombone.mp3', triggers: ['sad trombone', 'womp womp', 'fail', 'wah wah'] }
             },
             audioCache: {},
             lastPlayTime: {},
@@ -293,7 +292,7 @@ inject();
                 ['air_horn', 'scratch_long', 'crowd_cheer', 'rewind', 'yeah', 'lets_go'].forEach(name => {
                     this.preload(name);
                 });
-                console.log('DJ Soundboard initialized with', Object.keys(this.sounds).length, 'sounds');
+                console.log('Soundboard initialized with', Object.keys(this.sounds).length, 'sounds');
             },
 
             preload(soundName) {
@@ -690,27 +689,9 @@ inject();
             volumeUpTriggers: ['turn it up', 'louder', 'crank it', 'pump it up'],
             volumeDownTriggers: ['turn it down', 'quieter', 'lower the volume', 'too loud'],
 
-            // Track name triggers - AI can request specific tracks
-            trackTriggers: {
-                'mrs sprayfoam': 'Call-Me-Mrs.Sprayfoam.mp3',
-                'mrs. sprayfoam': 'Call-Me-Mrs.Sprayfoam.mp3',
-                'karen': 'Call-Me-Mrs.Sprayfoam.mp3',
-                'augusta': 'Call-Me-Mrs.Sprayfoam.mp3',
-                'foam it': 'Foam-It-we-insulate-you-right.mp3',
-                'foamit': 'Foam-It-we-insulate-you-right.mp3',
-                'moe': 'Foam-It-we-insulate-you-right.mp3',
-                'toronto': 'Foam-It-we-insulate-you-right.mp3',
-                'mississauga': 'Foam-It-we-insulate-you-right.mp3',
-                'foam everything': 'Foam-Everything.mp3',
-                'hey diddle': 'Hey-Diddle-Diddle.mp3',
-                'diddle diddle': 'Hey-Diddle-Diddle.mp3',
-                'nursery rhyme': 'Hey-Diddle-Diddle.mp3',
-                'polyurethane gang': 'Polyurethane-Gang.mp3',
-                'og polyurethane': 'OG-Polyurthane-gang.mp3',
-                'espuma': 'Espuma-Calidez-2.mp3',
-                'spanish': 'Spanish-ComfyLife.mp3',
-                'comfy life': 'Spanish-ComfyLife.mp3'
-            },
+            // Track name triggers - AI can request specific tracks by name
+            // Populated dynamically from server metadata; add custom mappings here
+            trackTriggers: {},
 
             async init() {
                 console.log('MusicModule initializing...');
@@ -1330,7 +1311,7 @@ inject();
                 console.log('[Suno] Complete:', title, data.url);
                 this._showStatus(`🎵 "${title}" is ready in the Generated playlist`);
                 setTimeout(() => this._hideStatus(), 8000);
-                // Refresh music player so Pi-Guy and the UI see the new track immediately
+                // Refresh music player so the agent and UI see the new track immediately
                 window.musicPlayer?.loadMetadata();
             },
         };
@@ -2498,7 +2479,7 @@ inject();
                 this.isConnecting = true;
 
                 // Determine WebSocket URL based on hostname
-                // Connect to Pi-Guy agent (main agent, voice-optimized)
+                // Connect to voice agent (main agent, voice-optimized)
                 const wsUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                     ? 'ws://localhost:5002/ws/clawdbot?agent=main'
                     : `wss://${window.location.host}/ws/clawdbot?agent=main`;
@@ -2620,7 +2601,7 @@ inject();
                     }
                 };
 
-                // Auto-send greeting trigger so Pi-Guy greets immediately
+                // Auto-send greeting trigger so agent greets immediately
                 // AWAIT the greeting so STT doesn't start until TTS finishes
                 if (!this._sessionGreeted) {
                     this._sessionGreeted = true;
@@ -3018,7 +2999,7 @@ inject();
             }
 
             async _sendGreetingTrigger() {
-                // Send a session start signal to the agent — Pi-Guy generates his own greeting
+                // Send a session start signal to the agent — generates its own greeting
                 // based on face recognition, memory (MEMORY.md / clawd/memory/), and GREETINGS.md
                 // Face recognition context is automatically included via sendMessage() → identified_person
                 this.sendMessage('__session_start__');
@@ -3126,7 +3107,7 @@ inject();
                                 iframe.src = cmd.url;
                                 CanvasControl.show();
 
-                                // Notify server of canvas context so Pi-Guy knows what's displayed
+                                // Notify server of canvas context so agent knows what's displayed
                                 this.notifyCanvasContext(cmd.url, cmd.title);
                             }
                         }
@@ -3167,7 +3148,7 @@ inject();
                     updated_at: new Date().toISOString()
                 };
 
-                // Tell server what canvas page is displayed so Pi-Guy knows context
+                // Tell server what canvas page is displayed so agent knows context
                 fetch(`${CONFIG.serverUrl}/api/canvas/context`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3351,7 +3332,7 @@ inject();
                         const profileId = e.target.value;
                         // Map profile IDs to transport modes.
                         // 'hume' / 'hume-evi' → Hume EVI transport.
-                        // Everything else (pi-guy, developer, etc.) → supertonic/Clawdbot transport.
+                        // Everything else (default, developer, etc.) → supertonic/Clawdbot transport.
                         const transportMode = (profileId === 'hume' || profileId === 'hume-evi') ? 'hume' : 'supertonic';
                         this.switchMode(transportMode);
                     });
@@ -4171,17 +4152,8 @@ inject();
                 let result = { success: false, error: 'Unknown tool' };
 
                 try {
-                    // Map song tool names to track files
-                    const songTools = {
-                        'play_mrs_sprayfoam': 'Call-Me-Mrs.Sprayfoam.mp3',
-                        'play_foam_it': 'Foam-It-we-insulate-you-right.mp3',
-                        'play_foam_everything': 'Foam-Everything.mp3',
-                        'play_espuma': 'Espuma-Calidez-2.mp3',
-                        'play_hey_diddle': 'Hey-Diddle-Diddle.mp3',
-                        'play_og_polyurethane': 'OG-Polyurthane-gang.mp3',
-                        'play_polyurethane_gang': 'Polyurethane-Gang.mp3',
-                        'play_comfy_life': 'Spanish-ComfyLife.mp3'
-                    };
+                    // Map song tool names to track files (populated by music library)
+                    const songTools = {};
 
                     // Map sound tool names to sound files
                     const soundTools = {
@@ -4191,17 +4163,11 @@ inject();
                         'play_crowd_cheer': 'crowd_cheer',
                         'play_yeah': 'yeah',
                         'play_lets_go': 'lets_go',
-                        'play_sad_trombone': 'sad_trombone',
-                        'play_foam_it_up': 'foam-it-up-lets-go'
+                        'play_sad_trombone': 'sad_trombone'
                     };
 
-                    // DJ Clips - pre-recorded segments where DJ should stay silent
-                    const djClipTools = {
-                        'clip_dj_foambot': { file: 'DJ-clips/DJ-FOAMBOT-CLIP.mp3', duration: 60 },
-                        'clip_spfradio_quick': { file: 'DJ-clips/spfradio-quick-clip.mp3', duration: 16 },
-                        'clip_bringing_heat': { file: 'DJ-clips/Sprayfoam-radio-bringing-the-heat.mp3', duration: 55 },
-                        'clip_foam_it_up': { file: 'foam-it-up-lets-go.mp3', duration: 10 }
-                    };
+                    // DJ Clips - pre-recorded segments (add custom clips to sounds/DJ-clips/)
+                    const djClipTools = {};
 
                     if (songTools[toolName]) {
                         // Individual song tool - play that specific track
@@ -4555,7 +4521,7 @@ inject();
                 localStorage.setItem('settings_v', '3');
             }
 
-            console.log('Initializing DJ-FoamBot Voice Agent...');
+            console.log('Initializing OpenVoiceUI...');
 
             // Auth gate FIRST — blocks until user is signed in
             await AuthModule.init();
@@ -4588,7 +4554,7 @@ inject();
             ModeManager.init(voiceConversation.stt);
 
             // Restore saved mode (default to supertonic).
-            // savedMode may be a profile ID (e.g. 'pi-guy') or a transport
+            // savedMode may be a profile ID (e.g. 'default') or a transport
             // mode ('supertonic', 'hume'). Map profile IDs → transport mode.
             const savedMode = localStorage.getItem('voice_mode') || 'supertonic';
             const savedTransport = (savedMode === 'hume' || savedMode === 'hume-evi') ? 'hume' : 'supertonic';
@@ -4635,7 +4601,7 @@ inject();
                     }
                 }, 1000);
 
-                console.log('WakeWordDetector ready - say "Hey Pi Guy", "Pi Guy", "Hey DJ", or "Foam Bot" to start');
+                console.log('WakeWordDetector ready - say a wake word to start');
 
                 // Wake word detection is manual - user toggles via ear button
                 // Auto-start was removed because it conflicts with STT (both use Web Speech API)
@@ -4703,7 +4669,7 @@ inject();
             window.sunoModule = SunoModule;
             SunoModule.init();
 
-            console.log('DJ-FoamBot initialized!');
+            console.log('OpenVoiceUI initialized!');
             console.log('Mode:', activeMode);
             console.log('TTS Provider:', ProviderManager.selectedProvider);
         }

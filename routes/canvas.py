@@ -29,7 +29,7 @@ CANVAS_MANIFEST_PATH = _APP_ROOT / 'canvas-manifest.json'
 CANVAS_PAGES_DIR = Path(os.getenv('CANVAS_PAGES_DIR', str(_APP_ROOT / 'canvas-pages')))
 CANVAS_SSE_PORT = int(os.getenv('CANVAS_SSE_PORT', '3030'))
 CANVAS_SESSION_PORT = int(os.getenv('CANVAS_SESSION_PORT', '3002'))
-BRAIN_EVENTS_PATH = Path('/tmp/piguy-voice-events.jsonl')
+BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
 # Self-hosted installs: auth is disabled by default. Set CANVAS_REQUIRE_AUTH=true to enable Clerk JWT checks.
 CANVAS_REQUIRE_AUTH = os.getenv('CANVAS_REQUIRE_AUTH', 'false').lower() == 'true'
 
@@ -150,8 +150,8 @@ def extract_canvas_page_content(page_path: str, max_chars: int = 1000) -> str:
         return ''
 
 
-def get_canvas_context_for_piguy() -> str:
-    """Return canvas context string for Pi-Guy's system prompt with full page catalog."""
+def get_canvas_context() -> str:
+    """Return canvas context string for the agent's system prompt with full page catalog."""
     manifest = load_canvas_manifest()
     parts = ['\n--- CANVAS CONTEXT ---']
 
@@ -200,7 +200,7 @@ def get_canvas_context_for_piguy() -> str:
     parts.append('- The canvas will open automatically when user sees your response')
     parts.append('\nAGENT SONG GENERATION (Suno AI):')
     parts.append('- To generate a new song, include: [SUNO_GENERATE:describe the song here]')
-    parts.append('- Example: [SUNO_GENERATE:upbeat hip hop track about spray foam insulation]')
+    parts.append('- Example: [SUNO_GENERATE:upbeat track about a sunny day]')
     parts.append('- The frontend will call /api/suno, poll for completion (~45s), then auto-play the new song')
     parts.append('- Songs are saved to generated_music/ and appear in the music player')
     parts.append('- Costs ~12 Suno credits per song (2 tracks generated per request)')
@@ -209,7 +209,7 @@ def get_canvas_context_for_piguy() -> str:
     parts.append('- To play a specific track, include: [MUSIC_PLAY:track name]')
     parts.append('- To stop music, include: [MUSIC_STOP]')
     parts.append('- To skip to next track, include: [MUSIC_NEXT]')
-    parts.append('- Available tracks: Mrs Sprayfoam, Foam It, Foam Everything, Espuma, Hey Diddle, OG Polyurethane, Polyurethane Gang, Comfy Life')
+    parts.append('- Available tracks are loaded dynamically from the music library')
     parts.append('- The music player will open/close automatically when user sees your response')
     parts.append('--- END CANVAS CONTEXT ---')
 
@@ -337,8 +337,7 @@ def sync_canvas_manifest() -> dict:
             }
         if page_id not in manifest['categories'][category]['pages']:
             manifest['categories'][category]['pages'].append(page_id)
-        if category == 'uncategorized' and page_id not in manifest['uncategorized']:
-            manifest['uncategorized'].append(page_id)
+        # Note: uncategorized pages are managed via manifest['categories']['uncategorized']['pages']
 
     # Reconcile: pages registered in pages{} but missing from their category list
     for page_id, page_data in manifest['pages'].items():
@@ -499,7 +498,7 @@ def canvas_proxy():
         return Response(html_content, mimetype='text/html')
     except Exception as exc:
         logger.error(f'Canvas proxy error: {exc}')
-        return f'<html><body><h1>Canvas Error</h1><p>{str(exc)}</p></body></html>', 500
+        return '<html><body><h1>Canvas Error</h1><p>Internal server error</p></body></html>', 500
 
 
 @canvas_bp.route('/canvas-sse/<path:path>')
@@ -596,7 +595,7 @@ def canvas_pages_proxy(path):
         return 'Page not found', 404
     except Exception as exc:
         logger.error(f'Canvas pages proxy error: {exc}')
-        return str(exc), 500
+        return 'Internal server error', 500
 
 
 @canvas_bp.route('/images/<path:path>')
@@ -612,7 +611,7 @@ def canvas_images_proxy(path):
         return 'Image not found', 404
     except Exception as exc:
         logger.error(f'Canvas images proxy error: {exc}')
-        return str(exc), 500
+        return 'Internal server error', 500
 
 
 @canvas_bp.route('/canvas-session/<path:path>', methods=['GET', 'POST'])
@@ -882,9 +881,8 @@ def create_canvas_page():
 @canvas_bp.route('/api/canvas/mtime/<path:filename>', methods=['GET'])
 def canvas_mtime(filename):
     """Return last modified time of a canvas page (frontend uses to detect changes)."""
-    canvas_dir = CANVAS_PAGES_DIR
-    filepath = canvas_dir / filename
-    if not filepath.exists() or not filepath.is_file():
+    resolved = _safe_canvas_path(str(CANVAS_PAGES_DIR), filename)
+    if resolved is None or not resolved.exists() or not resolved.is_file():
         return jsonify({'error': 'not found'}), 404
-    mtime = filepath.stat().st_mtime
+    mtime = resolved.stat().st_mtime
     return jsonify({'mtime': mtime, 'filename': filename})

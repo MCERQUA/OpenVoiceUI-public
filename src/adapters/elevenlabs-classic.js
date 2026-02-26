@@ -81,7 +81,7 @@ const ElevenLabsClassicAdapter = {
 
     // ── Identity & capabilities ───────────────────────────────────────────────
 
-    name: 'ElevenLabs Classic (Pi-Guy)',
+    name: 'ElevenLabs Classic',
 
     /** Feature flags: shell shows/hides UI elements based on this array */
     capabilities: [
