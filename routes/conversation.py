@@ -537,7 +537,14 @@ def _conversation_inner():
     log_conversation('user', user_message, session_id=session_id,
                      tts_provider=tts_provider, voice=voice)
 
-    message_with_context = context_prefix + user_message if context_prefix else user_message
+    # Replace the legacy __session_start__ sentinel with a natural-language greeting
+    # prompt so the LLM produces a real greeting instead of a system sentinel ("NO").
+    # user_message is kept as-is so the sentinel suppression logic still works.
+    _gateway_message = (
+        'A new voice session has just started. Give a brief, friendly one-sentence greeting.'
+        if user_message == '__session_start__' else user_message
+    )
+    message_with_context = context_prefix + _gateway_message if context_prefix else _gateway_message
     ai_response = None
     captured_actions = []
 
@@ -707,7 +714,7 @@ def _conversation_inner():
                             )
                             metrics['profile'] = 'gateway'
                             metrics['model'] = 'glm-4.7-flash'
-                            print(f"[DEBUG] Gateway response ({len(full_response or '')} chars): {repr((full_response or '')[:300])}", flush=True)
+                            logger.debug(f"[GW] Gateway response ({len(full_response or '')} chars): {repr((full_response or '')[:300])}")
                             logger.info(
                                 f"### LLM inference completed in "
                                 f"{metrics['llm_inference_ms']}ms "

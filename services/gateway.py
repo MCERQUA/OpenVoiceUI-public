@@ -37,6 +37,15 @@ from cryptography.hazmat.primitives.serialization import (
 
 logger = logging.getLogger(__name__)
 
+# System/internal response strings that must never be surfaced to the user.
+# The OpenClaw agent sometimes responds to background heartbeat instructions
+# with these strings — they are not meaningful AI replies.
+_SYSTEM_RESPONSE_PATTERNS = frozenset({
+    'HEARTBEAT_OK',
+    'heartbeat_ok',
+    'HEARTBEAT OK',
+})
+
 # Path to the externalized system prompt file
 _PROMPT_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts', 'voice-system-prompt.md')
 _PROMPT_FALLBACK = (
@@ -391,7 +400,7 @@ class GatewayConnection:
         system_prompt = _load_system_prompt()
 
         full_message = f"{system_prompt}\n\nUser message: {message}"
-        print(f"[DEBUG GW] Sending to gateway ({len(full_message)} chars). User part: {repr(message[:120])}", flush=True)
+        logger.debug(f"[GW] Sending to gateway ({len(full_message)} chars). User part: {repr(message[:120])}")
 
         chat_params = {
             "message": full_message,
@@ -512,7 +521,7 @@ class GatewayConnection:
                         event_queue.put({'type': 'action', 'action': action})
                         if phase == 'start':
                             tool_name = tool_data.get('name', '?')
-                            print(f"[DEBUG GW] TOOL CALL: {tool_name}", flush=True)
+                            logger.debug(f"[GW] TOOL CALL: {tool_name}")
                             logger.info(f"### TOOL START: {tool_name}")
                             if tool_name in ('sessions_spawn',
                                              'sessions-spawn',
@@ -581,6 +590,17 @@ class GatewayConnection:
                                 prev_text_len = 0
                                 collected_text = ''
                             elif collected_text:
+                                if collected_text.strip() in _SYSTEM_RESPONSE_PATTERNS:
+                                    logger.info(
+                                        f"### Suppressing system response "
+                                        f"(lifecycle end): {collected_text!r}"
+                                    )
+                                    event_queue.put({
+                                        'type': 'text_done',
+                                        'response': None,
+                                        'actions': captured_actions
+                                    })
+                                    return
                                 logger.info(
                                     f"### ✓✓✓ AI RESPONSE (lifecycle end): "
                                     f"{collected_text[:200]}..."
@@ -618,7 +638,18 @@ class GatewayConnection:
                                 final_text = content
 
                         if final_text:
-                            print(f"[DEBUG GW] chat.final text ({len(final_text)} chars): {repr(final_text[:200])}", flush=True)
+                            logger.debug(f"[GW] chat.final text ({len(final_text)} chars): {repr(final_text[:200])}")
+                            if final_text.strip() in _SYSTEM_RESPONSE_PATTERNS:
+                                logger.info(
+                                    f"### Suppressing system response "
+                                    f"(chat final): {final_text!r}"
+                                )
+                                event_queue.put({
+                                    'type': 'text_done',
+                                    'response': None,
+                                    'actions': captured_actions
+                                })
+                                return
                             logger.info(
                                 f"### ✓✓✓ AI RESPONSE (chat final): "
                                 f"{final_text[:200]}..."
@@ -680,7 +711,7 @@ class GatewayConnection:
                 continue
 
         # Hard timeout fallback
-        print(f"[DEBUG GW] hard timeout. collected_text ({len(collected_text)} chars): {repr(collected_text[:200])}", flush=True)
+        logger.warning(f"[GW] hard timeout. collected_text ({len(collected_text)} chars): {repr(collected_text[:200])}")
         if collected_text:
             event_queue.put({
                 'type': 'text_done',
