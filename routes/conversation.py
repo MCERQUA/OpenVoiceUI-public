@@ -32,6 +32,7 @@ from pathlib import Path
 from flask import Blueprint, Response, jsonify, make_response, request
 
 from routes.canvas import canvas_context, update_canvas_context, CANVAS_PAGES_DIR
+from routes.music import current_music_state as _music_state
 from services.gateway_manager import gateway_manager
 from services.tts import generate_tts_b64 as _tts_generate_b64
 from tts_providers import get_provider, list_providers
@@ -500,7 +501,17 @@ def _conversation_inner():
             context_parts.append('[Canvas CLOSED]')
         if ui_context.get('canvasMenuOpen'):
             context_parts.append('[Canvas menu visible to user]')
-        if ui_context.get('musicPlaying'):
+        # Use server-side music state as authoritative source
+        _srv_track = _music_state.get('current_track')
+        _srv_playing = _music_state.get('playing', False)
+        if _srv_playing and _srv_track:
+            _track_name = _srv_track.get('title') or _srv_track.get('name', 'unknown')
+            context_parts.append(f'[Music PLAYING: {_track_name}]')
+        elif _srv_track:
+            _track_name = _srv_track.get('title') or _srv_track.get('name', 'unknown')
+            context_parts.append(f'[Music PAUSED/STOPPED — last track: {_track_name}]')
+        elif ui_context.get('musicPlaying'):
+            # Fallback: frontend reported playing but server has no state
             track = ui_context.get('musicTrack', 'unknown')
             context_parts.append(f'[Music PLAYING: {track}]')
         context_parts.append(
