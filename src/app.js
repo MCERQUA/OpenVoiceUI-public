@@ -2803,6 +2803,12 @@ inject();
                             const spotifyArtist = spotifyMatch[2]?.trim() || '';
                             window.musicPlayer?.playSpotify(spotifyTrack, spotifyArtist);
                         }
+                        // Check for [SLEEP] — agent-initiated return to wake-word mode
+                        if (/\[SLEEP\]/i.test(text) && !canvasCommandsProcessed.has('SLEEP')) {
+                            canvasCommandsProcessed.add('SLEEP');
+                            console.log('[Sleep] Agent requested sleep — will disconnect after audio');
+                            window._sleepAfterResponse = true;
+                        }
                         // Early HTML canvas: as soon as </html> lands in the stream, save and show
                         // Don't wait for text_done — avoids incomplete-response failures
                         if (!canvasCommandsProcessed.has('HTML_CANVAS')) {
@@ -3225,6 +3231,12 @@ inject();
                     this.isPlaying = false;
                     this.callbacks.onListening();
                     WaveformModule.setAmplitude(0);
+                    // Agent requested sleep — disconnect after farewell audio finishes
+                    if (window._sleepAfterResponse) {
+                        window._sleepAfterResponse = false;
+                        console.log('[Sleep] Farewell audio done — returning to wake-word mode');
+                        setTimeout(() => this.disconnect(), 600);
+                    }
                     return;
                 }
 
