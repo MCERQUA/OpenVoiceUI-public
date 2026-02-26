@@ -408,8 +408,12 @@ def server_stats():
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
+        from services.gateway_manager import gateway_manager
+        gateways = gateway_manager.list_gateways()
+
         return jsonify({
             'cpu_percent': cpu,
+            'gateways': gateways,
             'memory': {
                 'used_gb': round(mem.used / 1024 ** 3, 2),
                 'total_gb': round(mem.total / 1024 ** 3, 2),

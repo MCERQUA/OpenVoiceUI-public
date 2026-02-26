@@ -1,0 +1,9 @@
+{
+  "id": "example-gateway",
+  "name": "Example Gateway (Echo)",
+  "version": "1.0.0",
+  "provides": "gateway",
+  "gateway_class": "Gateway",
+  "requires_env": [],
+  "description": "Reference implementation — echoes messages back. Use as a template."
+}

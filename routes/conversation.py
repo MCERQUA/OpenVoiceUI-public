@@ -32,7 +32,7 @@ from pathlib import Path
 from flask import Blueprint, Response, jsonify, make_response, request
 
 from routes.canvas import canvas_context, update_canvas_context, CANVAS_PAGES_DIR
-from services.gateway import gateway_connection
+from services.gateway_manager import gateway_manager
 from services.tts import generate_tts_b64 as _tts_generate_b64
 from tts_providers import get_provider, list_providers
 
@@ -447,6 +447,7 @@ def _conversation_inner():
     ui_context = data.get('ui_context', {})
     identified_person = data.get('identified_person') or None
     agent_id = data.get('agent_id') or None  # e.g. 'default'; None = default 'main'
+    gateway_id = data.get('gateway_id') or None  # plugin gateway id; None = 'openclaw'
     max_response_chars = data.get('max_response_chars') or None  # profile cap, truncates at sentence boundary
     metrics['session_id'] = session_id
     metrics['user_message_len'] = len(user_message)
@@ -547,22 +548,18 @@ def _conversation_inner():
     ai_response = None
     captured_actions = []
 
-    # ── PRIMARY PATH: Clawdbot Gateway (OpenClaw + GLM 4.7-flash) ─────────
-    if gateway_connection.is_configured():
+    # ── PRIMARY PATH: Gateway (routed by gateway_id from request/profile) ──
+    if gateway_manager.is_configured():
         try:
             logger.info('### Starting Gateway connection...')
             event_queue: queue.Queue = queue.Queue()
-
-            # Per-agent session keys — each agent keeps its own warm session
-            from services.gateway import _GATEWAY_SESSION_KEYS
-            _agent_key = _GATEWAY_SESSION_KEYS.get(agent_id or 'default')
-            _session_key = _agent_key if _agent_key else get_voice_session_key()
+            _session_key = get_voice_session_key()
 
             def _run_gateway():
-                # stream_to_queue routes to the correct gateway via GatewayRouter
-                gateway_connection.stream_to_queue(
+                gateway_manager.stream_to_queue(
                     event_queue, message_with_context, _session_key, captured_actions,
-                    agent_id=agent_id
+                    gateway_id=gateway_id,
+                    agent_id=agent_id,
                 )
 
             t_llm_start = time.time()

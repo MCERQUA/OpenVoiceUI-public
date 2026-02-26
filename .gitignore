@@ -77,6 +77,14 @@ transcripts/*
 !generated_music/.gitkeep
 canvas-manifest.json
 canvas-manifest.bak
+
+# Plugins — installed locally, not committed to the base repo.
+# Each plugin is its own repo: git clone <url> plugins/<id>
+# The example-gateway reference and README are tracked.
+plugins/*/
+!plugins/example-gateway/
+!plugins/README.md
+!plugins/.gitkeep
 .coverage
 .pytest_cache/
 backups/
