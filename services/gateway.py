@@ -19,6 +19,8 @@ Usage:
 """
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import os
@@ -28,6 +30,10 @@ import uuid
 from pathlib import Path
 
 import websockets
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding, NoEncryption, PrivateFormat, PublicFormat, load_pem_private_key
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +79,51 @@ def _load_system_prompt() -> str:
     except Exception:
         base = _PROMPT_FALLBACK
     return base + _load_generated_tracks()
+
+
+def _load_device_identity() -> dict:
+    """Load or generate the Ed25519 device identity for OpenClaw auth."""
+    identity_file = os.path.join(os.path.dirname(__file__), '..', '.device-identity.json')
+    if os.path.exists(identity_file):
+        with open(identity_file) as f:
+            return json.load(f)
+    # Generate new Ed25519 key pair
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+    raw_pub = public_key.public_bytes(Encoding.Raw, PublicFormat.Raw)
+    device_id = hashlib.sha256(raw_pub).hexdigest()
+    pub_pem = public_key.public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo).decode()
+    priv_pem = private_key.private_bytes(
+        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
+    ).decode()
+    identity = {"deviceId": device_id, "publicKeyPem": pub_pem, "privateKeyPem": priv_pem}
+    with open(identity_file, 'w') as f:
+        json.dump(identity, f)
+    logger.info(f"Generated new device identity: {device_id[:16]}...")
+    return identity
+
+
+def _sign_device_connect(identity: dict, client_id: str, client_mode: str,
+                          role: str, scopes: list, token: str, nonce: str) -> dict:
+    """Sign the device connect payload with Ed25519 for OpenClaw ≥ 2026.2.24."""
+    signed_at = int(time.time() * 1000)
+    scopes_str = ",".join(scopes)
+    payload = "|".join([
+        "v2", identity["deviceId"], client_id, client_mode,
+        role, scopes_str, str(signed_at), token or "", nonce
+    ])
+    private_key = load_pem_private_key(identity["privateKeyPem"].encode(), password=None)
+    signature = private_key.sign(payload.encode())
+    sig_b64 = base64.b64encode(signature).decode()
+    raw_pub = private_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    pub_b64url = base64.urlsafe_b64encode(raw_pub).rstrip(b'=').decode()
+    return {
+        "id": identity["deviceId"],
+        "publicKey": pub_b64url,
+        "signature": sig_b64,
+        "signedAt": signed_at,
+        "nonce": nonce
+    }
 
 
 class GatewayConnection:
@@ -172,6 +223,14 @@ class GatewayConnection:
                 f"Expected connect.challenge, got: {challenge_data}"
             )
 
+        # Extract nonce from challenge for device signing
+        nonce = challenge_data.get('payload', {}).get('nonce', '')
+        scopes = ["operator.read", "operator.write"]
+        identity = _load_device_identity()
+        device_block = _sign_device_connect(
+            identity, "cli", "cli", "operator", scopes, self.auth_token, nonce
+        )
+
         # Connect format — client.id must be "cli" (gateway validates this as a constant)
         handshake = {
             "type": "req",
@@ -181,9 +240,10 @@ class GatewayConnection:
                 "minProtocol": 3, "maxProtocol": 3,
                 "client": {"id": "cli", "version": "1.0.0", "platform": "linux", "mode": "cli"},
                 "role": "operator",
-                "scopes": ["operator.read", "operator.write"],
+                "scopes": scopes,
                 "caps": ["tool-events"], "commands": [], "permissions": {},
                 "auth": {"token": self.auth_token},
+                "device": device_block,
                 "locale": "en-US",
                 "userAgent": "openvoice-ui-voice/1.0.0"
             }
@@ -331,6 +391,7 @@ class GatewayConnection:
         system_prompt = _load_system_prompt()
 
         full_message = f"{system_prompt}\n\nUser message: {message}"
+        print(f"[DEBUG GW] Sending to gateway ({len(full_message)} chars). User part: {repr(message[:120])}", flush=True)
 
         chat_params = {
             "message": full_message,
@@ -451,6 +512,7 @@ class GatewayConnection:
                         event_queue.put({'type': 'action', 'action': action})
                         if phase == 'start':
                             tool_name = tool_data.get('name', '?')
+                            print(f"[DEBUG GW] TOOL CALL: {tool_name}", flush=True)
                             logger.info(f"### TOOL START: {tool_name}")
                             if tool_name in ('sessions_spawn',
                                              'sessions-spawn',
@@ -556,6 +618,7 @@ class GatewayConnection:
                                 final_text = content
 
                         if final_text:
+                            print(f"[DEBUG GW] chat.final text ({len(final_text)} chars): {repr(final_text[:200])}", flush=True)
                             logger.info(
                                 f"### ✓✓✓ AI RESPONSE (chat final): "
                                 f"{final_text[:200]}..."
@@ -617,6 +680,7 @@ class GatewayConnection:
                 continue
 
         # Hard timeout fallback
+        print(f"[DEBUG GW] hard timeout. collected_text ({len(collected_text)} chars): {repr(collected_text[:200])}", flush=True)
         if collected_text:
             event_queue.put({
                 'type': 'text_done',

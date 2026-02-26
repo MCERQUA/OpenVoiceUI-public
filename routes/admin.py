@@ -167,6 +167,36 @@ ALLOWED_RPC_METHODS = frozenset({
 
 
 # ---------------------------------------------------------------------------
+# Auth check endpoint
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/api/auth/check', methods=['GET'])
+def auth_check():
+    """
+    Check if the current Clerk session is on the allowed list.
+    Called by the frontend after sign-in to determine whether to show the full UI
+    or a waiting-list screen.
+
+    Returns:
+        200 {"allowed": true, "user_id": "..."}   — user is approved
+        403 {"allowed": false, "user_id": "..."}   — signed in but not on allowlist
+        401 {"allowed": false, "user_id": null}    — not signed in at all
+    """
+    try:
+        from auth.middleware import get_token_from_request, verify_clerk_token
+        token = get_token_from_request()
+        if not token:
+            return jsonify({'allowed': False, 'user_id': None, 'reason': 'not_signed_in'}), 401
+        user_id = verify_clerk_token(token)
+        if user_id:
+            return jsonify({'allowed': True, 'user_id': user_id})
+        # Token valid but user not in allowlist (verify_clerk_token returns None when blocked)
+        return jsonify({'allowed': False, 'user_id': None, 'reason': 'not_on_allowlist'}), 403
+    except Exception as exc:
+        logger.error(f'auth_check error: {exc}')
+        return jsonify({'allowed': False, 'user_id': None, 'reason': 'error'}), 500
+
+
 # Gateway RPC proxy endpoints
 # ---------------------------------------------------------------------------
 

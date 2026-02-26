@@ -79,9 +79,9 @@ class SupertonicProvider(TTSProvider):
         ... )
     """
 
-    # Default paths
-    DEFAULT_ONNX_DIR = "/home/mike/supertonic/assets/onnx"
-    DEFAULT_VOICE_STYLES_DIR = "/home/mike/supertonic/assets/voice_styles"
+    # Default paths — override via SUPERTONIC_MODEL_PATH env var
+    DEFAULT_ONNX_DIR = os.getenv('SUPERTONIC_MODEL_PATH', '/opt/supertonic/assets/onnx')
+    DEFAULT_VOICE_STYLES_DIR = None  # derived from onnx_dir if not set
 
     # Available voice styles (expanded from base implementation)
     AVAILABLE_VOICES = [
@@ -127,44 +127,44 @@ class SupertonicProvider(TTSProvider):
         """
         super().__init__()
 
-        # Check if SupertonicTTS is available
-        if SupertonicTTS is None:
-            raise ValueError(
-                f"SupertonicTTS module not available: {_import_error}. "
-                f"Ensure supertonic_tts.py exists and dependencies are installed."
-            )
-
-        # Store configuration
-        self.onnx_dir = onnx_dir or self.DEFAULT_ONNX_DIR
-        self.voice_styles_dir = voice_styles_dir or self.DEFAULT_VOICE_STYLES_DIR
-        self.default_voice = default_voice
-        self.use_gpu = use_gpu
-
-        # Validate default voice
-        if default_voice not in self.AVAILABLE_VOICES:
-            raise ValueError(
-                f"Invalid default_voice: {default_voice}. "
-                f"Available: {self.AVAILABLE_VOICES}"
-            )
-
-        # Validate paths
-        if not os.path.exists(self.onnx_dir):
-            raise FileNotFoundError(
-                f"ONNX directory not found: {self.onnx_dir}"
-            )
-
-        if not os.path.exists(self.voice_styles_dir):
-            raise FileNotFoundError(
-                f"Voice styles directory not found: {self.voice_styles_dir}"
-            )
-
-        # Initialize with default voice
         self._status = 'inactive'
         self._init_error = None
         self._tts_cache: Dict[str, SupertonicTTS] = {}
 
+        # Check if SupertonicTTS module is available
+        if SupertonicTTS is None:
+            self._status = 'error'
+            self._init_error = f"supertonic_tts module not found. Set SUPERTONIC_MODEL_PATH in .env and ensure supertonic_tts.py is present."
+            self.onnx_dir = onnx_dir or self.DEFAULT_ONNX_DIR
+            self.voice_styles_dir = voice_styles_dir or self.DEFAULT_ONNX_DIR.replace('/onnx', '/voice_styles')
+            self.default_voice = default_voice
+            self.use_gpu = use_gpu
+            return
+
+        # Store configuration
+        self.onnx_dir = onnx_dir or self.DEFAULT_ONNX_DIR
+        self.voice_styles_dir = (
+            voice_styles_dir
+            or (self.DEFAULT_VOICE_STYLES_DIR if self.DEFAULT_VOICE_STYLES_DIR
+                else os.path.join(os.path.dirname(self.onnx_dir), 'voice_styles'))
+        )
+        self.default_voice = default_voice
+        self.use_gpu = use_gpu
+
+        # Soft-fail on missing paths — provider shows as 'error' but appears in the list
+        if not os.path.exists(self.onnx_dir):
+            self._status = 'error'
+            self._init_error = f"ONNX directory not found: {self.onnx_dir}. Set SUPERTONIC_MODEL_PATH in .env."
+            logger.warning(f"SupertonicProvider: {self._init_error}")
+            return
+
+        if not os.path.exists(self.voice_styles_dir):
+            self._status = 'error'
+            self._init_error = f"Voice styles directory not found: {self.voice_styles_dir}"
+            logger.warning(f"SupertonicProvider: {self._init_error}")
+            return
+
         try:
-            # Test initialization with default voice
             self._create_tts_instance(self.default_voice)
             self._status = 'active'
             logger.info(f"SupertonicProvider initialized with voice '{default_voice}'")
@@ -371,6 +371,7 @@ class SupertonicProvider(TTSProvider):
             >>> info['languages']
             ['en', 'ko', 'es', 'pt', 'fr']
         """
+        onnx_dir = getattr(self, 'onnx_dir', self.DEFAULT_ONNX_DIR)
         return {
             'name': 'Supertonic TTS',
             'provider_id': 'supertonic',
@@ -393,8 +394,8 @@ class SupertonicProvider(TTSProvider):
             'languages': self.SUPPORTED_LANGUAGES.copy(),
             'max_characters': 10000,
             'notes': (
-                'Free, fast, local inference. Default provider for DJ-FoamBot. '
-                f'Using ONNX models from: {self.onnx_dir}'
+                'Free, fast, local inference. Requires local ONNX models. '
+                f'Set SUPERTONIC_MODEL_PATH in .env. Current path: {onnx_dir}'
             ),
             'documentation_url': 'https://github.com/playht/supertonic',
             'default_voice': self.default_voice,

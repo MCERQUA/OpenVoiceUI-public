@@ -77,12 +77,15 @@ def create_app(config_override: dict = None):
         '/music/',
         '/images/',    # canvas images (individual pages check their own flag)
         '/static/',    # PWA icons, app icons
+        '/pages/',     # canvas pages — served without auth (CANVAS_REQUIRE_AUTH opt-in)
+        '/api/canvas/',  # canvas API — creation, manifest, context (no per-user auth needed)
     )
     _PUBLIC_EXACT = {
         '/',           # main page — hosts the Clerk login gate itself
         '/pi',         # Pi-optimized page — same login gate, different entry point
         '/health/live',
         '/health/ready',
+        '/api/auth/check',      # Auth check endpoint — does its own token verification
         '/api/suno/callback',   # Suno's servers POST here from external IPs (no Clerk token)
         '/sw.js',           # PWA service worker — browser fetches this before auth
         '/manifest.json',   # PWA manifest — browser fetches this before auth

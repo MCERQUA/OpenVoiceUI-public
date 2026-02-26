@@ -31,7 +31,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, make_response, request
 
-from routes.canvas import canvas_context, update_canvas_context
+from routes.canvas import canvas_context, update_canvas_context, CANVAS_PAGES_DIR
 from services.gateway import gateway_connection
 from services.tts import generate_tts_b64 as _tts_generate_b64
 from tts_providers import get_provider, list_providers
@@ -286,6 +286,7 @@ def clean_for_tts(text: str) -> str:
     text = re.sub(r'\[MUSIC_STOP\]', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\[MUSIC_NEXT\]', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\[SUNO_GENERATE:[^\]]*\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\[SPOTIFY:[^\]]*\]', '', text, flags=re.IGNORECASE)
 
     # Remove code blocks
     text = re.sub(r'```[\s\S]*?```', '', text)
@@ -525,13 +526,10 @@ def _conversation_inner():
             _page_list = ', '.join(_page_ids) if _page_ids else 'none'
         except Exception:
             _page_list = 'unknown'
-        _canvas_verb = 'Switch page with' if ui_context.get('canvasVisible') else 'Open a page with'
         context_parts.append(
-            f'[CANVAS CONTROL: {_canvas_verb} [CANVAS:page-id] in your text — do NOT call the canvas tool. '
-            f'Use the EXACT page-id from this list (case-sensitive, no spaces). '
-            f'Available pages: {_page_list}. '
-            f'If you just created a new page, open it immediately using its exact filename (without .html). '
-            f'Otherwise only open when the user asks.]'
+            f'[CANVAS: To CREATE a new page output the full HTML inside a fenced code block (```html...```) in your reply — the interface saves and displays it automatically, do NOT also use [CANVAS:]. '
+            f'To OPEN an existing page embed [CANVAS:page-id] in your text. '
+            f'Existing pages: {_page_list}.]'
         )
     if context_parts:
         context_prefix = ' '.join(context_parts) + ' '
@@ -597,8 +595,13 @@ def _conversation_inner():
 
                     # ── Mid-stream TTS helpers ────────────────────────────
                     def _has_open_tag(text):
-                        """True while inside an incomplete [...] action tag."""
-                        return text.count('[') > text.count(']')
+                        """True while inside an incomplete [...] action tag or open code fence."""
+                        if text.count('[') > text.count(']'):
+                            return True
+                        # Odd number of ``` markers means we're inside a code block
+                        if text.count('```') % 2 != 0:
+                            return True
+                        return False
 
                     def _extract_sentence(text, min_len=40):
                         """Return (sentence, remainder) at first sentence boundary
@@ -687,6 +690,16 @@ def _conversation_inner():
                             full_response = evt.get('response')
                             if full_response and max_response_chars:
                                 full_response = _truncate_at_sentence(full_response, max_response_chars)
+
+                            # Suppress bare NO/YES sentinel responses to system triggers
+                            # (gateway returns "NO" for wake-word checks on __session_start__)
+                            _is_system_trigger = user_message.startswith('__')
+                            if _is_system_trigger and full_response and \
+                                    full_response.strip().upper() in ('NO', 'NO.', 'YES', 'YES.'):
+                                logger.info(f'Suppressing sentinel "{full_response.strip()}" for system trigger')
+                                yield json.dumps({'type': 'no_audio'}) + '\n'
+                                log_metrics(metrics)
+                                break
                             metrics['llm_inference_ms'] = int((time.time() - t_llm_start) * 1000)
                             metrics['tool_count'] = sum(
                                 1 for a in captured_actions
@@ -694,6 +707,7 @@ def _conversation_inner():
                             )
                             metrics['profile'] = 'gateway'
                             metrics['model'] = 'glm-4.7-flash'
+                            print(f"[DEBUG] Gateway response ({len(full_response or '')} chars): {repr((full_response or '')[:300])}", flush=True)
                             logger.info(
                                 f"### LLM inference completed in "
                                 f"{metrics['llm_inference_ms']}ms "

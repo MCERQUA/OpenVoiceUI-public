@@ -124,18 +124,82 @@ Define agents in JSON — each profile configures:
 
 ---
 
+## Prerequisites
+
+- **Python 3.10+**
+- **OpenClaw gateway** running locally — [openclaw.dev](https://openclaw.dev)
+  - Default port: `18791` (configure in `.env`)
+  - For OpenClaw ≥ 2026.2.24: device identity signing is handled automatically on first connect
+- **Groq API key** for TTS — [console.groq.com](https://console.groq.com) (free tier available)
+- Optional: Gemini API key (vision), Suno API key (music generation), Clerk (auth)
+
+---
+
 ## Quick Start
 
 ```bash
 git clone https://github.com/MCERQUA/OpenVoiceUI-public
 cd OpenVoiceUI-public
-pip install -r backend/requirements.txt
+python3 -m venv venv
+venv/bin/pip install -r backend/requirements.txt
 cp .env.example .env
-# Edit .env with your keys
-python3 server.py
+# Edit .env — at minimum set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY
+venv/bin/python3 server.py
 ```
 
 Open `http://localhost:5001` in your browser.
+
+### Minimum `.env` for local use
+
+```bash
+PORT=5001
+CLAWDBOT_GATEWAY_URL=ws://127.0.0.1:18791
+CLAWDBOT_AUTH_TOKEN=your-openclaw-gateway-token
+GATEWAY_SESSION_KEY=voice-main-1
+GROQ_API_KEY=your-groq-key
+```
+
+---
+
+## Production Deployment (Nginx + SSL + systemd)
+
+A setup script handles nginx config, Let's Encrypt SSL, and systemd service creation:
+
+```bash
+# Edit variables at top of script (DOMAIN, PORT, EMAIL, INSTALL_DIR), then:
+sudo bash setup-sudo.sh
+```
+
+The script is idempotent — safe to re-run. It will skip SSL if cert already exists.
+
+**After deploy:**
+```bash
+sudo systemctl status openvoiceui
+sudo journalctl -u openvoiceui -f
+```
+
+---
+
+## Authentication
+
+OpenVoiceUI uses **Clerk** for JWT auth. Without Clerk keys, all `/api/*` endpoints return 401 (the frontend still loads).
+
+To **disable auth** for local/trusted use: leave `VITE_CLERK_PUBLISHABLE_KEY` unset in `.env`.
+
+To **enable auth**:
+1. Create a Clerk app at [clerk.com](https://clerk.com)
+2. Add `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` to `.env`
+3. Set `ALLOWED_USER_IDS=user_yourclerkid` — find your ID in server logs after first login
+
+---
+
+## OpenClaw Integration
+
+OpenVoiceUI connects to an [OpenClaw](https://openclaw.dev) gateway via persistent WebSocket. OpenClaw handles LLM routing, tool use, and agent sessions.
+
+**OpenClaw ≥ 2026.2.24**: Requires Ed25519 device identity signing. OpenVoiceUI handles this automatically — a `.device-identity.json` file is generated on first run (never committed to git). The gateway auto-approves local loopback clients on first connect.
+
+**Without OpenClaw**: The voice pipeline won't work. The frontend will load but all `/api/conversation` calls will fail with a gateway error.
 
 ---
 

@@ -16,8 +16,8 @@ def get_supertonic_tts():
         try:
             from supertonic_tts import SupertonicTTS
             supertonic_tts = SupertonicTTS(
-                onnx_dir="/home/mike/supertonic/assets/onnx",
-                voice_style_path="/home/mike/supertonic/assets/voice_styles/M1.json",
+                onnx_dir="${SUPERTONIC_MODEL_PATH}",
+                voice_style_path="${SUPERTONIC_MODEL_PATH}/../voice_styles/M1.json",
                 use_gpu=False
             )
             print("✓ Supertonic TTS initialized")
@@ -79,7 +79,7 @@ def supertonic_tts_endpoint():
         if voice_style not in valid_voices:
             return jsonify({"error": f"Invalid voice: {voice_style}. Available: {', '.join(valid_voices)}"}), 400
         
-        voice_style_path = f"/home/mike/supertonic/assets/voice_styles/{voice_style}.json"
+        voice_style_path = f"${SUPERTONIC_MODEL_PATH}/../voice_styles/{voice_style}.json"
         
         # 6. Get or initialize TTS
         tts = get_supertonic_tts()
@@ -94,7 +94,7 @@ def supertonic_tts_endpoint():
         try:
             from supertonic_tts import SupertonicTTS
             tts_instance = SupertonicTTS(
-                onnx_dir="/home/mike/supertonic/assets/onnx",
+                onnx_dir="${SUPERTONIC_MODEL_PATH}",
                 voice_style_path=voice_style_path,
                 use_gpu=False
             )
@@ -178,7 +178,7 @@ def supertonic_tts_endpoint():
 ```python
 import requests
 
-response = requests.post('http://localhost:5001/api/supertonic-tts', json={
+response = requests.post('http://localhost:${PORT}/api/supertonic-tts', json={
     'text': 'Welcome to DJ-FoamBot',
     'lang': 'en',
     'speed': 1.05,
@@ -221,7 +221,7 @@ async function synthesize(text) {
 
 ### From Bash/cURL
 ```bash
-curl -X POST http://localhost:5001/api/supertonic-tts \
+curl -X POST http://localhost:${PORT}/api/supertonic-tts \
   -H "Content-Type: application/json" \
   -d '{
     "text": "This is a test",
@@ -245,7 +245,7 @@ curl -X POST http://localhost:5001/api/supertonic-tts \
 To test different voices:
 ```python
 for voice in ['M1', 'M2', 'F1', 'F2']:
-    response = requests.post('http://localhost:5001/api/supertonic-tts', json={
+    response = requests.post('http://localhost:${PORT}/api/supertonic-tts', json={
         'text': 'Hello, my name is DJ-FoamBot',
         'voice_style': voice
     })
@@ -270,7 +270,7 @@ The endpoint logs to the server's logger:
 
 ```python
 # Check logs with:
-# sudo journalctl -u pi-guy -f
+# sudo journalctl -u openvoiceui -f
 # grep "Generating speech" logs
 # grep "TTS endpoint error" logs
 ```
@@ -291,7 +291,7 @@ python3 test_supertonic.py
 
 ### Manual API Test
 ```bash
-curl -X POST http://localhost:5001/api/supertonic-tts \
+curl -X POST http://localhost:${PORT}/api/supertonic-tts \
   -H "Content-Type: application/json" \
   -d '{"text":"Test"}' \
   > test.wav && file test.wav
@@ -302,7 +302,7 @@ Expected output: `test.wav: RIFF (little-endian) data, WAVE audio, ...`
 ## Configuration
 
 Default settings in `get_supertonic_tts()`:
-- ONNX directory: `/home/mike/supertonic/assets/onnx/`
+- ONNX directory: `${SUPERTONIC_MODEL_PATH}/`
 - Default voice: M1.json
 - GPU: Disabled (CPU only)
 

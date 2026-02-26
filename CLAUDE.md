@@ -1,6 +1,23 @@
 # OpenVoiceUI — Agent System
 
-> **Current state**: Modular voice agent platform. See SETUP.md for installation.
+> **Current state**: Final development stretch — polishing for clean public release.
+
+---
+
+## Claude Code Role — Development Mission
+
+This project is in its **final stretch before public release**. All work done here is development work aimed at producing a clean GitHub repo with a zero-friction install experience.
+
+**Every fix must be categorized:**
+- **Code fix** → change is in the repo (done)
+- **Install step** → must be in `SETUP.md` or handled by `setup.sh`
+- **Server config** → VPS-specific, documented in a separate server setup guide
+
+**Before marking anything "done", ask:** "Would a fresh user hitting this problem be stuck? Can we prevent it?"
+
+**Fixes are tracked in:** `.claude/projects/.../memory/fixes-log.md`
+
+**Goal:** User selects an OpenClaw agent, points it at this repo, runs setup — and it works. No manual debugging required.
 
 ---
 

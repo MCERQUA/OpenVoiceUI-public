@@ -320,8 +320,12 @@ export class MusicPlayer {
                 this.isPlaying = true;
                 this.currentTrack = filename;
                 this.currentMetadata = data.track;
+                this.currentPlaylist = data.playlist || this.currentPlaylist;
                 if (this.button) this.button.classList.add('active');
-                if (this.panel) this.panel.classList.add('playing');
+                if (this.panel) {
+                    this.panel.classList.add('playing');
+                    this.panel.classList.remove('spotify-mode');
+                }
                 if (this.trackName) this.trackName.textContent = data.track.title || filename;
                 this._syncPlayButtons(true);
                 console.log('Now playing:', data.track.title, 'from playlist:', data.playlist);
@@ -334,6 +338,56 @@ export class MusicPlayer {
             }
         } catch (error) {
             console.error('Music play error:', error);
+        }
+    }
+
+    // ── Spotify mode ──────────────────────────────────────────────────────
+
+    /**
+     * Switch the music player to Spotify display mode.
+     * Called when agent emits [SPOTIFY:track|artist] tag.
+     * The actual audio plays on the user's Spotify Connect device.
+     */
+    async playSpotify(trackName, artist) {
+        console.log('MusicPlayer: Spotify mode -', trackName, artist);
+
+        // Stop local audio cleanly
+        if (!this.audio.paused) {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+        }
+
+        this.currentPlaylist = 'spotify';
+        this.isPlaying = true;
+        this.currentTrack = trackName;
+        this.currentMetadata = { title: trackName, artist, source: 'spotify', playlist: 'spotify' };
+
+        // Update track name display
+        const displayName = artist ? `${trackName}  ${artist}` : trackName;
+        if (this.trackName) this.trackName.textContent = displayName;
+
+        // Update panel UI
+        if (this.button) this.button.classList.add('active');
+        if (this.panel) {
+            this.panel.classList.add('playing');
+            this.panel.classList.add('spotify-mode');
+        }
+        this._syncPlayButtons(true);
+        if (this.panelState === 'closed') this.openPanel();
+
+        // Notify backend so status/context reflects Spotify
+        try {
+            const url = new URL(`${this.serverUrl}/api/music`);
+            url.searchParams.set('action', 'spotify');
+            url.searchParams.set('track', trackName);
+            if (artist) url.searchParams.set('artist', artist);
+            await fetch(url);
+        } catch (e) {
+            console.warn('MusicPlayer: Spotify state sync failed:', e);
+        }
+
+        if (this._eventBus) {
+            this._eventBus.emit('music:play', { track: trackName, metadata: this.currentMetadata });
         }
     }
 
@@ -353,7 +407,10 @@ export class MusicPlayer {
         this.currentTrack = null;
         this.currentMetadata = null;
         if (this.button) this.button.classList.remove('active');
-        if (this.panel) this.panel.classList.remove('playing');
+        if (this.panel) {
+            this.panel.classList.remove('playing');
+            this.panel.classList.remove('spotify-mode');
+        }
         this._syncPlayButtons(false);
         this.closePanel();
         if (this._eventBus) this._eventBus.emit('music:stop', {});

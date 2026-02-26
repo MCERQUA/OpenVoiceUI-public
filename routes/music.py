@@ -153,9 +153,12 @@ def save_playlist_order(playlist, order):
 def get_music_files(playlist="sprayfoam"):
     """
     Return list of track dicts for the given playlist.
-    playlist: 'sprayfoam' | 'generated'
+    playlist: 'sprayfoam' | 'generated' | 'spotify'
     Respects saved order from order.json if present.
     """
+    if playlist == "spotify":
+        return []
+
     music_extensions = {".mp3", ".wav", ".ogg", ".m4a", ".webm"}
 
     if playlist == "generated":
@@ -297,20 +300,57 @@ def handle_music():
         "playlist", current_music_state.get("current_playlist", "sprayfoam")
     )
 
-    if playlist in ("sprayfoam", "generated"):
+    if playlist in ("sprayfoam", "generated", "spotify"):
         current_music_state["current_playlist"] = playlist
+
+    # ── SPOTIFY ───────────────────────────────────────────────────────────
+    # Handle before get_music_files — Spotify has no local files
+    if action == "spotify":
+        track = request.args.get("track", "Unknown Track")
+        artist = request.args.get("artist", "Spotify")
+        album = request.args.get("album", "")
+        current_music_state["current_playlist"] = "spotify"
+        current_music_state["playing"] = True
+        current_music_state["track_started_at"] = time.time()
+        spotify_track = {
+            "title": track,
+            "name": track,
+            "artist": artist,
+            "album": album,
+            "playlist": "spotify",
+            "source": "spotify",
+            "filename": None,
+        }
+        current_music_state["current_track"] = spotify_track
+        print(f"🎵 Spotify mode: '{track}' by {artist}")
+        return jsonify({
+            "action": "spotify",
+            "track": spotify_track,
+            "playlist": "spotify",
+            "source": "spotify",
+            "response": f"Now streaming '{track}' by {artist} from Spotify.",
+        })
 
     try:
         music_files = get_music_files(playlist)
 
         # ── LIST ──────────────────────────────────────────────────────────
         if action == "list":
+            if playlist == "spotify":
+                return jsonify({
+                    "tracks": [],
+                    "count": 0,
+                    "playlist": "spotify",
+                    "available_playlists": ["sprayfoam", "generated", "spotify"],
+                    "source": "spotify",
+                    "response": "Spotify streaming mode. Ask me to play any song, album, or playlist on Spotify.",
+                })
             if not music_files:
                 return jsonify({
                     "tracks": [],
                     "count": 0,
                     "playlist": playlist,
-                    "available_playlists": ["sprayfoam", "generated"],
+                    "available_playlists": ["sprayfoam", "generated", "spotify"],
                     "response": "I don't have any music yet! Upload some MP3s to my music folder and I'll spin them for you.",
                 })
             track_names = [t["name"] for t in music_files]
@@ -318,7 +358,7 @@ def handle_music():
                 "tracks": music_files,
                 "count": len(music_files),
                 "playlist": playlist,
-                "available_playlists": ["sprayfoam", "generated"],
+                "available_playlists": ["sprayfoam", "generated", "spotify"],
                 "response": (
                     f"I've got {len(music_files)} track{'s' if len(music_files) != 1 else ''} ready to spin: "
                     f"{', '.join(track_names[:5])}{'...' if len(track_names) > 5 else ''}"
@@ -462,6 +502,20 @@ def handle_music():
             playing = current_music_state.get("playing", False)
             vol = int(current_music_state["volume"] * 100)
             started_at = current_music_state.get("track_started_at")
+
+            # Spotify mode — no local file, no timeline
+            if track and track.get("source") == "spotify":
+                title = track.get("title", "Unknown")
+                artist = track.get("artist", "")
+                artist_str = f" by {artist}" if artist else ""
+                return jsonify({
+                    "action": "status",
+                    "playing": playing,
+                    "track": track,
+                    "source": "spotify",
+                    "volume": vol,
+                    "response": f"{'Streaming' if playing else 'Paused'}:'{title}'{artist_str} on Spotify.",
+                })
 
             if track and playing:
                 duration = track.get("duration_seconds", 120)
@@ -660,6 +714,15 @@ def list_playlists():
             "total_size_bytes": sum(f.stat().st_size for f in tracks),
             "active": current_music_state.get("current_playlist") == name,
         })
+    # Spotify is a virtual playlist — no local files
+    playlists.append({
+        "name": "spotify",
+        "track_count": None,
+        "total_size_bytes": None,
+        "active": current_music_state.get("current_playlist") == "spotify",
+        "source": "spotify",
+        "description": "Stream any song, album, or playlist from Spotify",
+    })
     return jsonify({"playlists": playlists})
 
 
