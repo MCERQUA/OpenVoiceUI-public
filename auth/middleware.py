@@ -26,7 +26,19 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-_CLERK_FRONTEND_DOMAIN = os.getenv('CLERK_FRONTEND_API', '')
+def _derive_clerk_domain(key: str) -> str:
+    """Derive the Clerk frontend domain from a publishable key (pk_live_/pk_test_)."""
+    import base64
+    try:
+        suffix = key.split('_', 2)[-1]
+        padding = (4 - len(suffix) % 4) % 4
+        decoded = base64.b64decode(suffix + '=' * padding).decode('utf-8').rstrip('$')
+        return decoded
+    except Exception:
+        return ''
+
+_raw_clerk_key = (os.getenv('CLERK_PUBLISHABLE_KEY') or os.getenv('VITE_CLERK_PUBLISHABLE_KEY', '')).strip()
+_CLERK_FRONTEND_DOMAIN = os.getenv('CLERK_FRONTEND_API') or (_derive_clerk_domain(_raw_clerk_key) if _raw_clerk_key else '')
 _JWKS_URL = f'https://{_CLERK_FRONTEND_DOMAIN}/.well-known/jwks.json'
 _JWKS_CACHE_TTL = 3600  # refresh keys every 60 minutes
 

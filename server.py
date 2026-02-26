@@ -305,13 +305,13 @@ def serve_index():
     import pathlib
     html = pathlib.Path("index.html").read_text()
     server_url = os.environ.get("AGENT_SERVER_URL", "").strip().rstrip("/")
-    clerk_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "").strip()
+    clerk_key = (os.environ.get("CLERK_PUBLISHABLE_KEY") or os.environ.get("VITE_CLERK_PUBLISHABLE_KEY", "")).strip()
     config_parts = []
     config_parts.append(f'serverUrl:"{server_url}"' if server_url else 'serverUrl:window.location.origin')
     if clerk_key:
         config_parts.append(f'clerkPublishableKey:"{clerk_key}"')
     config_block = f'<script>window.AGENT_CONFIG={{{",".join(config_parts)}}};</script>'
-    html = html.replace("</head>", f"  {config_block}\n</head>", 1)
+    html = html.replace("<head>", f"<head>\n  {config_block}", 1)
     resp = Response(html, mimetype="text/html")
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
