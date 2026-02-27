@@ -573,7 +573,8 @@ def _conversation_inner():
             )
         else:
             _gateway_message = (
-                'A new voice session has just started. Give a brief, friendly one-sentence greeting.'
+                'A new voice session has just started. Give a brief, friendly one-sentence greeting. '
+                'Do NOT address anyone by name — no face has been recognized and you do not know who is speaking.'
             )
     else:
         _gateway_message = user_message
