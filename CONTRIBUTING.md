@@ -15,11 +15,23 @@ The voice pipeline requires a running gateway. The default is [OpenClaw](https:/
 
 ---
 
+## Branch Workflow
+
+| Branch | Purpose | Who pushes directly |
+|--------|---------|---------------------|
+| `main` | Stable, released code | Nobody — PR only, 1 review required |
+| `dev`  | Integration / in-progress work | Maintainers only |
+
+**Contributors always open PRs targeting `dev`**, not `main`.
+Maintainers periodically merge `dev → main` to cut a release.
+
+---
+
 ## Development Setup
 
 ```bash
-git clone https://github.com/MCERQUA/OpenVoiceUI-public
-cd OpenVoiceUI-public
+git clone https://github.com/MCERQUA/OpenVoiceUI
+cd OpenVoiceUI
 python3 -m venv venv
 venv/bin/pip install -r backend/requirements.txt
 cp .env.example .env

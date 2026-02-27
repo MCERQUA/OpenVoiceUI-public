@@ -1,3 +1,6 @@
+> **Target branch:** Please ensure this PR targets `dev`, not `main`.
+> Maintainers merge `dev → main` to cut releases. PRs targeting `main` will be redirected.
+
 ## What does this PR do?
 <!-- Brief description of the change -->
 
