@@ -18,11 +18,19 @@ from typing import Dict, List, Any, Optional
 
 from .base_provider import TTSProvider
 
-# Import the SupertonicTTS wrapper from the main module
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# ── API mode (preferred) ───────────────────────────────────────────────────────
+# When SUPERTONIC_API_URL is set, all synthesis calls go to the shared
+# supertonic-tts microservice (loaded once, serves all users).
+# Falls back to local ONNX loading if the env var is not set.
+_API_URL = os.environ.get("SUPERTONIC_API_URL", "").rstrip("/")
+
+# ── Local mode (fallback) ──────────────────────────────────────────────────────
 import sys
 from pathlib import Path
 
-# Add project root to path for importing supertonic_tts
 _project_root = Path(__file__).parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
@@ -30,12 +38,8 @@ if str(_project_root) not in sys.path:
 try:
     from supertonic_tts import SupertonicTTS
 except ImportError as e:
-    # If SupertonicTTS is not available, we'll handle this gracefully
     SupertonicTTS = None
     _import_error = str(e)
-
-# Configure logging
-logger = logging.getLogger(__name__)
 
 
 class SupertonicProvider(TTSProvider):
@@ -130,28 +134,44 @@ class SupertonicProvider(TTSProvider):
         self._status = 'inactive'
         self._init_error = None
         self._tts_cache: Dict[str, SupertonicTTS] = {}
+        self.default_voice = default_voice
+        self.use_gpu = use_gpu
 
-        # Check if SupertonicTTS module is available
+        # ── API mode ──────────────────────────────────────────────────────────
+        # Preferred: call the shared supertonic-tts microservice.
+        # Models are loaded once system-wide; no per-process ONNX loading.
+        if _API_URL:
+            try:
+                import requests
+                resp = requests.get(f"{_API_URL}/health", timeout=3)
+                if resp.ok:
+                    self._use_api = True
+                    self._api_url = _API_URL
+                    self.onnx_dir = onnx_dir or self.DEFAULT_ONNX_DIR
+                    self.voice_styles_dir = ""
+                    self._status = 'active'
+                    logger.info(f"SupertonicProvider: API mode → {_API_URL}")
+                    return
+            except Exception as e:
+                logger.warning(f"SupertonicProvider: API at {_API_URL} unreachable ({e}), trying local")
+
+        self._use_api = False
+
+        # ── Local mode (fallback) ─────────────────────────────────────────────
         if SupertonicTTS is None:
             self._status = 'error'
-            self._init_error = f"supertonic_tts module not found. Set SUPERTONIC_MODEL_PATH in .env and ensure supertonic_tts.py is present."
+            self._init_error = "supertonic_tts module not found. Set SUPERTONIC_API_URL or SUPERTONIC_HELPER_PATH."
             self.onnx_dir = onnx_dir or self.DEFAULT_ONNX_DIR
             self.voice_styles_dir = voice_styles_dir or self.DEFAULT_ONNX_DIR.replace('/onnx', '/voice_styles')
-            self.default_voice = default_voice
-            self.use_gpu = use_gpu
             return
 
-        # Store configuration
         self.onnx_dir = onnx_dir or self.DEFAULT_ONNX_DIR
         self.voice_styles_dir = (
             voice_styles_dir
             or (self.DEFAULT_VOICE_STYLES_DIR if self.DEFAULT_VOICE_STYLES_DIR
                 else os.path.join(os.path.dirname(self.onnx_dir), 'voice_styles'))
         )
-        self.default_voice = default_voice
-        self.use_gpu = use_gpu
 
-        # Soft-fail on missing paths — provider shows as 'error' but appears in the list
         if not os.path.exists(self.onnx_dir):
             self._status = 'error'
             self._init_error = f"ONNX directory not found: {self.onnx_dir}. Set SUPERTONIC_MODEL_PATH in .env."
@@ -167,7 +187,7 @@ class SupertonicProvider(TTSProvider):
         try:
             self._create_tts_instance(self.default_voice)
             self._status = 'active'
-            logger.info(f"SupertonicProvider initialized with voice '{default_voice}'")
+            logger.info(f"SupertonicProvider: local mode, voice '{default_voice}'")
         except Exception as e:
             self._status = 'error'
             self._init_error = str(e)
@@ -306,19 +326,27 @@ class SupertonicProvider(TTSProvider):
         )
 
         try:
-            # Reinitialize SupertonicTTS with requested voice for each call
-            # This matches the behavior in server.py (lines ~3089-3094)
+            # ── API mode: call shared supertonic-tts service ──────────────────
+            if getattr(self, '_use_api', False):
+                import requests
+                resp = requests.post(
+                    f"{self._api_url}/tts",
+                    json={"text": text, "voice": voice, "speed": speed,
+                          "steps": total_step, "lang": lang},
+                    timeout=60,
+                )
+                if not resp.ok:
+                    raise RuntimeError(f"Supertonic API error {resp.status_code}: {resp.text[:200]}")
+                audio_bytes = resp.content
+                logger.info(f"API: {len(audio_bytes)} bytes for voice '{voice}'")
+                return audio_bytes
+
+            # ── Local mode: load ONNX in-process ─────────────────────────────
             tts = self._create_tts_instance(voice)
-
-            # Generate speech
             audio_bytes = tts.generate_speech(
-                text=text,
-                lang=lang,
-                speed=speed,
-                total_step=total_step
+                text=text, lang=lang, speed=speed, total_step=total_step
             )
-
-            logger.info(f"Generated {len(audio_bytes)} bytes of audio for voice '{voice}'")
+            logger.info(f"Local: {len(audio_bytes)} bytes for voice '{voice}'")
             return audio_bytes
 
         except Exception as e:
