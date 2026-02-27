@@ -1,4 +1,4 @@
-# ai-eyes2 Default Configuration
+# OpenVoiceUI Default Configuration
 # All values here can be overridden by environment variables.
 # Env var naming: SECTION__KEY (double underscore), e.g. SERVER__PORT=5002
 # Or use the direct env var names listed in comments.
@@ -10,45 +10,32 @@ server:
   debug: false
   threaded: true
 
-# ── Gateway (Clawdbot) ────────────────────────────────────────────────────────
+# ── Gateway (OpenClaw) ────────────────────────────────────────────────────────
 gateway:
   url: "ws://127.0.0.1:18791"         # env: CLAWDBOT_GATEWAY_URL
   auth_token: ""                       # env: CLAWDBOT_AUTH_TOKEN (required)
-  session_key: "voice-main-2"          # env: GATEWAY_SESSION_KEY
+  session_key: "voice-main-1"          # env: GATEWAY_SESSION_KEY
 
 # ── LLM Models ────────────────────────────────────────────────────────────────
 models:
-  zai_default: "glm-4.5-flash"         # direct Z.AI model
-  zai_gateway: "zai/glm-4.7-flash"     # gateway-routed Z.AI model
-  gemini: "gemini-2.0-flash"           # env: GEMINI_MODEL
   whisper: "tiny"                      # Faster-Whisper model size
   whisper_device: "cpu"                # cpu or cuda
   whisper_compute: "float32"           # float32, float16, int8
 
 # ── TTS ───────────────────────────────────────────────────────────────────────
 tts:
-  provider: "supertonic"               # env: TTS_PROVIDER (supertonic or groq-orpheus)
-  use_groq: false                      # env: USE_GROQ_TTS (true = groq-orpheus)
+  provider: "groq"                     # env: TTS_PROVIDER (groq or supertonic)
 
 # ── Conversation ──────────────────────────────────────────────────────────────
 conversation:
   max_history_messages: 20             # env: MAX_HISTORY_MESSAGES
-  active_profile: "flash-direct"       # flash-direct or gateway
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
-paths:
-  openclaw_workspace: "~/.openclaw/workspace"   # env: OPENCLAW_WORKSPACE
-  clawdbot_memory_db: ""   # optional: path to clawdbot memory DB
-  canvas_display_dir: "/var/www/canvas-display"
-  canvas_pages_dir: "/var/www/canvas-display/pages"
-  canvas_images_dir: "/var/www/canvas-display/images"
-  canvas_live_html: "/var/www/canvas-display/canvas/live.html"
+  active_profile: "default"            # must match a filename in profiles/
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging:
   level: "INFO"                        # env: LOG_LEVEL
 
-# ── Features (runtime toggles, separate from feature flags) ──────────────────
+# ── Features (runtime toggles) ────────────────────────────────────────────────
 features:
   enable_fts: true                     # env: ENABLE_FTS
   enable_briefing: true                # env: ENABLE_BRIEFING
