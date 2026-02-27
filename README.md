@@ -141,11 +141,11 @@ Define agents in JSON — each profile configures:
 ## Prerequisites
 
 - **Python 3.10+**
-- **OpenClaw gateway** running locally — [openclaw.dev](https://openclaw.dev)
+- **OpenClaw gateway** running locally — [openclaw.ai](https://openclaw.ai)
   - Default port: `18791` (configure in `.env`)
   - For OpenClaw ≥ 2026.2.24: device identity signing is handled automatically on first connect
 - **Groq API key** for TTS — [console.groq.com](https://console.groq.com) (free tier available)
-- Optional: Gemini API key (vision), Suno API key (music generation), Clerk (auth)
+- Optional: Suno API key (music generation), Clerk (auth for multi-user deployments)
 
 ---
 
@@ -208,7 +208,7 @@ To **enable Clerk JWT auth** (for multi-user or public-facing deployments):
 
 ## OpenClaw Integration
 
-OpenVoiceUI connects to an [OpenClaw](https://openclaw.dev) gateway via persistent WebSocket. OpenClaw handles LLM routing, tool use, and agent sessions.
+OpenVoiceUI connects to an [OpenClaw](https://openclaw.ai) gateway via persistent WebSocket. OpenClaw handles LLM routing, tool use, and agent sessions.
 
 **OpenClaw ≥ 2026.2.24**: Requires Ed25519 device identity signing. OpenVoiceUI handles this automatically — a `.device-identity.json` file is generated on first run (never committed to git). The gateway auto-approves local loopback clients on first connect.
 
