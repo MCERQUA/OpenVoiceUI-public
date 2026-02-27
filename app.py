@@ -179,7 +179,7 @@ def create_app(config_override: dict = None):
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.clerk.accounts.dev; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
+            "img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev https://lh3.googleusercontent.com https://avatars.githubusercontent.com; "
             "media-src 'self' blob:; "
             "connect-src 'self' wss: https:; "
             "frame-src 'self' https://*.clerk.accounts.dev; "
