@@ -249,7 +249,7 @@ def identify_face():
 
     except Exception as exc:
         logger.error('Face identification failed: %s', exc)
-        return jsonify({'name': 'unknown', 'confidence': 0, 'message': str(exc)}), 200
+        return jsonify({'name': 'unknown', 'confidence': 0, 'message': 'Face identification failed'}), 200
     finally:
         if tmp_path:
             try:

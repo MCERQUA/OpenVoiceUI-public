@@ -514,7 +514,7 @@ def get_hume_token():
         })
     except Exception as e:
         logger.error(f"Hume token error: {e}")
-        return jsonify({"error": str(e), "available": False}), 500
+        return jsonify({"error": "Failed to retrieve token", "available": False}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +551,7 @@ def groq_stt():
         return jsonify({"transcript": transcription.text, "success": True})
     except Exception as e:
         logger.error(f"Groq STT error: {e}")
-        return jsonify({"error": f"STT failed: {e}"}), 500
+        return jsonify({"error": "Speech-to-text failed"}), 500
 
 
 @app.route("/api/stt/local", methods=["POST"])
@@ -593,7 +593,7 @@ def local_stt():
         return jsonify({"transcript": transcript, "success": True})
     except Exception as e:
         logger.error(f"Local STT error: {e}")
-        return jsonify({"error": f"STT failed: {e}"}), 500
+        return jsonify({"error": "Speech-to-text failed"}), 500
     finally:
         for f in [tmp_path, tmp_path.replace(".webm", ".wav")]:
             try:
@@ -637,7 +637,7 @@ def brave_search():
         return jsonify({"query": query, "results": results, "success": True})
     except Exception as e:
         logger.error(f"Brave Search error: {e}")
-        return jsonify({"error": f"Search failed: {e}"}), 500
+        return jsonify({"error": "Search failed"}), 500
 
 
 @app.route("/api/search", methods=["GET", "POST"])
@@ -701,7 +701,7 @@ def web_search():
         return jsonify({"query": query, "results": results, "success": True})
     except Exception as e:
         logger.error(f"DuckDuckGo search error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Search failed"}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -828,7 +828,7 @@ def run_command():
         return jsonify({"error": f"'{matched}' timed out after 30s"}), 504
     except Exception as e:
         logger.error(f"Command error ({matched}): {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Command execution failed"}), 500
 
 
 @app.route("/api/commands", methods=["GET"])
@@ -1010,7 +1010,7 @@ def clawdbot_websocket(ws):
             ws.close()
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
-            ws.send(json.dumps({"type": "error", "message": str(e)}))
+            ws.send(json.dumps({"type": "error", "message": "Connection error"}))
             ws.close()
 
     try:

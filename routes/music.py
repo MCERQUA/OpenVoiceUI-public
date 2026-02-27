@@ -623,7 +623,7 @@ def handle_music():
 
     except Exception as e:
         print(f"Music error: {e}")
-        return jsonify({"action": "error", "response": f"My DJ equipment malfunctioned: {str(e)}"})
+        return jsonify({"action": "error", "response": "Music playback error"})
 
 
 @music_bp.route("/api/music/transition", methods=["POST", "GET"])
