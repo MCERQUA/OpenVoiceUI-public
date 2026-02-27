@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenVoiceUI Voice Agent Server
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/path/to/OpenVoiceUI-public
+ExecStart=/path/to/OpenVoiceUI-public/venv/bin/python3 /path/to/OpenVoiceUI-public/server.py
+Restart=always
+RestartSec=10
+Environment=PATH=/usr/bin:/usr/local/bin
+EnvironmentFile=/path/to/OpenVoiceUI-public/.env
+
+[Install]
+WantedBy=multi-user.target

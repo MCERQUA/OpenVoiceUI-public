@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>OpenVoiceUI</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#060610">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- iOS PWA (Safari "Add to Home Screen") -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OpenVoiceUI">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+
+    <!-- iOS Safari Audio Fix — must run before any AudioContext usage -->
+    <script>(function(){var A=window.AudioContext||window.webkitAudioContext;if(!A)return;window.audioContext=new A();var u=false;function f(){if(u)return;var b=window.audioContext.createBuffer(1,1,22050),s=window.audioContext.createBufferSource();s.buffer=b;s.connect(window.audioContext.destination);(s.start||s.noteOn).call(s,0);window.audioContext.resume().then(function(){u=true;}).catch(function(){});}['touchstart','touchend','click','keydown'].forEach(function(e){document.addEventListener(e,f,{passive:true});});window.isAudioUnlocked=function(){return u;};}());
+    // Register PWA service worker
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js',{scope:'/'}).then(function(r){console.log('[SW] registered:',r.scope);}).catch(function(e){console.warn('[SW] registration failed:',e);});}
+    </script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="src/styles/theme-dark.css?v=3">
+    <link rel="stylesheet" href="src/styles/face.css?v=10">
+    <link rel="stylesheet" href="src/styles/base.css?v=9">
+    <link rel="stylesheet" href="src/ui/settings/SettingsPanel.css?v=3">
+
+    <!-- Mobile overrides — inlined to bypass any CSS file caching -->
+    <style>
+        @media (max-width: 500px) {
+            .eye-cap-top { top: -13px; }
+        }
+    </style>
+
+    <!-- UI modules (global scripts — must load before app module) -->
+    <script src="src/ui/themes/ThemeManager.js"></script>
+    <script src="src/ui/face/FaceRenderer.js"></script>
+    <script src="src/ui/settings/SettingsPanel.js"></script>
+
+    <!-- Clerk Authentication (optional — set CLERK_PUBLISHABLE_KEY in .env) -->
+    <script>
+        // Only load Clerk if a key is injected by the server
+        if (window.AGENT_CONFIG?.clerkPublishableKey) {
+            const s = document.createElement('script');
+            s.async = true;
+            s.crossOrigin = 'anonymous';
+            s.dataset.clerkPublishableKey = window.AGENT_CONFIG.clerkPublishableKey;
+            s.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+            document.head.appendChild(s);
+        }
+    </script>
+</head>
+<body>
+    <!-- App entry point: injects DOM shell + initializes all modules -->
+    <script type="module" src="src/app.js?v=4"></script>
+</body>
+</html>

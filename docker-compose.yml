@@ -1,0 +1,15 @@
+services:
+  openvoiceui:
+    build: .
+    ports:
+      - "${PORT:-5001}:${PORT:-5001}"
+    env_file:
+      - .env
+    volumes:
+      # Persist runtime data outside container
+      - ./uploads:/app/uploads
+      - ./canvas-pages:/app/canvas-pages
+      - ./known_faces:/app/known_faces
+      - ./music:/app/music
+      - ./generated_music:/app/generated_music
+    restart: unless-stopped

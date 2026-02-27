@@ -1,0 +1,387 @@
+/* =============================================================
+   Face System Styles
+   Eye faces, moods, waveform mouth, visualizer bars
+   ============================================================= */
+
+/* Main face area */
+        .face-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Face Box - Black rounded container with glow */
+        .face-box {
+            position: relative;
+            width: min(380px, 80vw);
+            height: min(380px, 80vw);
+            background: var(--dark-bg);
+            border-radius: 25px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding-top: min(70px, 14.7vw);
+            padding-bottom: min(40px, 8.4vw);
+            margin: 0;
+            box-shadow:
+                0 0 30px rgba(0, 136, 255, 0.3),
+                0 0 60px rgba(0, 136, 255, 0.1),
+                inset 0 0 30px rgba(0, 136, 255, 0.05);
+            border: 2px solid rgba(0, 136, 255, 0.3);
+            z-index: 1;
+            --shake-amount: 5px;
+        }
+
+        /* Eyes container */
+        .eyes-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: min(30px, 6vw);
+            margin-bottom: min(40px, 8.4vw);
+            position: relative;
+        }
+
+        .eye {
+            position: relative;
+            width: min(100px, 22vw);
+            height: min(115px, 25vw);
+        }
+
+        .eye-white {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #ffffff 0%, #e8e8e8 70%, #cccccc 100%);
+            border-radius: 50% 50% 45% 45%;
+            box-shadow: 0 0 30px rgba(0, 136, 255, 0.3), inset 0 -10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .pupil-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s ease-out;
+        }
+
+        .pupil {
+            width: min(40px, 10vw);
+            height: min(40px, 10vw);
+            background: radial-gradient(circle at 30% 30%, #333 0%, #000 70%);
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .pupil::before {
+            content: '';
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            top: 8px;
+            left: 8px;
+        }
+
+        .pupil::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            top: 20px;
+            right: 12px;
+        }
+
+        /* Eyelids */
+        .eyelid-top {
+            position: absolute;
+            width: 130%; height: 75%;
+            background: var(--dark-bg);
+            top: -60%; left: -15%;
+            border-radius: 0 0 50% 50%;
+            transition: transform 0.15s ease-in-out;
+            z-index: 10;
+        }
+
+        .eyelid-bottom {
+            position: absolute;
+            width: 130%; height: 40%;
+            background: var(--dark-bg);
+            bottom: -35%; left: -15%;
+            border-radius: 50% 50% 0 0;
+            transition: transform 0.15s ease-in-out;
+            z-index: 10;
+        }
+
+        .eye-cap-top {
+            position: absolute;
+            width: 120%; height: 27px;
+            background: var(--dark-bg);
+            top: -15px; left: -10%;
+            z-index: 11;
+        }
+
+        /* Blink animation */
+        .eye.blinking .eyelid-top { transform: translateY(90%); }
+        .eye.blinking .eyelid-bottom { transform: translateY(-30%); }
+
+        /* Mood: Angry */
+        .eye.angry .eyelid-top { transform: translateY(40%) rotate(var(--angry-rotate, 0deg)); }
+        .left-eye.angry .eyelid-top { --angry-rotate: 15deg; transform-origin: right center; }
+        .right-eye.angry .eyelid-top { --angry-rotate: -15deg; transform-origin: left center; }
+
+        /* Mood: Sad */
+        .eye.sad .eyelid-top { transform: translateY(30%) rotate(var(--sad-rotate, 0deg)); }
+        .left-eye.sad .eyelid-top { --sad-rotate: -10deg; transform-origin: left center; }
+        .right-eye.sad .eyelid-top { --sad-rotate: 10deg; transform-origin: right center; }
+
+        /* Mood: Happy */
+        .eye.happy .eyelid-bottom { transform: translateY(-60%); }
+
+        /* Mood: Thinking */
+        .eye.thinking .pupil-container { transform: translate(15px, -15px) !important; }
+        .left-eye.thinking .eyelid-top { transform: translateY(25%); }
+
+        /* Thought Bubbles */
+        .thought-bubbles {
+            position: absolute;
+            top: -60px;
+            right: -40px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .thought-bubbles.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .thought-bubble {
+            position: absolute;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(200, 220, 255, 0.7) 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 170, 255, 0.4), 0 0 20px rgba(0, 170, 255, 0.2);
+            animation: thought-float 2s ease-in-out infinite;
+        }
+        .thought-bubble.tb-1 {
+            width: 8px;
+            height: 8px;
+            right: 0;
+            bottom: 0;
+            animation-delay: 0s;
+        }
+        .thought-bubble.tb-2 {
+            width: 14px;
+            height: 14px;
+            right: -18px;
+            bottom: 16px;
+            animation-delay: 0.3s;
+        }
+        .thought-bubble.tb-3 {
+            width: 22px;
+            height: 22px;
+            right: -42px;
+            bottom: 38px;
+            animation-delay: 0.6s;
+        }
+        .thought-bubble.tb-3::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: rgba(0, 136, 255, 0.5);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: thought-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes thought-float {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+            }
+            50% {
+                transform: translateY(-6px) scale(1.1);
+            }
+        }
+        @keyframes thought-pulse {
+            0%, 100% {
+                opacity: 0.3;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            50% {
+                opacity: 0.8;
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+        }
+
+        /* Mood: Surprised */
+        .eye.surprised .eye-white { transform: scale(1.1); }
+        .eye.surprised .pupil { transform: scale(0.8); }
+
+        /* Mood: Listening */
+        .eye.listening .pupil { animation: listening-pulse 1.5s ease-in-out infinite; }
+        @keyframes listening-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Waveform mouth */
+        .mouth-container {
+            width: min(200px, 42vw);
+            height: min(80px, 16.8vw);
+            position: relative;
+            z-index: 10;
+        }
+
+        #waveform-canvas {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 10px var(--cyan));
+        }
+
+/* Status indicator (now integrated into settings tab) */
+        .status-indicator {
+            display: none;
+        }
+
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--red);
+            animation: pulse 2s infinite;
+            flex-shrink: 0;
+        }
+
+        .status-dot.connected { background: var(--green); }
+        .status-dot.connecting { background: var(--yellow); }
+        .status-dot.speaking { background: var(--cyan); animation: none; }
+        .status-dot.listening { background: var(--green); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+/* ===== VISUALIZER BARS - Equalizer bars around face box ===== */
+
+        /* Top/Bottom visualizers - attached to face box */
+        .visualizer-container {
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 3px;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .visualizer-container.active { opacity: 1; }
+        .visualizer-container.top {
+            top: -8px;
+            transform: translateY(-100%);
+            align-items: flex-end;
+        }
+        .visualizer-container.bottom {
+            bottom: -8px;
+            transform: translateY(100%);
+            align-items: flex-start;
+        }
+
+        .visualizer-bar {
+            flex: 1;
+            max-width: 8px;
+            border-radius: 3px;
+            transition: height 0.05s ease;
+            box-shadow: 0 0 8px var(--cyan);
+        }
+        .visualizer-container.top .visualizer-bar {
+            background: linear-gradient(to top,
+                var(--cyan) 0%,
+                var(--blue) 40%,
+                #aa00ff 70%,
+                var(--red) 100%);
+            background-size: 100% 55px;
+            background-position: bottom;
+            background-repeat: no-repeat;
+        }
+        .visualizer-container.bottom .visualizer-bar {
+            background: linear-gradient(to bottom,
+                var(--cyan) 0%,
+                var(--blue) 40%,
+                #aa00ff 70%,
+                var(--red) 100%);
+            background-size: 100% 55px;
+            background-position: top;
+            background-repeat: no-repeat;
+        }
+
+        /* Side visualizers - attached to face box, full height */
+        .side-visualizer {
+            position: absolute;
+            top: 10px;
+            bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .side-visualizer.active { opacity: 1; }
+        .side-visualizer.left { right: 100%; margin-right: 8px; align-items: flex-end; }
+        .side-visualizer.right { left: 100%; margin-left: 8px; align-items: flex-start; }
+
+        .side-bar {
+            width: 80px;
+            height: 6px;
+            border-radius: 3px;
+            box-shadow: 0 0 8px var(--cyan);
+            transition: width 0.05s ease;
+        }
+        .side-visualizer.left .side-bar {
+            background: linear-gradient(to left,
+                var(--cyan) 0%,
+                var(--blue) 40%,
+                #aa00ff 70%,
+                var(--red) 100%);
+            background-size: 85px 100%;
+            background-position: right;
+            background-repeat: no-repeat;
+        }
+        .side-visualizer.right .side-bar {
+            background: linear-gradient(to right,
+                var(--cyan) 0%,
+                var(--blue) 40%,
+                #aa00ff 70%,
+                var(--red) 100%);
+            background-size: 85px 100%;
+            background-position: left;
+            background-repeat: no-repeat;
+        }
+
+        @media (max-width: 500px) {
+            .eye-cap-top {
+                top: -13px;
+            }
+        }
+

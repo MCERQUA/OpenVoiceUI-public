@@ -1,0 +1,37 @@
+# Python 3.10+ required
+# Core framework
+Flask==3.1.3
+flask-cors==6.0.2
+flask-sock==0.7.0
+
+# WebSocket & HTTP
+websockets==16.0
+requests==2.32.5
+
+# Environment & config
+python-dotenv==1.2.1
+
+# System monitoring
+psutil==7.2.2
+
+# Speech-to-text (Faster Whisper — optional, for local STT)
+faster-whisper==1.2.1
+
+# TTS providers
+groq==1.0.0                 # Groq Orpheus TTS (required if using groq provider)
+
+# Auth (Clerk JWT — optional, only if CANVAS_REQUIRE_AUTH=true)
+PyJWT==2.11.0
+cryptography==46.0.5
+
+# Face recognition (local, free — runs on-server, no API calls)
+deepface>=0.0.93            # DeepFace biometric face recognition
+tf-keras>=2.19.0            # Required by deepface (Keras backend)
+
+# AI providers (optional)
+google-generativeai==0.8.6  # Only if using Gemini
+
+# Supertonic local TTS (optional — install manually if using local ONNX TTS)
+# onnxruntime>=1.23.1
+# soundfile>=0.12.1
+# librosa>=0.10.0

@@ -1,0 +1,111 @@
+# Dependencies
+node_modules/
+venv/
+
+# Environment
+.env
+.env.local
+.env.dev
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+server.log
+*.log
+
+# Databases
+usage.db
+usage.db-shm
+usage.db-wal
+*.db-shm
+*.db-wal
+
+# Device identity (auto-generated on first run — never commit)
+.device-identity.json
+
+# Sensitive / private
+known_faces/
+agent_config_backup.json
+docs/agent-snapshot-*.json
+TOOLS.md
+prompts/dj_prompt_*.txt
+prompts/hume_config_snapshot*.txt
+
+# Netlify
+.netlify/
+
+# Misc generated
+memory_docs.json
+face_owners.json
+job_runner.log
+*.pkl
+refactor-state/
+
+# Runtime / private
+.active-profile
+.voice-session-counter
+face_owners.json
+agent_config_backup.json
+known_faces/
+generated_music/*.mp3
+generated_music/generated_metadata.json
+music/*.mp3
+canvas-pages/*.html
+canvas-pages/*.bak
+uploads/*
+transcripts/*
+!uploads/.gitkeep
+!transcripts/.gitkeep
+!generated_music/.gitkeep
+canvas-manifest.json
+canvas-manifest.bak
+
+# Plugins — installed locally, not committed to the base repo.
+# Each plugin is its own repo: git clone <url> plugins/<id>
+# The example-gateway reference and README are tracked.
+plugins/*/
+!plugins/example-gateway/
+!plugins/README.md
+!plugins/.gitkeep
+.coverage
+.pytest_cache/
+backups/
+docs/session-*.md
+
+# Personal/server-specific session notes
+setup-notes-*.md
+setup-base-sudo.sh
+*.bak
+
+# Dev/test files (not for public repo)
+stt-test.html
+index-pi.html
+base.html
+test_supertonic.py
+tools_health_check.py
+job_runner.sh
+pi_notes/
+
+# Legacy doc locations (moved to docs/)
+README_SUPERTONIC.md
+SUPERTONIC_SETUP.md
+INTEGRATION_DETAILS.md
+TTS_PROVIDERS.md

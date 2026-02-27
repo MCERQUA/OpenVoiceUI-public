@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "default": "eyes",
+  "faces": [
+    {
+      "id": "eyes",
+      "name": "AI Eyes",
+      "description": "Classic animated eyes with mood-based eyelid expressions and mouse tracking",
+      "module": "/src/face/EyeFace.js",
+      "class": "EyeFace",
+      "preview": "/src/face/previews/eyes.svg",
+      "moods": ["neutral", "happy", "sad", "angry", "thinking", "surprised", "listening"],
+      "features": ["blink", "eye-tracking", "mood-eyelids"]
+    },
+    {
+      "id": "orb",
+      "name": "Sound Orb",
+      "description": "Audio-reactive orb visualizer with particle effects",
+      "module": "/src/ui/face/FaceRenderer.js",
+      "class": null,
+      "note": "Legacy renderer — use FaceRenderer.setMode('orb'). Full ES module port planned for P5.",
+      "preview": "/src/face/previews/orb.svg",
+      "moods": [],
+      "features": ["audio-reactive", "particles"]
+    }
+  ]
+}

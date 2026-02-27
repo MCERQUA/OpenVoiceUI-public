@@ -1,0 +1,67 @@
+# Feature Flags — ai-eyes2 refactor
+#
+# These flags gate each refactor phase so changes can be rolled out gradually.
+# All flags default to false (old behaviour preserved until explicitly enabled).
+#
+# Override any flag via env var:
+#   FEATURE_USE_BLUEPRINTS=true
+#   FEATURE_PERSISTENT_WEBSOCKET=true
+#   etc.
+#
+# Usage in code:
+#   from config.loader import config
+#   if config.flag('use_blueprints'):
+#       ...
+
+flags:
+  # ── Phase 1: Foundation ───────────────────────────────────────────────────
+  use_yaml_config: true          # P1-T2 — YAML config system active
+  use_feature_flags: true        # P1-T3 — this flag system itself (meta)
+  use_health_probes: true        # P1-T4 — /health/live and /health/ready endpoints
+  use_sqlite_wal: true           # P1-T5 — WAL mode + connection pooling
+  use_session_reset: false       # P1-T7 — POST /api/session/reset endpoint
+
+  # ── Phase 2: Backend Blueprint Split ─────────────────────────────────────
+  use_blueprints: false          # P2-T1 — Flask app factory + blueprints
+  use_gateway_service: false     # P2-T2 — GatewayConnection as services/gateway.py
+  use_conversation_blueprint: false  # P2-T3 — conversation routes in blueprint
+  use_music_blueprint: false     # P2-T4 — music routes in blueprint
+  use_canvas_blueprint: false    # P2-T5 — canvas routes in blueprint
+  use_admin_blueprint: false     # P2-T6 — admin routes in blueprint
+  use_tts_service: false         # P2-T7 — TTS providers as service module
+
+  # ── Phase G: Gateway & Transport ─────────────────────────────────────────
+  use_persistent_websocket: false  # PG-T2 — persistent WS to Gateway
+  use_streaming_events: false      # PG-T3 — stream delta events to frontend
+  use_webchat_mode: true           # PG-T5 — Gateway client mode WEBCHAT
+
+  # ── Phase 3: Frontend Module Extraction ──────────────────────────────────
+  use_eventbus: false            # P3-T1 — frontend EventBus pub/sub
+  use_css_modules: false         # P3-T2 — extracted CSS files
+  use_stt_module: false          # P3-T3 — WebSpeechSTT as module
+  use_tts_player_module: false   # P3-T4 — TTSPlayer as module
+  use_face_module: false         # P3-T5 — face system as module
+  use_music_module: false        # P3-T6 — MusicPlayer as module
+  use_voice_session: false       # P3-T7 — VoiceSession orchestrator
+  use_emotion_engine: false      # P3-T8 — EmotionEngine for mood → face
+  use_thin_shell: false          # P3-T9 — slim index.html shell
+
+  # ── Phase 4: Admin UI ────────────────────────────────────────────────────
+  use_session_control_ui: false  # P4-T1 — Reset Conversation button
+  use_playlist_editor: false     # P4-T2 — PlaylistEditor UI
+  use_face_picker: false         # P4-T3 — face picker gallery
+  use_theme_editor: false        # P4-T4 — color picker / theme editor
+  use_tts_preview: false         # P4-T5 — TTS voice preview
+  use_profile_switcher_ui: false # P4-T6 — profile switcher UI
+
+  # ── Phase 5: Agent Profiles & Provider Registry ───────────────────────────
+  use_provider_registry: false   # P5-T2 — provider auto-discovery
+  use_profile_system: false      # P5-T3 — JSON profile schema
+  use_profile_manager: false     # P5-T4 — ProfileManager + API
+  use_speech_normalization: false # P5-T5 — config-driven speech normalisation
+
+  # ── Phase 6: Multi-Agent Framework ───────────────────────────────────────
+  use_eventbridge: false         # P6-T1 — EventBridge implementation
+  use_clawdbot_adapter: false    # P6-T2 — ClawdBotAdapter module
+  use_hume_adapter: false        # P6-T3 — Hume EVI adapter
+  use_capability_ui: false       # P6-T4 — capability-driven UI shell

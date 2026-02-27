@@ -1,0 +1,89 @@
+/*
+ * pi-overrides.css — Raspberry Pi performance optimizations
+ *
+ * Loaded only from index-pi.html, after base.css and face.css.
+ * Uses !important throughout to override base styles without touching them.
+ *
+ * Removes (expensive on ARM without GPU compositing):
+ *   - backdrop-filter: blur() on all 8 elements — software compositing on
+ *     ARM causes significant CPU overhead whenever any panel is open
+ *   - thought-float / thought-pulse decorative animations — constant repaints
+ *   - party effects system — heavy canvas + DOM particle rendering
+ *
+ * Preserves (functional):
+ *   - listening-pulse (pupil animation — shows active listening state)
+ *   - pulse (status dot animation)
+ *   - All eyelid CSS transitions (blink, mood expressions)
+ *   - All transform-based eye mood states (no animation property used)
+ */
+
+
+/* ── 1. Remove backdrop-filter: blur() on all 8 elements ── */
+/*
+ * Panels already have near-opaque backgrounds (rgba alpha 0.95–0.97),
+ * so removing the blur is visually imperceptible on Pi displays.
+ */
+
+.edge-tab,
+.ac-tab,
+.face-panel,
+.mode-picker,
+.a2a-panel,
+.listen-panel,
+#action-console,
+#transcript-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+
+/* ── 2. Disable decorative thought-bubble animations ── */
+/*
+ * These animate continuously whenever the agent is "thinking".
+ * Thought bubbles are purely decorative — removing animation
+ * keeps them visible but static.
+ */
+
+.thought-bubble {
+    animation: none !important;
+}
+
+.thought-bubble.tb-3::after {
+    animation: none !important;
+}
+
+
+/* ── 3. Hide party effects system ── */
+/*
+ * JS still initializes the party effects module, but with display:none
+ * the browser skips all compositing, canvas drawing, and DOM particle work.
+ * Voice, face, and waveform are completely unaffected.
+ */
+
+.party-effects-container,
+#party-particle-container,
+#disco-container {
+    display: none !important;
+}
+
+
+/* ── 4. Emoji font fallback for Pi Chromium ── */
+/*
+ * Pi Chromium doesn't always pick up the system emoji font automatically.
+ * Adding the emoji font family explicitly forces correct glyph rendering.
+ * Without this, emoji characters render as blank squares (tofu).
+ *
+ * 'emoji' is a CSS4 generic font family that maps to the OS emoji font.
+ * Noto Color Emoji is the standard Pi OS emoji font (apt: fonts-noto-color-emoji).
+ */
+
+.edge-tab span,
+.edge-tab,
+button span,
+#canvas-menu-button,
+.mode-opt-icon,
+.console-button span,
+.transcript-button span {
+    font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji',
+                 'Segoe UI Symbol', emoji, sans-serif !important;
+}

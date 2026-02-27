@@ -1,0 +1,1045 @@
+#!/usr/bin/env python3
+"""
+OpenVoiceUI Server — Entry Point
+
+Initialises the Flask application and registers all route blueprints.
+Routes are split into focused blueprints under routes/; this file handles
+startup wiring, session management, usage tracking, and standalone endpoints
+that don't belong to a specific feature blueprint.
+
+Start:
+    venv/bin/python3 server.py
+
+See README.md for full setup instructions.
+"""
+
+import asyncio
+import base64
+import faulthandler
+import json
+import logging
+import os
+import queue
+import re
+import requests
+import signal
+import sqlite3
+import subprocess
+import tempfile
+import threading
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+import websockets
+from dotenv import load_dotenv
+from flask import Response, request, jsonify
+
+faulthandler.enable()  # print traceback on hard crashes (SIGSEGV etc.)
+
+# Load environment variables before anything else
+env_path = Path(__file__).parent / ".env"
+load_dotenv(env_path, override=True)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+SERVER_START_TIME = time.time()
+
+
+# ---------------------------------------------------------------------------
+# Faster-Whisper — lazy-loaded on first /api/stt/local request
+# ---------------------------------------------------------------------------
+
+_whisper_model = None
+
+
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        logger.info("Loading Faster-Whisper model (first STT request)...")
+        _whisper_model = WhisperModel("tiny", device="cpu", compute_type="float32")
+        logger.info("Faster-Whisper model ready.")
+    return _whisper_model
+
+
+# ---------------------------------------------------------------------------
+# Flask app factory + blueprint registration
+# ---------------------------------------------------------------------------
+
+from app import create_app
+app, sock = create_app()
+
+from routes.music import music_bp
+app.register_blueprint(music_bp)
+
+from routes.canvas import (
+    canvas_bp,
+    canvas_context,
+    update_canvas_context,
+    extract_canvas_page_content,
+    get_canvas_context,
+    load_canvas_manifest,
+    save_canvas_manifest,
+    add_page_to_manifest,
+    sync_canvas_manifest,
+    CANVAS_MANIFEST_PATH,
+    CANVAS_PAGES_DIR,
+    CATEGORY_ICONS,
+    CATEGORY_COLORS,
+)
+app.register_blueprint(canvas_bp)
+
+from routes.static_files import static_files_bp, DJ_SOUNDS, SOUNDS_DIR
+app.register_blueprint(static_files_bp)
+
+from routes.admin import admin_bp
+app.register_blueprint(admin_bp)
+
+from routes.theme import theme_bp
+app.register_blueprint(theme_bp)
+
+from routes.conversation import conversation_bp, clean_for_tts
+app.register_blueprint(conversation_bp)
+
+from routes.profiles import profiles_bp
+app.register_blueprint(profiles_bp)
+
+from routes.elevenlabs_hybrid import elevenlabs_hybrid_bp
+app.register_blueprint(elevenlabs_hybrid_bp)
+
+from routes.instructions import instructions_bp
+app.register_blueprint(instructions_bp)
+
+from routes.greetings import greetings_bp
+app.register_blueprint(greetings_bp)
+
+from routes.suno import suno_bp
+app.register_blueprint(suno_bp)
+
+from routes.vision import vision_bp
+app.register_blueprint(vision_bp)
+
+from routes.transcripts import transcripts_bp
+app.register_blueprint(transcripts_bp)
+
+from routes.pi import pi_bp
+app.register_blueprint(pi_bp)
+
+# Auto-sync canvas manifest on startup so any pages written outside the API
+# are picked up immediately without a restart.
+try:
+    sync_canvas_manifest()
+    logger.info("Canvas manifest synced on startup.")
+except Exception as _e:
+    logger.warning(f"Canvas manifest auto-sync failed (non-critical): {_e}")
+
+
+# ---------------------------------------------------------------------------
+# Voice session management
+# ---------------------------------------------------------------------------
+
+VOICE_SESSION_FILE = Path(__file__).parent / ".voice-session-counter"
+_consecutive_empty_responses = 0
+
+
+def _save_session_counter(counter: int) -> None:
+    VOICE_SESSION_FILE.write_text(str(counter))
+
+
+def get_voice_session_key() -> str:
+    """Return the current voice session key, e.g. 'voice-main-6'."""
+    prefix = os.getenv("GATEWAY_SESSION_KEY_PREFIX", "voice-main")
+    try:
+        counter = int(VOICE_SESSION_FILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        counter = 1
+        _save_session_counter(counter)
+    return f"{prefix}-{counter}"
+
+
+def bump_voice_session() -> str:
+    """Increment the session counter and return the new session key."""
+    global _consecutive_empty_responses
+    prefix = os.getenv("GATEWAY_SESSION_KEY_PREFIX", "voice-main")
+    try:
+        counter = int(VOICE_SESSION_FILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        counter = 1
+    counter += 1
+    _save_session_counter(counter)
+    _consecutive_empty_responses = 0
+    new_key = f"{prefix}-{counter}"
+    logger.info(f"Session bumped → {new_key}")
+    return new_key
+
+
+# ---------------------------------------------------------------------------
+# User usage tracking (SQLite)
+# ---------------------------------------------------------------------------
+
+MONTHLY_LIMIT = int(os.getenv("MONTHLY_USAGE_LIMIT", "20"))
+UNLIMITED_USERS: list = [
+    u.strip() for u in os.getenv("UNLIMITED_USER_IDS", "").split(",") if u.strip()
+]
+DB_PATH = Path(__file__).parent / "usage.db"
+
+from db.pool import SQLitePool
+db_pool = SQLitePool(DB_PATH, pool_size=5)
+
+
+def init_db() -> None:
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS usage (
+            user_id TEXT PRIMARY KEY,
+            message_count INTEGER DEFAULT 0,
+            month TEXT,
+            updated_at TEXT
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT DEFAULT 'default',
+            role TEXT NOT NULL,
+            message TEXT NOT NULL,
+            tts_provider TEXT,
+            voice TEXT,
+            created_at TEXT
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT DEFAULT 'default',
+            profile TEXT,
+            model TEXT,
+            handshake_ms INTEGER,
+            llm_inference_ms INTEGER,
+            tts_generation_ms INTEGER,
+            total_ms INTEGER,
+            user_message_len INTEGER,
+            response_len INTEGER,
+            tts_text_len INTEGER,
+            tts_provider TEXT,
+            tts_success INTEGER DEFAULT 1,
+            tts_error TEXT,
+            tool_count INTEGER DEFAULT 0,
+            fallback_used INTEGER DEFAULT 0,
+            error TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def get_current_month() -> str:
+    return datetime.now().strftime("%Y-%m")
+
+
+def get_user_usage(user_id: str) -> int:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT message_count, month FROM usage WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        count, month = row
+        return count if month == get_current_month() else 0
+    return 0
+
+
+def increment_usage(user_id: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    current_month = get_current_month()
+    now = datetime.now().isoformat()
+    c.execute("SELECT month FROM usage WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    if row:
+        if row[0] != current_month:
+            c.execute(
+                "UPDATE usage SET message_count = 1, month = ?, updated_at = ? WHERE user_id = ?",
+                (current_month, now, user_id),
+            )
+        else:
+            c.execute(
+                "UPDATE usage SET message_count = message_count + 1, updated_at = ? WHERE user_id = ?",
+                (now, user_id),
+            )
+    else:
+        c.execute(
+            "INSERT INTO usage (user_id, message_count, month, updated_at) VALUES (?, 1, ?, ?)",
+            (user_id, current_month, now),
+        )
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
+
+# ---------------------------------------------------------------------------
+# Upload directory
+# ---------------------------------------------------------------------------
+
+UPLOADS_DIR = Path(__file__).parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Routes — index
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def serve_index():
+    """Serve index.html with injected runtime config.
+
+    Set AGENT_SERVER_URL in .env to override the backend URL the frontend
+    connects to. Defaults to window.location.origin (correct for same-origin
+    deployments).
+    """
+    import pathlib
+    html = pathlib.Path("index.html").read_text()
+    server_url = os.environ.get("AGENT_SERVER_URL", "").strip().rstrip("/")
+    clerk_key = (os.environ.get("CLERK_PUBLISHABLE_KEY") or os.environ.get("VITE_CLERK_PUBLISHABLE_KEY", "")).strip()
+    config_parts = []
+    config_parts.append(f'serverUrl:"{server_url}"' if server_url else 'serverUrl:window.location.origin')
+    if clerk_key:
+        config_parts.append(f'clerkPublishableKey:"{clerk_key}"')
+    config_block = f'<script>window.AGENT_CONFIG={{{",".join(config_parts)}}};</script>'
+    html = html.replace("<head>", f"<head>\n  {config_block}", 1)
+    resp = Response(html, mimetype="text/html")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# Routes — health probes
+# ---------------------------------------------------------------------------
+
+from health import health_checker as _health_checker
+
+
+@app.route("/health/live", methods=["GET"])
+def health_live():
+    """Liveness probe — always 200 while the process is running."""
+    result = _health_checker.liveness()
+    return jsonify({"healthy": result.healthy, "message": result.message, "details": result.details}), 200
+
+
+@app.route("/health/ready", methods=["GET"])
+def health_ready():
+    """Readiness probe — 200 only when Gateway and TTS are available."""
+    result = _health_checker.readiness()
+    code = 200 if result.healthy else 503
+    return jsonify({"healthy": result.healthy, "message": result.message, "details": result.details}), code
+
+
+@app.route("/api/memory-status", methods=["GET"])
+def memory_status():
+    """Process memory usage — for watchdog monitoring."""
+    import resource
+    rusage = resource.getrusage(resource.RUSAGE_SELF)
+    current_mb = rusage.ru_maxrss / 1024  # ru_maxrss is KB on Linux
+    return jsonify({"process": {"current_mb": round(current_mb, 1)}})
+
+
+# ---------------------------------------------------------------------------
+# Routes — session
+# ---------------------------------------------------------------------------
+
+@app.route("/api/session", methods=["GET"])
+def session_info():
+    """Return the current voice session key and consecutive-empty-response count."""
+    return jsonify({
+        "sessionKey": get_voice_session_key(),
+        "consecutiveEmpty": _consecutive_empty_responses,
+    })
+
+
+@app.route("/api/session/reset", methods=["POST"])
+def session_reset():
+    """Reset the voice session context.
+
+    Body (JSON, optional):
+      { "mode": "soft" }  — bump session key only (default)
+      { "mode": "hard" }  — bump session key and pre-warm the new session
+    """
+    from services.gateway import gateway_connection
+
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "soft")
+    if mode not in ("soft", "hard"):
+        return jsonify({"error": f"Invalid mode '{mode}'. Use 'soft' or 'hard'."}), 400
+
+    old_key = get_voice_session_key()
+    new_key = bump_voice_session()
+
+    if mode == "hard":
+        def _prewarm():
+            try:
+                gateway_connection.stream_to_queue(
+                    queue.Queue(),
+                    "[SYSTEM: session pre-warm, reply with exactly: ok]",
+                    new_key,
+                    [],
+                )
+                logger.info(f"Pre-warm complete for {new_key}")
+            except Exception as e:
+                logger.warning(f"Pre-warm failed: {e}")
+        threading.Thread(target=_prewarm, daemon=True).start()
+
+    return jsonify({
+        "old": old_key,
+        "new": new_key,
+        "mode": mode,
+        "message": f"Session reset ({mode})." + (" Pre-warming new session..." if mode == "hard" else ""),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Routes — diagnostics
+# ---------------------------------------------------------------------------
+
+@app.route("/api/diagnostics", methods=["GET"])
+def diagnostics():
+    """Diagnostic dashboard — uptime, active config, recent timing metrics."""
+    import resource
+
+    uptime_seconds = int(time.time() - SERVER_START_TIME)
+    uptime_h = uptime_seconds // 3600
+    uptime_m = (uptime_seconds % 3600) // 60
+    rusage = resource.getrusage(resource.RUSAGE_SELF)
+    memory_mb = round(rusage.ru_maxrss / 1024, 1)
+
+    state = {
+        "server": {
+            "uptime": f"{uptime_h}h {uptime_m}m",
+            "uptime_seconds": uptime_seconds,
+            "memory_mb": memory_mb,
+            "pid": os.getpid(),
+            "started_at": datetime.fromtimestamp(SERVER_START_TIME).isoformat(),
+        },
+        "config": {
+            "gateway_url": os.getenv("CLAWDBOT_GATEWAY_URL", "ws://127.0.0.1:18791"),
+            "session_key": get_voice_session_key(),
+            "tts_provider": os.getenv("DEFAULT_TTS_PROVIDER", "groq"),
+            "port": os.getenv("PORT", "5001"),
+        },
+    }
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("""
+            SELECT profile, model, handshake_ms, llm_inference_ms,
+                   tts_generation_ms, total_ms, user_message_len,
+                   response_len, tts_text_len, tts_provider, tts_success,
+                   tts_error, tool_count, fallback_used, error, created_at
+            FROM conversation_metrics
+            ORDER BY id DESC LIMIT 10
+        """)
+        state["recent_conversations"] = [dict(r) for r in c.fetchall()]
+        c.execute("""
+            SELECT COUNT(*) as total_conversations,
+                   AVG(total_ms) as avg_total_ms,
+                   AVG(llm_inference_ms) as avg_llm_ms,
+                   AVG(tts_generation_ms) as avg_tts_ms,
+                   AVG(handshake_ms) as avg_handshake_ms,
+                   SUM(CASE WHEN tts_success = 0 THEN 1 ELSE 0 END) as tts_failures,
+                   SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) as errors,
+                   MAX(total_ms) as max_total_ms,
+                   MIN(total_ms) as min_total_ms
+            FROM conversation_metrics
+            WHERE created_at > datetime('now', '-1 hour')
+        """)
+        stats = dict(c.fetchone() or {})
+        for key in ("avg_total_ms", "avg_llm_ms", "avg_tts_ms", "avg_handshake_ms"):
+            if stats.get(key) is not None:
+                stats[key] = round(stats[key])
+        state["last_hour_stats"] = stats
+        conn.close()
+    except Exception as e:
+        state["metrics_error"] = str(e)
+
+    return jsonify(state)
+
+
+# ---------------------------------------------------------------------------
+# Routes — Hume EVI token (used by src/adapters/hume-evi.js)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/hume/token", methods=["GET"])
+def get_hume_token():
+    """Return a short-lived Hume access token for EVI WebSocket connections.
+
+    Returns 403 when Hume credentials are not configured — the frontend
+    adapter treats this as 'Hume unavailable' rather than an error.
+    """
+    api_key = os.getenv("HUME_API_KEY")
+    secret_key = os.getenv("HUME_SECRET_KEY")
+
+    if not api_key or not secret_key:
+        return jsonify({"error": "Hume API credentials not configured", "available": False}), 403
+
+    try:
+        credentials = f"{api_key}:{secret_key}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        response = requests.post(
+            "https://api.hume.ai/oauth2-cc/token",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {encoded}",
+            },
+            data={"grant_type": "client_credentials"},
+            timeout=10,
+        )
+        if response.status_code != 200:
+            logger.error(f"Hume token request failed: {response.status_code} — {response.text}")
+            return jsonify({"error": "Failed to get Hume access token", "available": False}), 500
+        token_data = response.json()
+        return jsonify({
+            "access_token": token_data.get("access_token"),
+            "expires_in": token_data.get("expires_in", 3600),
+            "config_id": os.getenv("HUME_CONFIG_ID"),
+            "available": True,
+        })
+    except Exception as e:
+        logger.error(f"Hume token error: {e}")
+        return jsonify({"error": str(e), "available": False}), 500
+
+
+# ---------------------------------------------------------------------------
+# Routes — STT (Speech-to-Text)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/stt/groq", methods=["POST"])
+def groq_stt():
+    """Transcribe audio using Groq Whisper Large v3 Turbo (cloud, fast)."""
+    from services.tts import get_groq_client as _get_groq_client
+
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+
+    audio_file = request.files["audio"]
+    groq = _get_groq_client()
+    if not groq:
+        return jsonify({"error": "Groq client not available — check GROQ_API_KEY"}), 500
+
+    try:
+        audio_bytes = audio_file.read()
+        audio_tuple = (
+            audio_file.filename or "audio.webm",
+            audio_bytes,
+            audio_file.content_type or "audio/webm",
+        )
+        transcription = groq.audio.transcriptions.create(
+            file=audio_tuple,
+            model="whisper-large-v3-turbo",
+            response_format="json",
+            language="en",
+        )
+        logger.info(f"Groq STT: {transcription.text!r}")
+        return jsonify({"transcript": transcription.text, "success": True})
+    except Exception as e:
+        logger.error(f"Groq STT error: {e}")
+        return jsonify({"error": f"STT failed: {e}"}), 500
+
+
+@app.route("/api/stt/local", methods=["POST"])
+def local_stt():
+    """Transcribe audio using local Faster-Whisper with Silero VAD.
+
+    Requires faster-whisper and ffmpeg. Uses the 'tiny' model to keep
+    memory usage low.
+    """
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+
+    audio_file = request.files["audio"]
+    audio_bytes = audio_file.read()
+
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
+
+    try:
+        wav_path = tmp_path.replace(".webm", ".wav")
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path],
+            capture_output=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            logger.warning(f"FFmpeg conversion failed, transcribing original: {result.stderr.decode()}")
+            wav_path = tmp_path
+
+        segments, info = get_whisper_model().transcribe(
+            wav_path,
+            language="en",
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500, "threshold": 0.5},
+        )
+        transcript = " ".join(seg.text for seg in segments).strip()
+        logger.info(f"Local STT: {transcript!r} ({info.duration:.1f}s)")
+        return jsonify({"transcript": transcript, "success": True})
+    except Exception as e:
+        logger.error(f"Local STT error: {e}")
+        return jsonify({"error": f"STT failed: {e}"}), 500
+    finally:
+        for f in [tmp_path, tmp_path.replace(".webm", ".wav")]:
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Routes — web search
+# ---------------------------------------------------------------------------
+
+@app.route("/api/search/brave", methods=["GET"])
+def brave_search():
+    """Web search via Brave Search API. Requires BRAVE_API_KEY in .env."""
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+
+    brave_api_key = os.getenv("BRAVE_API_KEY")
+    if not brave_api_key:
+        return jsonify({"error": "BRAVE_API_KEY not configured"}), 500
+
+    try:
+        response = requests.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            headers={"Accept": "application/json", "X-Subscription-Token": brave_api_key},
+            params={"q": query, "count": 10, "search_lang": "en", "freshness": "pw"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        results = [
+            {
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "description": r.get("description", ""),
+            }
+            for r in data.get("web", {}).get("results", [])[:5]
+        ]
+        return jsonify({"query": query, "results": results, "success": True})
+    except Exception as e:
+        logger.error(f"Brave Search error: {e}")
+        return jsonify({"error": f"Search failed: {e}"}), 500
+
+
+@app.route("/api/search", methods=["GET", "POST"])
+def web_search():
+    """Web search via DuckDuckGo (no API key required)."""
+    import urllib.request
+    import urllib.parse
+    from html.parser import HTMLParser
+
+    if request.method == "POST":
+        query = (request.get_json() or {}).get("query")
+    else:
+        query = request.args.get("query")
+
+    if not query:
+        return jsonify({"error": "query required"}), 400
+
+    class _DDGParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.results = []
+            self._current = {}
+            self._capture = False
+            self._text = ""
+
+        def handle_starttag(self, tag, attrs):
+            d = dict(attrs)
+            if tag == "a" and d.get("class") == "result__a":
+                self._current = {"url": d.get("href", ""), "title": "", "snippet": ""}
+                self._capture = True
+            elif tag == "a" and d.get("class") == "result__snippet":
+                self._capture = True
+
+        def handle_endtag(self, tag):
+            if tag == "a" and self._capture:
+                if self._current and not self._current.get("title"):
+                    self._current["title"] = self._text.strip()
+                elif self._current.get("title") and not self._current.get("snippet"):
+                    self._current["snippet"] = self._text.strip()
+                    if self._current["title"] and self._current["url"]:
+                        self.results.append(self._current)
+                    self._current = {}
+                self._capture = False
+                self._text = ""
+
+        def handle_data(self, data):
+            if self._capture:
+                self._text += data
+
+    try:
+        encoded = urllib.parse.quote_plus(query)
+        req = urllib.request.Request(
+            f"https://html.duckduckgo.com/html/?q={encoded}",
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8")
+        parser = _DDGParser()
+        parser.feed(html)
+        results = parser.results[:5]
+        return jsonify({"query": query, "results": results, "success": True})
+    except Exception as e:
+        logger.error(f"DuckDuckGo search error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Routes — usage quotas
+# ---------------------------------------------------------------------------
+
+@app.route("/api/usage/<user_id>", methods=["GET"])
+def check_usage(user_id):
+    """Return the current month's usage for a user."""
+    if user_id in UNLIMITED_USERS:
+        return jsonify({
+            "user_id": user_id,
+            "used": get_user_usage(user_id),
+            "limit": -1,
+            "remaining": -1,
+            "allowed": True,
+            "unlimited": True,
+        })
+    count = get_user_usage(user_id)
+    return jsonify({
+        "user_id": user_id,
+        "used": count,
+        "limit": MONTHLY_LIMIT,
+        "remaining": max(0, MONTHLY_LIMIT - count),
+        "allowed": count < MONTHLY_LIMIT,
+    })
+
+
+@app.route("/api/usage/<user_id>/increment", methods=["POST"])
+def track_usage(user_id):
+    """Increment usage count for a user (called after each agent response)."""
+    if user_id in UNLIMITED_USERS:
+        increment_usage(user_id)
+        return jsonify({
+            "user_id": user_id,
+            "used": get_user_usage(user_id),
+            "limit": -1,
+            "remaining": -1,
+            "unlimited": True,
+        })
+    count = get_user_usage(user_id)
+    if count >= MONTHLY_LIMIT:
+        return jsonify({"error": "Monthly limit reached", "used": count, "limit": MONTHLY_LIMIT}), 429
+    increment_usage(user_id)
+    new_count = count + 1
+    return jsonify({
+        "user_id": user_id,
+        "used": new_count,
+        "limit": MONTHLY_LIMIT,
+        "remaining": max(0, MONTHLY_LIMIT - new_count),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Routes — server commands (whitelisted)
+# ---------------------------------------------------------------------------
+
+ALLOWED_COMMANDS = {
+    "git_status":     {"cmd": ["git", "status"],                                "desc": "Git working tree status"},
+    "git_log":        {"cmd": ["git", "log", "--oneline", "-10"],               "desc": "Last 10 commits"},
+    "disk_usage":     {"cmd": ["df", "-h", "/"],                                "desc": "Disk usage"},
+    "memory":         {"cmd": ["free", "-h"],                                   "desc": "Memory usage"},
+    "uptime":         {"cmd": ["uptime"],                                       "desc": "System uptime"},
+    "date":           {"cmd": ["date"],                                         "desc": "Current date/time"},
+    "whoami":         {"cmd": ["whoami"],                                       "desc": "Current user"},
+    "nginx_status":   {"cmd": ["systemctl", "status", "nginx", "--no-pager"],   "desc": "Nginx status"},
+    "service_status": {"cmd": ["systemctl", "status", "openvoiceui", "--no-pager"], "desc": "OpenVoiceUI service status"},
+    "network":        {"cmd": ["ss", "-tuln"],                                  "desc": "Active network listeners"},
+    "processes":      {"cmd": ["ps", "aux", "--sort=-%cpu"],                    "desc": "Running processes by CPU"},
+    "hostname":       {"cmd": ["hostname"],                                     "desc": "Server hostname"},
+    "ip_address":     {"cmd": ["hostname", "-I"],                               "desc": "Server IP addresses"},
+}
+
+_COMMAND_KEYWORDS = {
+    "git": "git_status", "commit": "git_log", "disk": "disk_usage",
+    "space": "disk_usage", "memory": "memory", "ram": "memory",
+    "time": "date", "date": "date", "nginx": "nginx_status",
+    "web": "nginx_status", "service": "service_status",
+    "openvoiceui": "service_status", "network": "network",
+    "ports": "network", "process": "processes", "cpu": "processes",
+    "running": "processes", "host": "hostname", "ip": "ip_address",
+    "address": "ip_address", "uptime": "uptime",
+}
+
+
+@app.route("/api/command", methods=["GET", "POST"])
+def run_command():
+    """Run a whitelisted server command. Accepts a command key or natural language."""
+    if request.method == "POST":
+        command = (request.get_json() or {}).get("command")
+    else:
+        command = request.args.get("command")
+
+    if not command:
+        return jsonify({
+            "available_commands": [{"name": k, "description": v["desc"]} for k, v in ALLOWED_COMMANDS.items()],
+        })
+
+    key = command.lower().replace(" ", "_").replace("-", "_")
+    matched = key if key in ALLOWED_COMMANDS else next(
+        (v for k, v in _COMMAND_KEYWORDS.items() if k in key), None
+    )
+
+    if not matched:
+        return jsonify({"error": "command not in whitelist", "available": list(ALLOWED_COMMANDS.keys())}), 400
+
+    cmd_info = ALLOWED_COMMANDS[matched]
+    try:
+        result = subprocess.run(
+            cmd_info["cmd"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(Path(__file__).parent),
+        )
+        output = (result.stdout.strip() or result.stderr.strip())[:1500]
+        return jsonify({
+            "command": matched,
+            "description": cmd_info["desc"],
+            "output": output,
+            "return_code": result.returncode,
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": f"'{matched}' timed out after 30s"}), 504
+    except Exception as e:
+        logger.error(f"Command error ({matched}): {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/commands", methods=["GET"])
+def list_commands():
+    """List all whitelisted commands."""
+    return jsonify({
+        "commands": [{"name": k, "description": v["desc"]} for k, v in ALLOWED_COMMANDS.items()]
+    })
+
+
+# ---------------------------------------------------------------------------
+# Routes — file upload
+# ---------------------------------------------------------------------------
+
+@app.route("/api/upload", methods=["POST"])
+def upload_file():
+    """Upload a file for the voice agent (images, text, code, etc.)."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "No filename"}), 400
+
+    allowed_exts = {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp",
+        ".pdf", ".txt", ".md", ".json", ".csv",
+        ".html", ".js", ".py", ".ts", ".css",
+    }
+    ext = Path(file.filename).suffix.lower()
+    if ext not in allowed_exts:
+        return jsonify({"error": f"File type '{ext}' not allowed"}), 400
+
+    safe_name = re.sub(r"[^\w\-.]", "_", file.filename)[:80]
+    save_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_name}"
+    save_path = UPLOADS_DIR / save_name
+    file.save(save_path)
+
+    is_image = ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+    result = {
+        "filename": save_name,
+        "original_name": file.filename,
+        "path": str(save_path),
+        "type": "image" if is_image else "text",
+        "size": save_path.stat().st_size,
+        "url": f"/uploads/{save_name}",
+    }
+    if not is_image and ext != ".pdf":
+        try:
+            result["content_preview"] = save_path.read_text(encoding="utf-8", errors="replace")[:2000]
+        except Exception:
+            pass
+
+    logger.info(f"Upload: {file.filename} → {save_path} ({result['size']} bytes)")
+    return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
+# WebSocket — Gateway proxy (/ws/clawdbot)
+# ---------------------------------------------------------------------------
+
+from services.tts import generate_tts_b64 as _generate_tts_b64
+
+
+def _tts_bytes(text: str) -> bytes:
+    """Generate TTS audio bytes for the WebSocket proxy."""
+    b64 = _generate_tts_b64(text, voice="M1")
+    if b64 is None:
+        raise RuntimeError("TTS generation returned no audio")
+    return base64.b64decode(b64)
+
+
+@sock.route("/ws/clawdbot")
+def clawdbot_websocket(ws):
+    """WebSocket proxy between the frontend and the OpenClaw Gateway.
+
+    Connects to CLAWDBOT_GATEWAY_URL, performs the protocol-3 handshake,
+    then bridges messages bidirectionally — generating TTS audio for every
+    assistant response before forwarding to the client.
+    """
+    gateway_url = os.getenv("CLAWDBOT_GATEWAY_URL", "ws://127.0.0.1:18791")
+    auth_token = os.getenv("CLAWDBOT_AUTH_TOKEN")
+
+    if not auth_token:
+        logger.error("CLAWDBOT_AUTH_TOKEN not set — WebSocket rejected")
+        ws.send(json.dumps({"type": "error", "message": "Server configuration error"}))
+        ws.close()
+        return
+
+    async def _run():
+        try:
+            async with websockets.connect(gateway_url) as gw:
+                logger.info(f"WebSocket connected to Gateway at {gateway_url}")
+
+                # Handshake
+                challenge = json.loads(await gw.recv())
+                logger.debug(f"Gateway challenge: {challenge.get('event')}")
+
+                await gw.send(json.dumps({
+                    "type": "req",
+                    "id": f"connect-{uuid.uuid4()}",
+                    "method": "connect",
+                    "params": {
+                        "minProtocol": 3,
+                        "maxProtocol": 3,
+                        "client": {
+                            "id": "webchat",
+                            "version": "1.0.0",
+                            "platform": "web",
+                            "mode": "webchat",
+                        },
+                        "auth": {"token": auth_token},
+                    },
+                }))
+
+                resp = json.loads(await gw.recv())
+                if resp.get("type") != "res" or not resp.get("ok"):
+                    logger.error(f"Gateway handshake failed: {resp}")
+                    ws.send(json.dumps({"type": "error", "message": "Gateway handshake failed"}))
+                    ws.close()
+                    return
+
+                logger.info("Gateway handshake OK")
+                ws.send(json.dumps({"type": "connected", "message": "Connected to OpenClaw Gateway"}))
+
+                async def _from_client():
+                    while True:
+                        msg = ws.receive()
+                        if not msg:
+                            break
+                        data = json.loads(msg)
+                        if data.get("type") == "chat.send":
+                            await gw.send(json.dumps({
+                                "type": "req",
+                                "id": f"chat-{uuid.uuid4()}",
+                                "method": "chat.send",
+                                "params": {
+                                    "content": data.get("content", ""),
+                                    "sessionKey": data.get("sessionKey", "main"),
+                                },
+                            }))
+
+                async def _from_gateway():
+                    while True:
+                        data = json.loads(await gw.recv())
+                        if data.get("type") != "event":
+                            continue
+                        event = data.get("event")
+                        payload = data.get("payload", {})
+
+                        if event == "agent.message":
+                            content = payload.get("content", "")
+                            if content:
+                                try:
+                                    audio_b64 = base64.b64encode(_tts_bytes(content)).decode()
+                                    ws.send(json.dumps({
+                                        "type": "assistant_message",
+                                        "text": content,
+                                        "audio": audio_b64,
+                                    }))
+                                except Exception as e:
+                                    logger.error(f"TTS failed in WebSocket handler: {e}")
+                                    ws.send(json.dumps({"type": "assistant_message", "text": content}))
+
+                        elif event == "agent.stream.delta":
+                            ws.send(json.dumps({
+                                "type": "text_delta",
+                                "delta": payload.get("delta", ""),
+                            }))
+
+                        elif event == "agent.stream.end":
+                            ws.send(json.dumps({"type": "stream_end"}))
+
+                await asyncio.gather(_from_client(), _from_gateway())
+
+        except (ConnectionRefusedError, OSError) as e:
+            logger.error(f"Cannot reach Gateway at {gateway_url}: {e}")
+            ws.send(json.dumps({"type": "error", "message": "Cannot connect to Gateway"}))
+            ws.close()
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+            ws.send(json.dumps({"type": "error", "message": str(e)}))
+            ws.close()
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        logger.error(f"Fatal WebSocket error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5001))
+
+    # Clean SIGTERM shutdown so systemd stop/restart works correctly.
+    # Restart=on-failure only triggers on non-zero exit — os._exit(0) prevents that.
+    def _handle_sigterm(signum, frame):
+        logger.info("SIGTERM received — shutting down.")
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+
+    logger.info(f"OpenVoiceUI starting on port {port}")
+    logger.info(f"  Frontend  → http://localhost:{port}/")
+    logger.info(f"  Health    → http://localhost:{port}/health/ready")
+    logger.info(f"  Admin     → http://localhost:{port}/src/admin.html")
+    logger.info(f"  Gateway   → {os.getenv('CLAWDBOT_GATEWAY_URL', 'ws://127.0.0.1:18791')}")
+
+    host = os.getenv("HOST", "127.0.0.1")  # Docker sets HOST=0.0.0.0; VPS stays loopback
+    app.run(host=host, port=port, debug=False, threaded=True)

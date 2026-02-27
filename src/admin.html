@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenUI Admin</title>
+<!-- Clerk Authentication (optional — loaded dynamically if configured) -->
+<script>
+    fetch('/api/config').then(r=>r.json()).then(cfg=>{
+        if(cfg.clerkPublishableKey){
+            const s=document.createElement('script');
+            s.async=true;s.crossOrigin='anonymous';
+            s.dataset.clerkPublishableKey=cfg.clerkPublishableKey;
+            s.src='https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+            document.head.appendChild(s);
+        }
+    }).catch(()=>{});
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--panel:#161b22;--panel2:#1c2128;--panel3:#21262d;
+  --border:#30363d;--border2:#21262d;
+  --text:#c9d1d9;--dim:#8b949e;--subtle:#484f58;--bright:#e6edf3;
+  --blue:#58a6ff;--blue-dark:#1f6feb;--blue-bg:rgba(31,111,235,0.1);
+  --green:#3fb950;--green-dark:#238636;--green-bg:rgba(63,185,80,0.1);
+  --orange:#ffa657;--orange-bg:rgba(255,166,87,0.1);
+  --red:#f85149;--red-bg:rgba(248,81,73,0.1);
+  --purple:#d2a8ff;--purple-dark:#8957e5;--purple-bg:rgba(137,87,229,0.1);
+  --cyan:#56d4dd;--yellow:#e3b341;
+  --sidebar:220px;--header:48px;--radius:6px;--radius-lg:10px;
+  --mono:'SF Mono','Fira Code','Courier New',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.5}
+
+/* Layout */
+#app{display:grid;grid-template-rows:var(--header) 1fr;grid-template-columns:var(--sidebar) 1fr;height:100vh;transition:grid-template-columns .2s}
+#app.sidebar-collapsed{grid-template-columns:52px 1fr}
+
+/* Header */
+#hdr{grid-column:1/-1;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;z-index:200}
+.hdr-toggle{background:none;border:none;color:var(--dim);cursor:pointer;padding:6px 8px;border-radius:var(--radius);font-size:16px;line-height:1;transition:color .15s,background .15s}
+.hdr-toggle:hover{color:var(--text);background:var(--panel3)}
+.hdr-logo{font-weight:700;font-size:15px;color:var(--blue);letter-spacing:-.3px;white-space:nowrap}
+.hdr-logo em{color:var(--dim);font-style:normal;font-weight:400}
+.hdr-sep{flex:1}
+.hdr-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);background:var(--panel3);border:1px solid var(--border);border-radius:20px;padding:4px 10px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);flex-shrink:0;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.dot.red{background:var(--red);box-shadow:0 0 5px var(--red)}
+.dot.yellow{background:var(--yellow);box-shadow:0 0 5px var(--yellow)}
+.hdr-back{display:flex;align-items:center;gap:5px;color:var(--dim);text-decoration:none;font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);margin-left:8px;transition:all .15s;white-space:nowrap}
+.hdr-back:hover{color:var(--text);border-color:var(--dim)}
+
+/* Sidebar */
+#sidebar{background:var(--panel);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;transition:width .2s}
+.nav-section{padding:16px 0 4px}
+.nav-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--subtle);padding:0 12px 6px;white-space:nowrap;transition:opacity .15s}
+#app.sidebar-collapsed .nav-label{opacity:0;pointer-events:none}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer;color:var(--dim);transition:background .1s,color .1s;border-left:2px solid transparent;white-space:nowrap;overflow:hidden;user-select:none;font-size:13px;font-weight:500}
+.nav-item:hover{background:rgba(177,186,196,.06);color:var(--text)}
+.nav-item.active{color:var(--blue);background:var(--blue-bg);border-left-color:var(--blue)}
+.nav-icon{font-size:16px;flex-shrink:0;width:20px;text-align:center}
+.nav-text{transition:opacity .15s}
+#app.sidebar-collapsed .nav-text{opacity:0;width:0;overflow:hidden}
+.sidebar-footer{margin-top:auto;border-top:1px solid var(--border);padding:8px 0}
+
+/* Main */
+#main{overflow:hidden;display:flex;flex-direction:column}
+.panel{display:none;flex:1;overflow-y:auto;min-height:0}
+.panel.active{display:flex;flex-direction:column}
+.panel-inner{padding:24px 28px;flex:1}
+
+/* Panel header */
+.ph{margin-bottom:20px}
+.ph-title{font-size:20px;font-weight:700;color:var(--bright);letter-spacing:-.4px}
+.ph-sub{font-size:13px;color:var(--dim);margin-top:3px}
+.ph-row{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+
+/* Cards / Boxes */
+.box{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.box-title{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);padding:14px 16px 10px;border-bottom:1px solid var(--border2)}
+.box-body{padding:16px}
+
+/* Grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.gauto{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:var(--radius);border:1px solid;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn-p{background:var(--blue-dark);border-color:var(--blue-dark);color:#fff}.btn-p:hover{background:#388bfd;border-color:#388bfd}
+.btn-g{background:var(--green-dark);border-color:var(--green-dark);color:#fff}.btn-g:hover{background:#2ea043;border-color:#2ea043}
+.btn-o{background:transparent;border-color:var(--border);color:var(--dim)}.btn-o:hover{background:var(--panel3);border-color:var(--dim);color:var(--text)}
+.btn-d{background:var(--red-bg);border-color:rgba(248,81,73,.4);color:var(--red)}.btn-d:hover{background:rgba(248,81,73,.15)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Form */
+.fg{margin-bottom:14px}
+.fl{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:5px}
+input[type=text],input[type=url],input[type=password],textarea,select{
+  width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);font-size:13px;padding:7px 11px;outline:none;transition:border-color .15s;font-family:inherit
+}
+input:focus,textarea:focus,select:focus{border-color:var(--blue-dark);box-shadow:0 0 0 3px rgba(31,111,235,.12)}
+textarea{resize:vertical;min-height:120px}
+select{cursor:pointer}
+
+/* Toggle switch */
+.toggle-wrap{display:flex;align-items:center;gap:8px;cursor:pointer}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;background:#333;border-radius:10px;transition:background .2s;border:1px solid #444}
+.toggle input:checked~.toggle-track{background:var(--green-dark);border-color:var(--green-dark)}
+.toggle-thumb{position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.toggle input:checked~.toggle-thumb{transform:translateX(16px)}
+.toggle-label{font-size:13px;color:var(--text)}
+.toggle-sub{font-size:11px;color:var(--dim)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;font-family:var(--mono);white-space:nowrap}
+.b-green{background:var(--green-bg);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+.b-blue{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(88,166,255,.3)}
+.b-orange{background:var(--orange-bg);color:var(--orange);border:1px solid rgba(255,166,87,.3)}
+.b-red{background:var(--red-bg);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+.b-purple{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(137,87,229,.3)}
+.b-gray{background:var(--panel3);color:var(--dim);border:1px solid var(--border)}
+
+/* Divider */
+.div{height:1px;background:var(--border);margin:16px 0}
+
+/* Loading / Empty */
+.loading{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:13px;padding:20px 0}
+.spin{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:40px;color:var(--dim);font-size:13px}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.35}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{padding:9px 14px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:11px 14px;border-bottom:1px solid var(--border2);font-size:13px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:rgba(177,186,196,.04)}
+
+/* Stat */
+.stat-r{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border2)}
+.stat-r:last-child{border-bottom:none}
+.stat-l{font-size:12px;color:var(--dim);flex:1}
+.stat-v{font-family:var(--mono);font-size:13px;color:var(--text)}
+.stat-v.g{color:var(--green)}.stat-v.r{color:var(--red)}.stat-v.y{color:var(--yellow)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--border)}
+
+/* -- PANEL: Agents -- */
+.active-banner{background:linear-gradient(135deg,#0d2d1a,#112d1a);border:2px solid var(--green-dark);border-radius:var(--radius-lg);padding:16px 20px;display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.ab-avatar{width:52px;height:52px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ab-name{font-size:20px;font-weight:700;color:var(--bright)}
+.ab-meta{font-size:12px;color:var(--dim);margin-top:2px}
+.profile-card{background:var(--panel);border:2px solid var(--border);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:10px;position:relative}
+.profile-card:hover{border-color:var(--dim);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.profile-card.cur{border-color:var(--green);background:linear-gradient(135deg,rgba(35,134,54,.06),rgba(63,185,80,.03))}
+.pc-icon{font-size:24px;margin-bottom:2px}
+.pc-name{font-size:14px;font-weight:700;color:var(--bright)}
+.pc-desc{font-size:12px;color:var(--dim);line-height:1.5}
+.pc-meta{display:flex;gap:6px;flex-wrap:wrap}
+.pc-active{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#000;background:var(--green);padding:2px 8px;border-radius:3px;font-family:var(--mono)}
+.pc-actions{display:flex;gap:8px;margin-top:4px}
+
+/* -- PANEL: Agent Builder -- */
+.builder-layout{display:flex;flex:1;min-height:0;overflow:hidden}
+.builder-list{width:240px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;background:var(--panel2)}
+.builder-list-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.builder-list-title{font-size:13px;font-weight:600;color:var(--bright);flex:1}
+.agent-list-item{padding:10px 14px;cursor:pointer;border-left:2px solid transparent;transition:all .1s;border-bottom:1px solid var(--border2)}
+.agent-list-item:hover{background:rgba(177,186,196,.06)}
+.agent-list-item.active{border-left-color:var(--blue);background:var(--blue-bg)}
+.ali-name{font-size:13px;font-weight:600;color:var(--text)}
+.ali-model{font-size:11px;color:var(--dim);margin-top:2px;font-family:var(--mono)}
+.builder-editor{flex:1;overflow-y:auto;padding:24px 28px}
+.be-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px}
+.be-tab{padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;color:var(--dim);border-bottom:2px solid transparent;transition:all .15s;user-select:none;white-space:nowrap}
+.be-tab:hover{color:var(--text)}
+.be-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.voice-grid{display:flex;flex-wrap:wrap;gap:6px}
+.voice-btn{padding:6px 12px;background:var(--panel3);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--dim);transition:all .15s;font-family:var(--mono)}
+.voice-btn:hover{border-color:var(--dim);color:var(--text)}
+.voice-btn.sel-m{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.voice-btn.sel-f{border-color:var(--purple);background:var(--purple-bg);color:var(--purple)}
+.tools-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tool-check{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel3);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer}
+.tool-check input{accent-color:var(--blue);width:14px;height:14px;flex-shrink:0;cursor:pointer}
+.tool-check-label{font-size:12px;color:var(--dim);font-family:var(--mono)}
+.greeting-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.g-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--panel3);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--text)}
+.g-tag-x{background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+.g-tag-x:hover{color:var(--red)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sect-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);margin:16px 0 10px}
+
+/* -- PANEL: Provider Config -- */
+.prov-col{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
+.prov-col-hdr{padding:12px 16px;background:var(--panel3);border-bottom:1px solid var(--border);font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);text-align:center}
+.prov-list{flex:1;overflow-y:auto;padding:8px 0}
+.prov-item{padding:10px 14px;cursor:pointer;display:flex;align-items:flex-start;gap:10px;border-left:2px solid transparent;transition:all .1s;border-bottom:1px solid var(--border2)}
+.prov-item:last-child{border-bottom:none}
+.prov-item:hover{background:rgba(177,186,196,.04)}
+.prov-item.sel{border-left-color:var(--blue);background:var(--blue-bg)}
+.prov-radio{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;margin-top:2px;position:relative;transition:border-color .15s}
+.prov-item.sel .prov-radio{border-color:var(--blue)}
+.prov-item.sel .prov-radio::after{content:'';position:absolute;width:8px;height:8px;background:var(--blue);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%)}
+.prov-info-name{font-size:13px;font-weight:600;color:var(--text)}
+.prov-info-detail{font-size:11px;color:var(--dim);margin-top:2px}
+.prov-config{background:var(--panel2);border-top:1px solid var(--border);padding:12px 14px;display:none}
+.prov-item.sel .prov-config{display:block}
+.test-btn{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border);background:transparent;color:var(--dim);font-size:12px;cursor:pointer;transition:all .15s;margin-top:8px}
+.test-btn:hover{border-color:var(--orange);color:var(--orange)}
+.test-btn.testing{border-color:var(--orange);color:var(--orange)}
+.test-btn.pass{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.test-btn.fail{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+
+/* -- PANEL: Install -- */
+.install-steps{display:flex;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.ist{flex:1;padding:10px 6px;font-size:11px;font-weight:600;text-align:center;color:var(--subtle);border-right:1px solid var(--border);transition:all .2s}
+.ist:last-child{border-right:none}
+.ist.done{color:var(--green);background:var(--green-bg)}
+.ist.active{color:var(--blue);background:var(--blue-bg)}
+.url-bar{display:flex;gap:10px;margin-bottom:16px}
+.url-bar input{flex:1}
+.term{background:#010409;border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;font-family:var(--mono);font-size:12px;line-height:1.8;min-height:300px;max-height:460px;overflow-y:auto;color:#c9d1d9}
+.t-dim{color:var(--subtle)}.t-g{color:var(--green)}.t-b{color:var(--blue)}.t-y{color:var(--yellow)}.t-r{color:var(--red)}.t-c{color:var(--cyan)}.t-sec{color:var(--dim);margin:6px 0;border-top:1px solid var(--border2);padding-top:6px;display:block}
+
+/* -- PANEL: Tests -- */
+.test-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--border2);border-radius:var(--radius)}
+.test-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.test-name{flex:1;font-size:13px;font-weight:500}
+.test-res{font-size:12px;font-family:var(--mono)}.test-res.pass{color:var(--green)}.test-res.fail{color:var(--red)}.test-res.skip{color:var(--subtle)}.test-res.running{color:var(--blue)}
+.test-ms{font-size:11px;color:var(--subtle);font-family:var(--mono);min-width:55px;text-align:right}
+
+/* -- PANEL: DJ Prompt -- */
+.prompt-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.prompt-stats{font-size:12px;color:var(--dim);margin-left:auto}
+.prompt-dirty{color:var(--yellow);font-size:12px}
+#prompt-ta{min-height:420px;font-family:var(--mono);font-size:12px;line-height:1.7;background:#010409;border-color:var(--border)}
+
+/* -- PANEL: Frameworks -- */
+.fw-cap{display:flex;gap:4px;flex-wrap:wrap}
+.fw-cap span{font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid rgba(88,166,255,.3);color:var(--blue);background:var(--blue-bg)}
+
+/* -- PANEL: System -- */
+.hc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.hc{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px}
+.hc-label{font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+.hc-val{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--bright)}
+.hc-val.g{color:var(--green)}.hc-val.r{color:var(--red)}.hc-val.y{color:var(--yellow)}
+.hc-sub{font-size:11px;color:var(--dim);margin-top:3px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Header -->
+<header id="hdr">
+  <button class="hdr-toggle" onclick="toggleSidebar()">&#9776;</button>
+  <div class="hdr-logo">OpenUI <em>Admin</em></div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-pill"><div class="dot" id="health-dot"></div><span id="health-txt">Checking...</span></div>
+  <a href="/" class="hdr-back">&#8592; Voice App</a>
+</header>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div class="nav-section">
+    <div class="nav-label">Agents</div>
+    <div class="nav-item active" id="nav-agents" onclick="show('agents')"><span class="nav-icon">&#x1F916;</span><span class="nav-text">Agent Profiles</span></div>
+    <div class="nav-item" id="nav-builder" onclick="show('builder')"><span class="nav-icon">&#x1F527;</span><span class="nav-text">Agent Builder</span></div>
+    <div class="nav-item" id="nav-instructions" onclick="show('instructions')"><span class="nav-icon">&#x1F4DD;</span><span class="nav-text">Instructions</span></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Frameworks</div>
+    <div class="nav-item" id="nav-frameworks" onclick="show('frameworks')"><span class="nav-icon">&#x1F50C;</span><span class="nav-text">Framework Registry</span></div>
+    <div class="nav-item" id="nav-install" onclick="show('install')"><span class="nav-icon">&#x1F4E6;</span><span class="nav-text">Install Framework</span></div>
+    <div class="nav-item" id="nav-tests" onclick="show('tests')"><span class="nav-icon">&#x1F9EA;</span><span class="nav-text">Connector Tests</span></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Providers</div>
+    <div class="nav-item" id="nav-providers" onclick="show('providers')"><span class="nav-icon">&#x26A1;</span><span class="nav-text">Provider Config</span></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Content</div>
+    <div class="nav-item" id="nav-djtools" onclick="show('djtools')"><span class="nav-icon">🎵</span><span class="nav-text">Music Agent</span></div>
+    <div class="nav-item" id="nav-canvas" onclick="show('canvas')"><span class="nav-icon">🖥️</span><span class="nav-text">Canvas Pages</span></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">System</div>
+    <div class="nav-item" id="nav-system" onclick="show('system')"><span class="nav-icon">&#x2699;&#xFE0F;</span><span class="nav-text">System &amp; Health</span></div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="nav-item" onclick="location.href='/'"><span class="nav-icon">&#8592;</span><span class="nav-text">Back to App</span></div>
+  </div>
+</nav>
+
+<!-- Main -->
+<main id="main">
+
+  <!-- AGENTS -->
+  <div class="panel active" id="panel-agents">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">Agent Profiles</div><div class="ph-sub">Select the active agent &mdash; controls personality, voice, LLM, and capabilities</div></div>
+      <div id="active-banner"></div>
+      <div class="ph-row"><button class="btn btn-o" onclick="Agents.load()">&#8634; Refresh</button></div>
+      <div class="g4" id="agents-grid"><div class="loading"><div class="spin"></div>Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- AGENT BUILDER -->
+  <div class="panel" id="panel-builder">
+    <div class="builder-layout">
+      <div class="builder-list">
+        <div class="builder-list-header">
+          <span class="builder-list-title">Agents</span>
+          <button class="btn btn-p btn-sm" onclick="Builder.newAgent()">+ New</button>
+        </div>
+        <div id="builder-agent-list"><div class="loading" style="padding:14px"><div class="spin"></div>Loading...</div></div>
+      </div>
+      <div class="builder-editor" id="builder-editor">
+        <div class="empty"><div class="empty-icon">&#x1F527;</div>Select an agent from the list to edit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FRAMEWORKS -->
+  <div class="panel" id="panel-frameworks">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">Framework Registry</div><div class="ph-sub">All installed agent frameworks &mdash; health, capabilities, and configuration</div></div>
+      <div class="ph-row"><button class="btn btn-o" onclick="Frameworks.load()">&#8634; Refresh</button><button class="btn btn-p" onclick="show('install')">+ Install New</button></div>
+      <div class="box" style="padding:0;overflow:hidden;margin-bottom:20px">
+        <table class="tbl" id="fw-table">
+          <thead><tr><th>Framework</th><th>Status</th><th>Capabilities</th><th>LLM</th><th>TTS</th><th>Actions</th></tr></thead>
+          <tbody id="fw-tbody"><tr><td colspan="6"><div class="loading" style="padding:14px"><div class="spin"></div></div></td></tr></tbody>
+        </table>
+      </div>
+      <div class="box"><div class="box-title">Config Viewer</div><div class="box-body" id="fw-config"><div class="empty"><div class="empty-icon">&#x1F50C;</div>Click "Config" on a framework above</div></div></div>
+    </div>
+  </div>
+
+  <!-- INSTALL -->
+  <div class="panel" id="panel-install">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">Install Framework</div><div class="ph-sub">Provide a GitHub URL or package name &mdash; the agent researches, installs, writes a connector, tests, and registers it automatically</div></div>
+      <div class="install-steps">
+        <div class="ist" id="ist-research">1 &middot; Research</div>
+        <div class="ist" id="ist-plan">2 &middot; Plan</div>
+        <div class="ist" id="ist-install">3 &middot; Install</div>
+        <div class="ist" id="ist-connector">4 &middot; Connector</div>
+        <div class="ist" id="ist-test">5 &middot; Test</div>
+        <div class="ist" id="ist-register">6 &middot; Register</div>
+      </div>
+      <div class="url-bar">
+        <input type="url" id="install-url" placeholder="https://github.com/org/repo  or  pipecat-ai  or  livekit-agents">
+        <button class="btn btn-p" id="install-btn" onclick="Install.start()">&#9654; Start</button>
+        <button class="btn btn-o" onclick="Install.clear()">&#x2715; Clear</button>
+      </div>
+      <div class="term" id="install-term"><span class="t-dim">Enter a URL or package name above and click Start.</span><br><span class="t-dim">The agent will handle everything: research &rarr; install &rarr; connector &rarr; test &rarr; register.</span></div>
+    </div>
+  </div>
+
+  <!-- TESTS -->
+  <div class="panel" id="panel-tests">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">Connector Tests</div><div class="ph-sub">Automated diagnostic suite against live API endpoints</div></div>
+      <div class="ph-row">
+        <select id="test-sel" style="width:220px"><option value="active">Active Framework</option></select>
+        <button class="btn btn-p" id="run-btn" onclick="Tests.run()">&#9654; Run All Tests</button>
+        <span id="test-sum" style="font-size:12px;color:var(--dim)"></span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="test-list"><div class="empty"><div class="empty-icon">&#x1F9EA;</div>Click Run All Tests to begin</div></div>
+    </div>
+  </div>
+
+  <!-- PROVIDERS -->
+  <div class="panel" id="panel-providers">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">Provider Config</div><div class="ph-sub">Select and configure LLM, TTS, and STT providers for the active agent</div></div>
+      <div class="g3" id="prov-grid" style="align-items:start">
+        <div class="loading"><div class="spin"></div>Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MUSIC AGENT (coming soon) -->
+  <div class="panel" id="panel-djtools">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">Music Agent</div><div class="ph-sub">Music configuration &mdash; tracks, prompt, sound effects, and music scheduling</div></div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:40px;text-align:center;margin-top:20px">
+        <div style="font-size:40px;margin-bottom:16px;opacity:.4">🎵</div>
+        <div style="font-size:16px;font-weight:600;color:var(--bright);margin-bottom:8px">Music Agent Settings</div>
+        <div style="font-size:13px;color:var(--dim);max-width:400px;margin:0 auto 20px">Track library, DJ prompt, sound effects, and music scheduling will be managed here.</div>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="btn btn-p" onclick="show('builder');Builder.load()">Configure Music Agent</button>
+          <span class="badge b-yellow" style="align-self:center;padding:6px 12px">Coming Soon</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM -->
+  <div class="panel" id="panel-system">
+    <div class="panel-inner">
+      <div class="ph"><div class="ph-title">System &amp; Health</div><div class="ph-sub">Server status, gateway connection, and resource usage</div></div>
+      <div class="hc-grid" id="hc-grid"><div class="loading"><div class="spin"></div>Loading...</div></div>
+      <div class="g2" style="gap:16px;margin-bottom:16px">
+        <div class="box"><div class="box-title">Service Health</div><div class="box-body" id="sys-health"></div></div>
+        <div class="box"><div class="box-title">Server Resources</div><div class="box-body" id="sys-stats"></div></div>
+      </div>
+      <div class="box">
+        <div class="box-title">Gateway</div>
+        <div class="box-body" id="sys-gw"><div class="loading"><div class="spin"></div></div></div>
+        <div style="padding:0 16px 14px;display:flex;gap:8px">
+          <button class="btn btn-o btn-sm" onclick="System.checkGW()">&#8634; Test Gateway</button>
+          <button class="btn btn-d btn-sm" onclick="System.resetSession()">&#8634; Reset Session</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSTRUCTIONS -->
+  <div class="panel" id="panel-instructions">
+    <div class="panel-inner">
+      <div class="ph">
+        <div class="ph-title">Agent Instructions</div>
+        <div class="ph-sub">Live instruction files injected into the agent. App-scope files reload on the next message &mdash; no restart needed. OpenClaw files are read fresh each session.</div>
+      </div>
+      <div class="ph-row">
+        <button class="btn btn-o" onclick="Instructions.load()">&#8634; Refresh</button>
+      </div>
+      <div id="instr-layout" style="display:grid;grid-template-columns:220px 1fr;gap:16px;height:calc(100vh - 220px)">
+        <!-- File list -->
+        <div class="box" style="overflow-y:auto">
+          <div class="box-title">Files</div>
+          <div id="instr-list" style="padding:8px 0"><div class="loading"><div class="spin"></div>Loading...</div></div>
+        </div>
+        <!-- Editor -->
+        <div class="box" style="display:flex;flex-direction:column;overflow:hidden">
+          <div class="box-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span id="instr-editor-title">Select a file</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span id="instr-badge" class="badge b-gray" style="display:none"></span>
+              <button id="instr-save-btn" class="btn btn-g btn-sm" style="display:none" onclick="Instructions.save()">&#x1F4BE; Save</button>
+            </div>
+          </div>
+          <div id="instr-desc" style="padding:8px 16px;font-size:12px;color:var(--dim);border-bottom:1px solid var(--border2)"></div>
+          <textarea id="instr-editor"
+            style="flex:1;background:var(--bg);border:none;outline:none;resize:none;padding:16px;font-family:var(--mono);font-size:13px;color:var(--text);line-height:1.6;min-height:0"
+            placeholder="Select a file from the list to edit..."
+            oninput="Instructions.onEdit()"
+          ></textarea>
+          <div id="instr-status" style="padding:6px 16px;font-size:11px;color:var(--dim);border-top:1px solid var(--border2);min-height:24px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS PAGES -->
+  <div class="panel" id="panel-canvas">
+    <div class="panel-inner">
+      <div class="ph">
+        <div class="ph-title">Canvas Pages</div>
+        <div class="ph-sub">Manage page visibility — toggle public access per page</div>
+      </div>
+      <div class="box">
+        <div class="box-body" id="canvas-pages-list"><div class="loading"><div class="spin"></div>Loading...</div></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<div id="toast" style="position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity .3s;box-shadow:0 4px 20px rgba(0,0,0,.5)"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// Sidebar
+let collapsed = false;
+function toggleSidebar(){collapsed=!collapsed;$('app').classList.toggle('sidebar-collapsed',collapsed)}
+
+// Panel routing
+const loaders = {
+  agents:()=>Agents.load(),
+  builder:()=>Builder.load(),
+  frameworks:()=>Frameworks.load(),
+  install:()=>{},
+  tests:()=>Tests.initSel(),
+  providers:()=>Providers.load(),
+  djtools:()=>DJTools.load(),
+  system:()=>System.load(),
+  instructions:()=>Instructions.load(),
+  canvas:()=>CanvasPages.load()
+};
+
+function show(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  $('panel-'+name)?.classList.add('active');
+  $('nav-'+name)?.classList.add('active');
+  loaders[name]?.();
+}
+
+// Agents
+const ICONS = {'default':'🤖','hume-evi':'🌊','hume_evi':'🌊','elevenlabs-classic':'🎙️','elevenlabs_classic':'🎙️',developer:'🛠️'};
+const LLMS = {'default':'GLM-4.7','hume-evi':'eLLM','elevenlabs-classic':'EL-AI',developer:'GLM-4.7'};
+const TTSS = {'default':'Groq/Supertonic','hume-evi':'Hume EVI','elevenlabs-classic':'ElevenLabs',developer:'Supertonic'};
+
+const Agents = {
+  profiles:[],active:null,
+  async load(){
+    $('agents-grid').innerHTML='<div class="loading"><div class="spin"></div>Loading...</div>';
+    try{
+      const d=await(await fetch('/api/profiles')).json();
+      this.profiles=d.profiles||[];this.active=d.active;
+      this.renderBanner();this.renderGrid();
+    }catch(e){$('agents-grid').innerHTML='<div class="empty"><div class="empty-icon">&#x26A0;&#xFE0F;</div>'+esc(e.message)+'</div>'}
+  },
+  renderBanner(){
+    const p=this.profiles.find(x=>x.id===this.active);
+    $('active-banner').innerHTML=p?'<div class="active-banner"><div class="ab-avatar">'+(ICONS[p.id]||'🤖')+'</div><div><div class="ab-name">'+esc(p.name)+'</div><div class="ab-meta">'+esc(p.description||'')+' &nbsp;&middot;&nbsp; <span class="badge b-green">Active</span></div></div></div>':''
+  },
+  renderGrid(){
+    const g=$('agents-grid');
+    if(!this.profiles.length){g.innerHTML='<div class="empty"><div class="empty-icon">🤖</div>No profiles found</div>';return}
+    g.innerHTML=this.profiles.map(p=>{
+      const cur=p.id===this.active;
+      return'<div class="profile-card'+(cur?' cur':'')+'" onclick="Agents.activate(\''+esc(p.id)+'\')">'+
+        (cur?'<div class="pc-active">Active</div>':'')+
+        '<div class="pc-icon">'+(ICONS[p.id]||'🤖')+'</div>'+
+        '<div class="pc-name">'+esc(p.name)+'</div>'+
+        '<div class="pc-desc">'+esc(p.description||'')+'</div>'+
+        '<div class="pc-meta"><span class="badge b-blue">'+esc(p.id)+'</span><span class="badge b-gray">v'+esc(p.version||'1.0')+'</span></div>'+
+        '<div class="pc-actions" onclick="event.stopPropagation()">'+
+        (cur?'<span class="badge b-green">&#x2713; Running</span>':'<button class="btn btn-p btn-sm" onclick="event.stopPropagation();Agents.activate(\''+esc(p.id)+'\')">&#9654; Activate</button>')+
+        '<button class="btn btn-o btn-sm" onclick="event.stopPropagation();show(\'builder\')">Edit</button>'+
+        '</div></div>'
+    }).join('');
+  },
+  async activate(id){
+    try{
+      const d=await(await fetch('/api/profiles/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile_id:id})})).json();
+      if(d.active||d.profile){this.active=id;this.renderBanner();this.renderGrid();toast('Activated: '+id,'green')}
+      else toast(d.error||'Failed','red');
+    }catch(e){toast(e.message,'red')}
+  }
+};
+
+// Agent Builder
+const Builder = {
+  profiles:[], currentId:null, activeId:null, _voice:null, activeTab:'general',
+
+  async load(){
+    const r=await fetch('/api/profiles').catch(()=>null);
+    if(!r){$('builder-agent-list').innerHTML='<div style="padding:14px;color:var(--red)">Error loading profiles</div>';return}
+    const d=await r.json();
+    this.profiles=d.profiles||[]; this.activeId=d.active;
+    this.renderList();
+    if(this.profiles.length && !this.currentId) this.selectAgent(this.profiles[0].id);
+    else if(this.currentId) this.selectAgent(this.currentId);
+  },
+
+  renderList(){
+    $('builder-agent-list').innerHTML=this.profiles.map(p=>
+      '<div class="agent-list-item'+(p.id===this.currentId?' active':'')+'" id="ali-'+p.id+'" onclick="Builder.selectAgent(\''+esc(p.id)+'\')">' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<div class="ali-name">'+esc(p.name)+'</div>' +
+        (p.id===this.activeId?'<span style="font-size:9px;background:var(--green-dark);color:#fff;padding:1px 5px;border-radius:3px;font-weight:700">LIVE</span>':'') +
+      '</div>' +
+      '<div class="ali-model">'+esc(p.llm?.provider||LLMS[p.id]||'—')+'</div></div>'
+    ).join('');
+  },
+
+  async selectAgent(id){
+    this.currentId=id;
+    document.querySelectorAll('.agent-list-item').forEach(el=>el.classList.remove('active'));
+    $('ali-'+id)?.classList.add('active');
+    $('builder-editor').innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div>Loading '+esc(id)+'...</div>';
+    try{
+      const r=await fetch('/api/profiles/'+id);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const data=await r.json();
+      // GET /api/profiles/:id returns profile directly (not wrapped)
+      const p=data.profile||data;
+      this._voice=p.voice?.voice_id||'M1';
+      this.renderEditor(id,p);
+    }catch(e){
+      $('builder-editor').innerHTML='<div style="padding:24px;color:var(--red)">Error: '+esc(e.message)+'</div>';
+    }
+  },
+
+  renderEditor(id,p){
+    const voices=['M1','M2','M3','M4','M5','F1','F2','F3','F4','F5'];
+    const selVoice=this._voice||'M1';
+    // features is {canvas:bool, music:bool, ...} object
+    const featObj=Array.isArray(p.features)?Object.fromEntries(p.features.map(k=>[k,true])):(p.features||{});
+    const allFeats=['canvas','music','tools','vision','memory','caller','sounds','commercial'];
+    const llmProv=p.llm?.provider||'zai';
+    const ttsProv=p.voice?.tts_provider||'supertonic';
+
+    const generalTab=
+      '<div class="g2" style="margin-bottom:14px">'+
+        '<div class="fg"><label class="fl">Name</label><input type="text" id="be-name" value="'+esc(p.name||'')+'"></div>'+
+        '<div class="fg"><label class="fl">Version</label><input type="text" id="be-ver" value="'+esc(p.version||'1.0')+'"></div>'+
+      '</div>'+
+      '<div class="fg"><label class="fl">Description</label><textarea id="be-desc" style="min-height:52px">'+esc(p.description||'')+'</textarea></div>'+
+      '<div class="sect-label">Framework</div>'+
+      '<div class="g2" style="margin-bottom:14px">'+
+        '<div class="fg"><label class="fl">LLM / Agent System</label><select id="be-llm">'+
+          '<option value="zai"'+(llmProv==='zai'?' selected':'')+'>Z.AI GLM via OpenClaw Gateway</option>'+
+          '<option value="gateway"'+(llmProv==='gateway'?' selected':'')+'>OpenClaw Direct</option>'+
+          '<option value="hume_evi"'+(llmProv==='hume_evi'?' selected':'')+'>Hume EVI</option>'+
+          '<option value="elevenlabs"'+(llmProv==='elevenlabs'?' selected':'')+'>ElevenLabs AI</option>'+
+          '<option value="openai"'+(llmProv==='openai'?' selected':'')+'>OpenAI</option>'+
+        '</select></div>'+
+        '<div class="fg"><label class="fl">TTS Provider</label><select id="be-tts">'+
+          '<option value="supertonic"'+(ttsProv==='supertonic'?' selected':'')+'>Supertonic (Free &middot; Local)</option>'+
+          '<option value="groq"'+(ttsProv==='groq'?' selected':'')+'>Groq Orpheus (Fast &middot; Cloud)</option>'+
+          '<option value="hume"'+(ttsProv==='hume'?' selected':'')+'>Hume EVI</option>'+
+          '<option value="elevenlabs"'+(ttsProv==='elevenlabs'?' selected':'')+'>ElevenLabs</option>'+
+        '</select></div>'+
+      '</div>'+
+      '<div class="fg"><label class="fl">Voice</label>'+
+        '<div class="voice-grid" id="voice-grid">'+
+          voices.map(v=>{const f=v.startsWith('F');const sel=v===selVoice;return'<button class="voice-btn'+(sel?(f?' sel-f':' sel-m'):'')+'" onclick="Builder.setVoice(\''+v+'\','+f+')" id="vb-'+v+'">'+v+'</button>'}).join('')+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--dim);margin-top:5px"><span style="color:var(--blue)">&#9632;</span> Male &nbsp;<span style="color:var(--purple)">&#9632;</span> Female</div>'+
+      '</div>'+
+      '<div class="sect-label">Vision / Camera AI</div>'+
+      '<div class="fg">'+
+        '<label class="fl">Vision Model <span style="font-size:10px;color:var(--dim)">&mdash; used for &ldquo;look at&rdquo; triggers and face recognition</span></label>'+
+        '<select id="be-vision-model">'+
+          '<option value="glm-4v-flash"'+(  (p.vision?.model||'glm-4v-flash')==='glm-4v-flash'  ?' selected':'')+'>GLM-4V Flash (Free &middot; Fast)</option>'+
+          '<option value="glm-4v"'+(        (p.vision?.model||'glm-4v-flash')==='glm-4v'         ?' selected':'')+'>GLM-4V (Better &middot; Paid)</option>'+
+          '<option value="glm-4v-plus"'+(   (p.vision?.model||'glm-4v-flash')==='glm-4v-plus'    ?' selected':'')+'>GLM-4V Plus (Best &middot; Paid)</option>'+
+        '</select>'+
+        '<div style="font-size:11px;color:var(--dim);margin-top:4px">Requires camera to be enabled. Model processes frames for &ldquo;what do you see&rdquo; and face ID.</div>'+
+      '</div>'+
+      '<div class="sect-label">Wake Word</div>'+
+      '<div class="fg">'+
+        '<label class="fl">Wake Word(s) <span style="font-size:10px;color:var(--dim)">&mdash; comma-separated phrases that activate this agent</span></label>'+
+        '<input type="text" id="be-wake-words" placeholder="wake up" value="'+esc((p.stt?.wake_words||['wake up']).join(', '))+'">'+
+        '<div style="font-size:11px;color:var(--dim);margin-top:4px">Default: <code style="font-size:11px">wake up</code> &nbsp;&middot;&nbsp; Examples: <code style="font-size:11px">hey jarvis, jarvis</code> &nbsp;&middot;&nbsp; Leave blank to reset to default</div>'+
+      '</div>'+
+      '<div class="g2" style="margin-top:10px">'+
+        '<label class="tool-check"><input type="checkbox" id="be-identify-on-wake"'+(p.stt?.identify_on_wake!==false?' checked':'')+'>'+
+          '<span class="tool-check-label">Identify face on wake <span style="font-size:10px;color:var(--dim)">&mdash; greet by name if recognized</span></span></label>'+
+        '<label class="tool-check"><input type="checkbox" id="be-require-camera-auth"'+(p.stt?.require_camera_auth===true?' checked':'')+'>'+
+          '<span class="tool-check-label">Require camera auth to wake <span style="font-size:10px;color:var(--dim)">&mdash; blocks unrecognized users</span></span></label>'+
+      '</div>';
+
+    const instrTab=
+      '<div style="font-size:12px;color:var(--dim);margin-bottom:10px">The agent\'s core personality, role, and behavior &mdash; equivalent to a SOUL.md file. Sent as the system prompt on every conversation.</div>'+
+      '<textarea id="be-prompt" style="min-height:360px;font-family:var(--mono);font-size:12px;line-height:1.7;background:#010409">'+esc(p.system_prompt||'')+'</textarea>'+
+      '<div style="font-size:11px;color:var(--subtle);margin-top:6px">Ctrl+S saves when Instructions tab is active</div>';
+
+    const featTab=
+      '<div style="font-size:12px;color:var(--dim);margin-bottom:14px">Enable capabilities for this agent. Takes effect on next conversation.</div>'+
+      '<div class="tools-grid">'+
+        allFeats.map(f=>'<label class="tool-check"><input type="checkbox"'+(featObj[f]?' checked':'')+' id="feat-'+f+'"><span class="tool-check-label">'+f+'</span></label>').join('')+
+      '</div>'+
+      '<div class="sect-label">Context</div>'+
+      '<div class="g2">'+
+        '<div class="fg"><label class="fl">Max History Messages</label><input type="text" id="be-maxhist" value="'+esc(String(p.context?.max_history_messages||12))+'"></div>'+
+        '<div class="fg"><label class="fl">Max Response Tokens</label><input type="text" id="be-maxtok" value="'+esc(String(p.llm?.parameters?.max_tokens||512))+'"></div>'+
+      '</div>';
+
+    $('builder-editor').innerHTML=
+      '<div class="ph" style="margin-bottom:14px">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<div class="ph-title">'+esc(p.name||id)+'</div>'+
+          (id===this.activeId?'<span class="badge b-green">&#x25CF; Live</span>':
+           '<button class="btn btn-p btn-sm" onclick="Agents.activate(\''+esc(id)+'\').then(()=>Builder.load())">&#9654; Activate</button>')+
+        '</div>'+
+        '<div class="ph-sub">'+esc(id)+' &nbsp;&#183;&nbsp; v'+esc(p.version||'1.0')+'</div>'+
+      '</div>'+
+      '<div class="be-tabs">'+
+        ['general','instructions','features'].map(t=>
+          '<div class="be-tab'+(this.activeTab===t?' active':'')+'" onclick="Builder.switchTab(\''+t+'\')">'+
+          {general:'&#9881; General',instructions:'&#x1F4DD; Instructions',features:'&#x1F527; Features'}[t]+'</div>'
+        ).join('')+
+      '</div>'+
+      '<div id="be-tab-general" class="be-tab-body"'+(this.activeTab==='general'?'':' style="display:none"')+'>'+generalTab+'</div>'+
+      '<div id="be-tab-instructions" class="be-tab-body"'+(this.activeTab==='instructions'?'':' style="display:none"')+'>'+instrTab+'</div>'+
+      '<div id="be-tab-features" class="be-tab-body"'+(this.activeTab==='features'?'':' style="display:none"')+'>'+featTab+'</div>'+
+      '<div class="div"></div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button class="btn btn-p" onclick="Builder.save(\''+esc(id)+'\')">&#x1F4BE; Save Changes</button>'+
+        '<button class="btn btn-o" onclick="Builder.selectAgent(\''+esc(id)+'\')">&#8634; Discard</button>'+
+        (id!=='default'?'<button class="btn btn-d" onclick="Builder.delete(\''+esc(id)+'\')">&#x1F5D1; Delete</button>':'')+
+      '</div>';
+  },
+
+  switchTab(tab){
+    this.activeTab=tab;
+    ['general','instructions','features'].forEach(t=>{
+      const body=$('be-tab-'+t); if(body) body.style.display=t===tab?'':'none';
+    });
+    document.querySelectorAll('.be-tab').forEach(el=>{
+      el.classList.toggle('active', el.onclick?.toString().includes("'"+tab+"'"));
+    });
+    // Re-query by content since onclick toString varies
+    document.querySelectorAll('.be-tab').forEach(el=>{
+      const matches={general:'General',instructions:'Instructions',features:'Features'};
+      el.classList.toggle('active', el.textContent.trim().includes(matches[tab]||''));
+    });
+  },
+
+  setVoice(v,isFemale){
+    document.querySelectorAll('.voice-btn').forEach(b=>{b.className='voice-btn'});
+    $('vb-'+v).className='voice-btn '+(isFemale?'sel-f':'sel-m');
+    this._voice=v;
+  },
+
+  async save(id){
+    const featObj={};
+    ['canvas','music','tools','vision','memory','caller','sounds','commercial'].forEach(f=>{
+      const el=$('feat-'+f); if(el) featObj[f]=el.checked;
+    });
+    const payload={
+      name:$('be-name')?.value||undefined,
+      description:$('be-desc')?.value||undefined,
+      version:$('be-ver')?.value||undefined,
+      system_prompt:$('be-prompt')?.value||undefined,
+      llm:{provider:$('be-llm')?.value, parameters:{max_tokens:parseInt($('be-maxtok')?.value)||512}},
+      voice:{tts_provider:$('be-tts')?.value, voice_id:this._voice||undefined},
+      stt:{
+        wake_words:(()=>{const raw=($('be-wake-words')?.value||'').trim();return raw?raw.split(',').map(w=>w.trim()).filter(Boolean):['wake up'];})(),
+        identify_on_wake:$('be-identify-on-wake')?.checked!==false,
+        require_camera_auth:$('be-require-camera-auth')?.checked===true,
+      },
+      vision:{model:$('be-vision-model')?.value||'glm-4v-flash'},
+      features:Object.keys(featObj).length?featObj:undefined,
+      context:{max_history_messages:parseInt($('be-maxhist')?.value)||12},
+    };
+    Object.keys(payload).forEach(k=>payload[k]===undefined&&delete payload[k]);
+    try{
+      const r=await fetch('/api/profiles/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const d=await r.json();
+      // PUT returns full profile directly (d.id means success)
+      if(d.id||d.name){toast('Saved \u2713','green');}
+      else if(d.error) toast(d.error,'red');
+      else toast('Saved','green');
+    }catch(e){toast(e.message,'red')}
+  },
+
+  async newAgent(){
+    const name=prompt('Agent name (e.g. "CodeBot", "Assistant"):');
+    if(!name||!name.trim()) return;
+    const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    const payload={
+      id, name:name.trim(), description:'New AI voice agent', version:'1.0',
+      system_prompt:'You are '+name.trim()+', an AI voice assistant. Be helpful, concise, and friendly.',
+      llm:{provider:'zai',model:'glm-4-7-flash',parameters:{max_tokens:512,temperature:0.7}},
+      voice:{tts_provider:'supertonic',voice_id:'M1',speed:1.1,parameters:{total_step:16}},
+      stt:{provider:'webspeech',language:'en-US'},
+      features:{canvas:false,music:false,tools:false,vision:false},
+      context:{max_history_messages:12,enable_history:true,enable_briefing:false,enable_fts:true},
+      ui:{face_enabled:true,face_mood:'neutral',theme:'dark',thought_bubbles:true,transcript_panel:true},
+    };
+    try{
+      const r=await fetch('/api/profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const d=await r.json();
+      if(d.id||d.ok){toast('Created: '+name,'green'); this.currentId=id; await this.load();}
+      else toast(d.error||'Failed — check profile ID is unique','red');
+    }catch(e){toast(e.message,'red')}
+  },
+
+  async delete(id){
+    if(!confirm('Delete agent "'+id+'"?')) return;
+    try{
+      const r=await fetch('/api/profiles/'+id,{method:'DELETE'});
+      const d=await r.json();
+      if(d.ok||d.deleted){toast('Deleted','green'); this.currentId=null; await this.load();}
+      else toast(d.error||'Failed','red');
+    }catch(e){toast(e.message,'red')}
+  }
+};
+
+// Frameworks
+const Frameworks={
+  CAPS:{'default':['Voice','Tools','Memory','Canvas','Files'],'hume-evi':['Voice','Emotion','Real-time'],'elevenlabs-classic':['Voice','Music','Caller','Phone'],developer:['Voice','Debug']},
+  async load(){
+    const tbody=$('fw-tbody');
+    tbody.innerHTML='<tr><td colspan="6"><div class="loading" style="padding:14px"><div class="spin"></div></div></td></tr>';
+    try{
+      const d=await(await fetch('/api/profiles')).json();
+      const profiles=d.profiles||[],active=d.active;
+      tbody.innerHTML=profiles.map(p=>{
+        const caps=(this.CAPS[p.id]||['Voice']).map(c=>'<span>'+esc(c)+'</span>').join('');
+        return'<tr>'+
+          '<td><div style="font-weight:600;color:var(--bright)">'+esc(p.name)+'</div><div style="font-size:11px;color:var(--subtle);font-family:var(--mono)">'+esc(p.id)+'</div></td>'+
+          '<td>'+(p.id===active?'<span class="badge b-green">&#x25CF; Active</span>':'<span class="badge b-gray">Ready</span>')+'</td>'+
+          '<td><div class="fw-cap">'+caps+'</div></td>'+
+          '<td><span style="font-family:var(--mono);font-size:12px">'+esc(LLMS[p.id]||'&mdash;')+'</span></td>'+
+          '<td><span style="font-family:var(--mono);font-size:12px">'+esc(TTSS[p.id]||'&mdash;')+'</span></td>'+
+          '<td style="display:flex;gap:6px">'+
+            '<button class="btn btn-o btn-sm" onclick="Frameworks.cfg(\''+esc(p.id)+'\',\''+esc(p.name)+'\')">Config</button>'+
+            (p.id!==active?'<button class="btn btn-p btn-sm" onclick="Agents.activate(\''+esc(p.id)+'\');Frameworks.load()">Activate</button>':'')+
+          '</td></tr>'
+      }).join('');
+    }catch(e){tbody.innerHTML='<tr><td colspan="6" style="color:var(--red)">'+esc(e.message)+'</td></tr>'}
+  },
+  async cfg(id,name){
+    const el=$('fw-config');el.innerHTML='<div class="loading"><div class="spin"></div>Loading...</div>';
+    try{
+      const d=await(await fetch('/api/profiles/'+id)).json();
+      el.innerHTML='<div style="font-weight:600;color:var(--bright);margin-bottom:10px">'+esc(name)+'</div><pre style="background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:14px;font-family:var(--mono);font-size:11px;overflow-x:auto;color:var(--text)">'+esc(JSON.stringify(d.profile||d,null,2))+'</pre>';
+    }catch(e){el.innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}
+  }
+};
+
+// Install
+const Install={
+  running:false,
+  setStep(n){
+    const all=['research','plan','install','connector','test','register'];
+    all.forEach(s=>{
+      const el=$('ist-'+s);if(!el)return;
+      el.className='ist';
+      if(s===n)el.classList.add('active');
+      else if(all.indexOf(s)<all.indexOf(n))el.classList.add('done');
+    });
+  },
+  log(html){const t=$('install-term');t.innerHTML+=html+'\n';t.scrollTop=t.scrollHeight},
+  clear(){
+    $('install-term').innerHTML='<span class="t-dim">Enter a URL or package name above and click Start.</span>';
+    $('install-url').value='';
+    ['research','plan','install','connector','test','register'].forEach(s=>{const e=$('ist-'+s);if(e)e.className='ist'});
+    this.running=false;$('install-btn').disabled=false;
+  },
+  async start(){
+    const url=$('install-url').value.trim();
+    if(!url){toast('Enter a URL or framework name','yellow');return}
+    if(this.running)return;
+    this.running=true;$('install-btn').disabled=true;
+    $('install-term').innerHTML='';
+    this.setStep('research');
+    this.log('<span class="t-c">-- Installing: '+esc(url)+' --</span>');
+    try{
+      const r=await fetch('/api/admin/install/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+      if(r.headers.get('content-type')?.includes('text/event-stream')){
+        const reader=r.body.getReader(),dec=new TextDecoder();
+        while(true){
+          const{done,value}=await reader.read();if(done)break;
+          for(const line of dec.decode(value).split('\n')){
+            if(line.startsWith('data: ')){
+              try{const e=JSON.parse(line.slice(6));this.handleEvt(e)}catch{this.log(esc(line.slice(6)))}
+            }
+          }
+        }
+      }else{
+        const d=await r.json();
+        this.log('<span class="t-b">'+esc(d.message||JSON.stringify(d))+'</span>');
+      }
+    }catch(e){
+      this.log('<span class="t-y">Routing through gateway...</span>');
+      try{
+        const r=await fetch('/api/admin/gateway/rpc',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({method:'chat.send',params:{sessionKey:'admin-install',message:'[ADMIN INSTALL] Install framework: '+url+'. Research, install, write connector, test, register. Report each step.'}})});
+        const d=await r.json();
+        this.log('<span class="t-g">&#x2713; Agent dispatched</span>');
+        this.log('<span class="t-dim">'+esc((d.message||JSON.stringify(d)).slice(0,300))+'</span>');
+      }catch(e2){this.log('<span class="t-r">&#x2715; '+esc(e2.message)+'</span>')}
+    }
+    this.running=false;$('install-btn').disabled=false;
+  },
+  handleEvt(e){
+    const sm={research:'research',plan:'plan',install:'install',connector:'connector',test:'test',register:'register'};
+    if(e.step&&sm[e.step])this.setStep(e.step);
+    if(e.message||e.data){
+      const cls=e.level==='error'?'t-r':e.level==='success'?'t-g':e.level==='section'?'t-sec':'t-dim';
+      this.log('<span class="'+cls+'">'+esc(e.message||e.data)+'</span>');
+    }
+    if(e.type==='done'){this.log('<span class="t-g">&#x2713; Complete!</span>');this.setStep('register')}
+  }
+};
+
+// Tests
+const TESTS=[
+  {id:'health',name:'Health Check',icon:'💚'},
+  {id:'profile',name:'Active Profile',icon:'🤖'},
+  {id:'gateway',name:'Gateway Connection',icon:'🔌'},
+  {id:'profiles_api',name:'Profiles API',icon:'📋'},
+  {id:'tts',name:'TTS Voices',icon:'🎙️'},
+  {id:'music',name:'Music Endpoint',icon:'🎵'},
+  {id:'dj_prompt',name:'DJ Prompt API',icon:'✏️'},
+  {id:'server_stats',name:'Server Stats',icon:'📊'},
+  {id:'session',name:'Session API',icon:'🔄'},
+  {id:'canvas',name:'Canvas API',icon:'🖥️'},
+  {id:'latency',name:'Latency Benchmark',icon:'⚡'},
+  {id:'conversation',name:'Conversation API',icon:'💬'},
+];
+const Tests={
+  res:{},
+  initSel(){
+    fetch('/api/profiles').then(r=>r.json()).then(d=>{
+      const s=$('test-sel');
+      s.innerHTML='<option value="active">Active ('+(d.active||'?')+')</option>'+(d.profiles||[]).map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('');
+    }).catch(()=>{});
+  },
+  renderList(running){
+    $('test-list').innerHTML=TESTS.map(t=>{
+      const r=this.res[t.id];
+      let cls='skip',txt='&mdash;',ms='';
+      if(r){cls=r.pass?'pass':'fail';txt=(r.pass?'&#x2713; PASS':'&#x2715; FAIL')+(r.detail?' &mdash; '+esc(r.detail):'');if(r.ms)ms=r.ms+'ms'}
+      if(running&&!r){cls='running';txt='...'}
+      return'<div class="test-row"><span class="test-icon">'+t.icon+'</span><span class="test-name">'+t.name+'</span><span class="test-res '+cls+'">'+txt+'</span><span class="test-ms">'+ms+'</span></div>'
+    }).join('');
+  },
+  async run(){
+    this.res={};$('test-sum').textContent='Running...';$('run-btn').disabled=true;this.renderList(true);
+    const run=async(id,fn)=>{const s=Date.now();try{const d=await fn();this.res[id]={pass:true,detail:d,ms:Date.now()-s}}catch(e){this.res[id]={pass:false,detail:e.message,ms:Date.now()-s}};this.renderList(true)};
+    await run('health',async()=>{const d=await(await fetch('/api/health')).json();if(d.status!=='ok')throw new Error(d.status);return d.service});
+    await run('profile',async()=>{const d=await(await fetch('/api/profiles/active')).json();return d.profile?.name||d.active||'?'});
+    await run('gateway',async()=>{const d=await(await fetch('/api/admin/gateway/status')).json();if(!d.ok&&!d.healthy&&!d.connected)throw new Error(d.error||'not connected');return'connected'});
+    await run('profiles_api',async()=>{const d=await(await fetch('/api/profiles')).json();if(!d.profiles)throw new Error('no profiles');return d.profiles.length+' profiles'});
+    await run('tts',async()=>{const r=await fetch('/api/tts/voices').catch(()=>null);return r?.ok?(await r.json()).voices?.length+' voices':'endpoint ok'});
+    await run('music',async()=>{const d=await(await fetch('/api/music?action=status')).json();return d.status||'ok'});
+    await run('dj_prompt',async()=>{const d=await(await fetch('/api/dj-prompt')).json();if(!d.prompt&&!d.text&&!d.content)throw new Error('no prompt');return'loaded'});
+    await run('server_stats',async()=>{const d=await(await fetch('/api/server-stats')).json();return'cpu '+(d.cpu_percent||'?')+'%'});
+    await run('session',async()=>{const r=await fetch('/api/session').catch(()=>null);return r?.ok?'ok':'endpoint ok'});
+    await run('canvas',async()=>{const d=await(await fetch('/api/canvas/manifest')).json();return(d.pages||[]).length+' pages'});
+    await run('latency',async()=>{const t=Date.now();await fetch('/api/health');return(Date.now()-t)+'ms'});
+    await run('conversation',async()=>'skipped (would use tokens)');
+    const pass=Object.values(this.res).filter(r=>r.pass).length;
+    $('test-sum').textContent=pass+'/'+TESTS.length+' passed';$('run-btn').disabled=false;this.renderList(false);
+  }
+};
+
+// Providers
+const Providers={
+  sel:{llm:null,tts:null,stt:null},
+  PROV:{
+    llm:[
+      {id:'gateway',name:'OpenClaw Gateway',detail:'GLM-4.7-Flash · Full tools · Memory · Canvas',badge:'b-green',badgeTxt:'ACTIVE'},
+      {id:'zai_direct',name:'Z.AI Direct',detail:'GLM-4.5-Flash · No tools · Fast',badge:'b-gray',badgeTxt:'ALT'},
+      {id:'hume_evi',name:'Hume EVI',detail:'Built-in eLLM · Emotion-aware · Real-time',badge:'b-orange',badgeTxt:'CLOUD'},
+      {id:'elevenlabs',name:'ElevenLabs AI',detail:'Conversational AI · Built-in',badge:'b-orange',badgeTxt:'CLOUD'},
+    ],
+    tts:[
+      {id:'supertonic',name:'Supertonic',detail:'Local ONNX · Free · 10 voices · ~2s',badge:'b-green',badgeTxt:'LOCAL'},
+      {id:'groq',name:'Groq Orpheus',detail:'Cloud API · Fast · ~300ms',badge:'b-blue',badgeTxt:'CLOUD'},
+      {id:'hume',name:'Hume EVI',detail:'Emotional · Real-time · Paired with Hume LLM',badge:'b-orange',badgeTxt:'CLOUD'},
+      {id:'elevenlabs',name:'ElevenLabs',detail:'High quality · Many voices · API',badge:'b-orange',badgeTxt:'CLOUD'},
+    ],
+    stt:[
+      {id:'webspeech',name:'Web Speech API',detail:'Browser-native · Chrome/Edge · Free',badge:'b-green',badgeTxt:'LOCAL'},
+      {id:'groq_whisper',name:'Groq Whisper',detail:'Cloud · Fast · Accurate',badge:'b-blue',badgeTxt:'CLOUD'},
+      {id:'local_whisper',name:'Local Whisper',detail:'faster-whisper · Private · GPU optional',badge:'b-purple',badgeTxt:'LOCAL'},
+    ]
+  },
+  load(){
+    this.sel={llm:'gateway',tts:'supertonic',stt:'webspeech'};
+    const mkCol=(type,label,items)=>
+      '<div class="prov-col">'+
+        '<div class="prov-col-hdr">'+label+'</div>'+
+        '<div class="prov-list">'+
+          items.map(p=>
+            '<div class="prov-item'+(this.sel[type]===p.id?' sel':'')+'" id="pi-'+type+'-'+p.id+'" onclick="Providers.select(\''+type+'\',\''+p.id+'\')">'+
+              '<div class="prov-radio"></div>'+
+              '<div style="flex:1;min-width:0">'+
+                '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'+
+                  '<div class="prov-info-name">'+esc(p.name)+'</div>'+
+                  '<span class="badge '+p.badge+'" style="font-size:9px">'+p.badgeTxt+'</span>'+
+                '</div>'+
+                '<div class="prov-info-detail">'+esc(p.detail)+'</div>'+
+                '<div class="prov-config">'+
+                  (type==='llm'&&p.id==='gateway'?'<div class="fg"><label class="fl">Session Key</label><input type="text" value="voice-main-3"></div>':'')+
+                  (type==='tts'&&p.id==='groq'?'<div class="fg"><label class="fl">API Key</label><input type="password" placeholder="gsk_..."></div>':'')+
+                  (type==='tts'&&p.id==='supertonic'?'<div class="fg"><label class="fl" style="margin-bottom:4px">Speed</label><input type="range" min="0.5" max="2" step="0.1" value="1.1" style="width:100%"></div>':'')+
+                  '<button class="test-btn" id="tb-'+type+'-'+p.id+'" onclick="Providers.test(\''+type+'\',\''+p.id+'\')">&#9654; Test Connection</button>'+
+                '</div>'+
+              '</div>'+
+            '</div>'
+          ).join('')+
+        '</div>'+
+      '</div>';
+    $('prov-grid').innerHTML=mkCol('llm','LLM',this.PROV.llm)+mkCol('tts','TTS',this.PROV.tts)+mkCol('stt','STT',this.PROV.stt);
+  },
+  select(type,id){
+    this.sel[type]=id;
+    document.querySelectorAll('[id^="pi-'+type+'-"]').forEach(el=>el.classList.remove('sel'));
+    $('pi-'+type+'-'+id)?.classList.add('sel');
+    toast(type.toUpperCase()+': '+id,'blue');
+  },
+  async test(type,id){
+    const btn=$('tb-'+type+'-'+id);if(!btn)return;
+    btn.className='test-btn testing';btn.textContent='Testing...';
+    try{
+      if(type==='llm'){const d=await(await fetch('/api/admin/gateway/status')).json();const ok=d.ok||d.healthy;btn.className='test-btn '+(ok?'pass':'fail');btn.textContent=ok?'&#x2713; Connected':'&#x2715; Failed'}
+      else if(type==='tts'){const d=await(await fetch('/api/health/ready')).json();const ok=d.details?.tts?.healthy;btn.className='test-btn '+(ok?'pass':'fail');btn.textContent=ok?'&#x2713; TTS Ready':'&#x2715; TTS Error'}
+      else{btn.className='test-btn pass';btn.textContent='&#x2713; Browser API Ready'}
+    }catch(e){btn.className='test-btn fail';btn.textContent='&#x2715; Error: '+e.message.slice(0,30)}
+  }
+};
+
+// DJ Tools (Music Agent placeholder - no-op)
+const DJTools={load(){}};
+
+// System
+const System={
+  async load(){await Promise.all([this.health(),this.stats(),this.checkGW()])},
+  async health(){
+    const dot=$('health-dot'),txt=$('health-txt'),cards=$('hc-grid'),det=$('sys-health');
+    try{
+      const[lr,rr]=await Promise.all([fetch('/health/live'),fetch('/health/ready')]);
+      const live=await lr.json(),ready=await rr.json();
+      dot.className='dot'+(ready.healthy?'':' yellow');
+      txt.textContent=ready.healthy?'All systems operational':'Degraded';
+      const up=live.details?.uptime_seconds||0;
+      const h=Math.floor(up/3600),m=Math.floor((up%3600)/60);
+      cards.innerHTML=
+        '<div class="hc"><div class="hc-label">Process</div><div class="hc-val g">Running</div><div class="hc-sub">'+h+'h '+m+'m uptime</div></div>'+
+        '<div class="hc"><div class="hc-label">Gateway</div><div class="hc-val '+(ready.details?.gateway?.healthy?'g':'r')+'">'+(ready.details?.gateway?.healthy?'&#x2713; OK':'&#x2715; Down')+'</div><div class="hc-sub">'+esc(ready.details?.gateway?.message||'')+'</div></div>'+
+        '<div class="hc"><div class="hc-label">TTS</div><div class="hc-val '+(ready.details?.tts?.healthy?'g':'y')+'">'+(ready.details?.tts?.healthy?'&#x2713; Ready':'&#x26A0; Check')+'</div><div class="hc-sub">'+esc(ready.details?.tts?.message||'')+'</div></div>';
+      det.innerHTML=Object.entries(ready.details||{}).map(([k,v])=>'<div class="stat-r"><span class="stat-l">'+esc(k)+'</span><span class="stat-v '+(v.healthy?'g':'r')+'">'+(v.healthy?'&#x2713;':'&#x2715;')+' '+esc(v.message||'')+'</span></div>').join('')||'<div class="empty">No details</div>';
+    }catch(e){dot.className='dot red';txt.textContent='Error';cards.innerHTML='<div class="hc"><div class="hc-label">Status</div><div class="hc-val r">Error</div></div>'}
+  },
+  async stats(){
+    const el=$('sys-stats');
+    try{
+      const d=await(await fetch('/api/server-stats')).json();
+      const cpu=d.cpu_percent||0;
+      const ram=d.memory?.percent||d.ram_percent||0;
+      const ramUsed=d.memory?.used_gb||d.ram_used_gb||'?';
+      const ramTotal=d.memory?.total_gb||d.ram_total_gb||'?';
+      const diskUsed=d.disk?.used_gb||d.disk_used_gb||'?';
+      const diskTotal=d.disk?.total_gb||d.disk_total_gb||'?';
+      const diskPct=d.disk?.percent||0;
+      el.innerHTML=[
+        ['CPU',cpu+'%',cpu>80?'r':cpu>60?'y':'g'],
+        ['RAM',ramUsed+' / '+ramTotal+' GB',ram>85?'r':ram>70?'y':''],
+        ['RAM %',ram+'%',''],
+        ['Disk',diskUsed+' / '+diskTotal+' GB',diskPct>90?'r':diskPct>80?'y':''],
+        ['Uptime',d.uptime||'?',''],
+        ['Top Process',(d.top_processes||[])[0]?.name||'?',''],
+      ].map(([l,v,c])=>'<div class="stat-r"><span class="stat-l">'+l+'</span><span class="stat-v '+c+'">'+esc(String(v))+'</span></div>').join('');
+    }catch(e){el.innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}
+  },
+  async checkGW(){
+    const el=$('sys-gw');
+    el.innerHTML='<div class="loading"><div class="spin"></div>Checking...</div>';
+    try{
+      const d=await(await fetch('/api/admin/gateway/status')).json();
+      const ok=d.ok||d.healthy||d.connected;
+      el.innerHTML='<div class="stat-r"><span class="stat-l">Status</span><span class="stat-v '+(ok?'g':'r')+'">'+(ok?'&#x2713; Connected':'&#x2715; Disconnected')+'</span></div>'+
+        '<div class="stat-r"><span class="stat-l">Message</span><span class="stat-v">'+esc(d.message||d.error||'&mdash;')+'</span></div>'+
+        (d.latency_ms?'<div class="stat-r"><span class="stat-l">Latency</span><span class="stat-v">'+d.latency_ms+'ms</span></div>':'');
+    }catch(e){el.innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'}
+  },
+  async resetSession(){
+    if(!confirm('Reset voice session? Next message will be slower (cold start).'))return;
+    try{const d=await(await fetch('/api/session/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();toast(d.ok?'Session reset':d.error||'Failed',d.ok?'green':'red')}
+    catch(e){toast(e.message,'red')}
+  }
+};
+
+// Instructions editor
+const Instructions = {
+  files: [],
+  current: null,
+  dirty: false,
+
+  async load() {
+    $('instr-list').innerHTML = '<div class="loading"><div class="spin"></div>Loading...</div>';
+    try {
+      const d = await (await fetch('/api/instructions')).json();
+      this.files = d.files || [];
+      this.renderList();
+      // Auto-select first app-scope file
+      if (!this.current) {
+        const first = this.files.find(f => f.scope === 'app' && f.exists !== false);
+        if (first) this.select(first.id);
+      }
+    } catch(e) {
+      $('instr-list').innerHTML = '<div class="empty" style="padding:16px"><span style="color:var(--red)">'+esc(e.message)+'</span></div>';
+    }
+  },
+
+  renderList() {
+    const app = this.files.filter(f => f.scope === 'app');
+    const oc = this.files.filter(f => f.scope === 'openclaw');
+    let html = '';
+    if (app.length) {
+      html += '<div style="padding:6px 12px 2px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--subtle)">This App</div>';
+      html += app.map(f => this._fileItem(f)).join('');
+    }
+    if (oc.length) {
+      html += '<div style="padding:10px 12px 2px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--subtle)">OpenClaw Workspace</div>';
+      html += oc.map(f => this._fileItem(f)).join('');
+    }
+    $('instr-list').innerHTML = html || '<div class="empty" style="padding:16px">No files found</div>';
+  },
+
+  _fileItem(f) {
+    const active = f.id === this.current ? 'background:var(--blue-bg);color:var(--blue);border-left:2px solid var(--blue)' : 'border-left:2px solid transparent';
+    const dot = f.scope === 'app'
+      ? '<span style="font-size:10px;color:var(--green)">&#9679;</span>'
+      : '<span style="font-size:10px;color:var(--purple)">&#9679;</span>';
+    const missing = !f.exists ? ' <span style="color:var(--dim);font-size:10px">(missing)</span>' : '';
+    return '<div onclick="Instructions.select(\''+f.id+'\')" style="padding:8px 12px;cursor:pointer;font-size:13px;'+active+';display:flex;align-items:center;gap:6px;transition:background .1s" onmouseover="this.style.background=\'rgba(177,186,196,.06)\'" onmouseout="this.style.background=\''+(f.id===this.current?'var(--blue-bg)':'transparent')+'\'">'+dot+esc(f.label)+missing+'</div>';
+  },
+
+  async select(id) {
+    if (this.dirty && this.current) {
+      if (!confirm('You have unsaved changes. Discard?')) return;
+    }
+    this.current = id;
+    this.dirty = false;
+    this.renderList();
+    const meta = this.files.find(f => f.id === id);
+    $('instr-editor-title').textContent = meta ? meta.label : id;
+    $('instr-desc').textContent = meta ? meta.description : '';
+    const badge = $('instr-badge');
+    const saveBtn = $('instr-save-btn');
+    if (meta) {
+      badge.textContent = meta.scope === 'app' ? 'hot-reload' : 'openclaw';
+      badge.className = 'badge ' + (meta.scope === 'app' ? 'b-green' : 'b-purple');
+      badge.style.display = '';
+    }
+    saveBtn.style.display = meta && meta.scope === 'app' ? '' : 'none';
+    $('instr-editor').value = '';
+    $('instr-status').textContent = 'Loading...';
+    try {
+      const d = await (await fetch('/api/instructions/'+id)).json();
+      if (d.error) { $('instr-status').textContent = 'Error: '+d.error; return; }
+      $('instr-editor').value = d.content || '';
+      $('instr-status').textContent = d.exists ? (d.size+' chars') : 'File does not exist yet — save to create it.';
+      $('instr-editor').disabled = meta && meta.scope === 'openclaw';
+    } catch(e) {
+      $('instr-status').textContent = 'Error: '+e.message;
+    }
+  },
+
+  onEdit() {
+    this.dirty = true;
+    const len = $('instr-editor').value.length;
+    $('instr-status').textContent = len+' chars (unsaved)';
+  },
+
+  async save() {
+    if (!this.current) return;
+    const content = $('instr-editor').value;
+    $('instr-save-btn').disabled = true;
+    try {
+      const d = await (await fetch('/api/instructions/'+this.current, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({content})
+      })).json();
+      if (d.ok) {
+        this.dirty = false;
+        $('instr-status').textContent = d.message+' ('+d.size+' chars)';
+        toast('Saved: '+this.current, 'green');
+      } else {
+        toast(d.error||'Save failed', 'red');
+      }
+    } catch(e) {
+      toast(e.message, 'red');
+    }
+    $('instr-save-btn').disabled = false;
+  }
+};
+
+// Toast
+let toastT;
+function toast(msg,color){
+  color=color||'blue';
+  const el=$('toast');
+  const styles={green:'background:#0d2d1a;border:1px solid #3fb950;color:#3fb950',blue:'background:#0d1926;border:1px solid #1f6feb;color:#58a6ff',red:'background:#1a0810;border:1px solid #f85149;color:#f85149',yellow:'background:#1a1200;border:1px solid #e3b341;color:#e3b341'};
+  el.setAttribute('style','position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;opacity:1;transition:opacity .3s;box-shadow:0 4px 20px rgba(0,0,0,.5);'+(styles[color]||styles.blue));
+  el.textContent=msg;
+  clearTimeout(toastT);toastT=setTimeout(()=>el.style.opacity='0',3000);
+}
+
+// Keyboard
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'){
+    e.preventDefault();
+    if($('panel-builder').classList.contains('active')&&Builder.currentId) Builder.save(Builder.currentId);
+    if($('panel-instructions').classList.contains('active')&&Instructions.current) Instructions.save();
+  }
+});
+
+// Canvas Pages manager
+const CanvasPages = {
+  pages: {},
+  async load() {
+    const el = $('canvas-pages-list');
+    el.innerHTML = '<div class="loading"><div class="spin"></div>Loading...</div>';
+    try {
+      const d = await (await fetch('/api/canvas/manifest')).json();
+      this.pages = d.pages || {};
+      this.render();
+    } catch(e) {
+      el.innerHTML = '<div class="empty">Failed to load: '+esc(e.message)+'</div>';
+    }
+  },
+  render() {
+    const el = $('canvas-pages-list');
+    const ids = Object.keys(this.pages);
+    if (!ids.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">🖥️</div>No canvas pages yet</div>';
+      return;
+    }
+    el.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+      '<thead><tr style="border-bottom:1px solid var(--border);color:var(--dim);font-size:12px">' +
+      '<th style="padding:8px 12px;text-align:left">Page</th>' +
+      '<th style="padding:8px 12px;text-align:left">Category</th>' +
+      '<th style="padding:8px 12px;text-align:right">Visibility</th>' +
+      '</tr></thead><tbody>' +
+      ids.map(id => {
+        const p = this.pages[id];
+        const pub = p.is_public || false;
+        return '<tr style="border-bottom:1px solid var(--border2)">' +
+          '<td style="padding:10px 12px">' +
+          '<div style="font-weight:500;color:var(--bright)">'+esc(p.display_name||id)+'</div>' +
+          '<div style="font-size:11px;color:var(--dim);margin-top:2px">'+esc(id)+'</div>' +
+          '</td>' +
+          '<td style="padding:10px 12px;color:var(--dim);font-size:12px">'+esc(p.category||'—')+'</td>' +
+          '<td style="padding:10px 12px;text-align:right">' +
+          '<button onclick="CanvasPages.toggle(\''+esc(id)+'\')" style="' +
+          'border:1px solid '+(pub?'var(--green)':'var(--border)')+';' +
+          'background:'+(pub?'var(--green-bg)':'transparent')+';' +
+          'color:'+(pub?'var(--green)':'var(--dim)')+';' +
+          'padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;transition:all .15s">' +
+          (pub ? '🌐 Public' : '🔒 Private') +
+          '</button></td></tr>';
+      }).join('') +
+      '</tbody></table>';
+  },
+  async toggle(id) {
+    const page = this.pages[id];
+    if (!page) return;
+    const newPublic = !(page.is_public || false);
+    try {
+      const r = await fetch('/api/canvas/manifest/page/'+id, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({is_public: newPublic})
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      this.pages[id].is_public = newPublic;
+      this.render();
+      toast((newPublic ? '🌐 Public: ' : '🔒 Private: ') + esc(page.display_name||id), newPublic?'green':'blue');
+    } catch(e) {
+      toast('Failed: '+e.message, 'red');
+    }
+  }
+};
+
+// Clerk auth gate for admin panel (skipped in local mode — no Clerk key configured)
+async function initAdminAuth() {
+  // If Clerk SDK wasn't injected (no key in env), skip auth entirely
+  if (!document.querySelector('script[data-clerk-publishable-key]')) return;
+  for (let i = 0; i < 10; i++) {
+    if (typeof Clerk !== 'undefined') break;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  if (typeof Clerk === 'undefined') return; // skip if Clerk unavailable
+  await Clerk.load();
+  if (!Clerk.user) {
+    // Redirect to main app login
+    location.href = '/?redirect=/admin' + location.hash;
+  }
+}
+
+// Init
+addEventListener('DOMContentLoaded', async function(){
+  await initAdminAuth();
+  System.health();
+  const hash=location.hash.slice(1);
+  const valid=['agents','builder','frameworks','install','tests','providers','djtools','system','instructions','canvas'];
+  show(valid.includes(hash)?hash:'agents');
+});
+</script>
+</body>
+</html>

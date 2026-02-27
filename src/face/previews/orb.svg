@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" width="120" height="80">
+  <rect width="120" height="80" fill="#060610"/>
+  <!-- Outer glow -->
+  <circle cx="60" cy="40" r="36" fill="url(#orbGlow)" opacity="0.4"/>
+  <!-- Core orb -->
+  <circle cx="60" cy="40" r="26" fill="url(#orbCore)"/>
+  <!-- Border -->
+  <circle cx="60" cy="40" r="26" fill="none" stroke="#00ffff" stroke-width="1.5" opacity="0.7"/>
+  <!-- Particles -->
+  <circle cx="36" cy="30" r="2.5" fill="#00ffff" opacity="0.8"/>
+  <circle cx="86" cy="28" r="2" fill="#00ffff" opacity="0.6"/>
+  <circle cx="90" cy="52" r="3" fill="#0088ff" opacity="0.7"/>
+  <circle cx="32" cy="55" r="2" fill="#00ffff" opacity="0.5"/>
+  <circle cx="60" cy="14" r="2.5" fill="#0088ff" opacity="0.7"/>
+  <circle cx="60" cy="66" r="2" fill="#00ffff" opacity="0.6"/>
+  <!-- Highlight -->
+  <circle cx="50" cy="30" r="8" fill="white" opacity="0.12"/>
+  <defs>
+    <radialGradient id="orbCore" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#0088ff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0044aa" stop-opacity="0.4"/>
+    </radialGradient>
+    <radialGradient id="orbGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0088ff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0088ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

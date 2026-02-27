@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Module Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        h1 { color: #00d4ff; }
+        .section {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        label { display: block; margin-bottom: 5px; color: #888; }
+        select, textarea, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0f0f23;
+            color: #fff;
+            font-size: 16px;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #00d4ff;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover { background: #00a8cc; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .status.success { background: #1a472a; }
+        .status.error { background: #4a1a1a; }
+        .status.info { background: #1a3a4a; }
+    </style>
+</head>
+<body>
+    <h1>TTS Module Test</h1>
+
+    <div class="section">
+        <label>Provider</label>
+        <select id="provider-select">
+            <option value="supertonic">Supertonic (Free)</option>
+            <option value="hume">Hume EVI</option>
+        </select>
+
+        <label>Voice</label>
+        <select id="voice-select">
+            <option value="M1">M1 (Male)</option>
+            <option value="M2">M2 (Male)</option>
+            <option value="F1">F1 (Female)</option>
+            <option value="F2">F2 (Female)</option>
+        </select>
+    </div>
+
+    <div class="section">
+        <label>Text to Speak</label>
+        <textarea id="text-input">Hello! This is a test of the modular TTS system. If you can hear this, the Supertonic provider is working correctly.</textarea>
+
+        <button id="speak-btn">Speak</button>
+        <button id="stop-btn" style="background: #e74c3c;">Stop</button>
+    </div>
+
+    <div id="status" class="status info">Ready</div>
+
+    <script type="module">
+        import { ttsRegistry } from './providers/tts/index.js';
+
+        const providerSelect = document.getElementById('provider-select');
+        const voiceSelect = document.getElementById('voice-select');
+        const textInput = document.getElementById('text-input');
+        const speakBtn = document.getElementById('speak-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const statusDiv = document.getElementById('status');
+
+        function setStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function updateVoiceOptions() {
+            const voices = ttsRegistry.getVoices();
+            voiceSelect.innerHTML = '';
+            voices.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                voiceSelect.appendChild(opt);
+            });
+        }
+
+        // Initialize
+        async function init() {
+            try {
+                setStatus('Initializing TTS providers...');
+
+                // Configure with server URL
+                const config = {
+                    serverUrl: window.location.origin
+                };
+
+                await ttsRegistry.initAll(config);
+
+                setStatus('TTS providers initialized', 'success');
+                updateVoiceOptions();
+
+            } catch (error) {
+                console.error('Init error:', error);
+                setStatus(`Init failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Event handlers
+        providerSelect.addEventListener('change', (e) => {
+            ttsRegistry.switchTo(e.target.value);
+            updateVoiceOptions();
+            setStatus(`Switched to ${e.target.value}`, 'info');
+        });
+
+        voiceSelect.addEventListener('change', (e) => {
+            ttsRegistry.setVoice(e.target.value);
+            setStatus(`Voice set to ${e.target.value}`, 'info');
+        });
+
+        speakBtn.addEventListener('click', async () => {
+            const text = textInput.value.trim();
+            if (!text) {
+                setStatus('Please enter some text', 'error');
+                return;
+            }
+
+            speakBtn.disabled = true;
+            setStatus('Speaking...', 'info');
+
+            const success = await ttsRegistry.speak(text);
+
+            if (success) {
+                setStatus('Speech started', 'success');
+            } else {
+                setStatus('Speech failed', 'error');
+            }
+
+            speakBtn.disabled = false;
+        });
+
+        stopBtn.addEventListener('click', () => {
+            ttsRegistry.stop();
+            setStatus('Stopped', 'info');
+        });
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
