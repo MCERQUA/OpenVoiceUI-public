@@ -226,7 +226,7 @@ User=${RUN_USER}
 WorkingDirectory=${INSTALL_DIR}
 ExecStartPre=/usr/local/bin/prestart-${SERVICE_NAME}.sh
 ExecStart=${INSTALL_DIR}/venv/bin/python3 ${INSTALL_DIR}/server.py
-Restart=always
+Restart=on-failure
 RestartSec=10
 Environment=PATH=/usr/bin:/usr/local/bin
 EnvironmentFile=${INSTALL_DIR}/.env
