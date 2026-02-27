@@ -2574,6 +2574,11 @@ inject();
                 StatusModule.update('thinking', 'CONNECTING...');
                 document.getElementById('thought-bubbles')?.classList.add('active');
 
+                // Guard mic from the start — greeting fetch + TTS play will set this properly
+                // via onSpeaking, but setting it here prevents any STT results that arrive
+                // between stt.start() and the first onSpeaking callback from slipping through
+                this._ttsPlaying = true;
+
                 // Unlock AudioContext for iOS — MUST happen synchronously within the user
                 // gesture call stack, before any await. iOS suspends AudioContext by default
                 // and blocks async audio.play() calls that arrive via network responses.
@@ -3450,17 +3455,20 @@ inject();
                         WaveformModule.setAmplitude(0);
                         MusicModule.duck(false);
                         document.getElementById('stop-button').style.display = 'none';
-                        // Restart microphone after DJ finishes speaking (with 1s delay to avoid picking up tail of TTS)
-                        this.clawdbotMode._ttsPlaying = false;
+                        // Keep _ttsPlaying = true through the entire delay window so the
+                        // stt.onResult filter blocks any echo/reverb that STT picks up
+                        // the moment the mic restarts. Clearing it here (before the timeout)
+                        // was the root cause of the self-echo loop.
                         setTimeout(() => {
+                            this.clawdbotMode._ttsPlaying = false;  // clear AFTER delay
                             if (this.clawdbotMode._voiceActive && this.clawdbotMode.stt && !this.clawdbotMode.stt.isListening) {
-                                console.log('🎤 Unmuting mic after TTS (delayed 1s)');
+                                console.log('🎤 Unmuting mic after TTS (echo guard expired)');
                                 if (this.clawdbotMode.stt && this.clawdbotMode.stt.resetProcessing) {
                                     this.clawdbotMode.stt.resetProcessing();
                                 }
                                 this.clawdbotMode.stt.start();
                             }
-                        }, 1000);
+                        }, 1500);
                     },
                     onMessage: (role, text) => {
                         console.log(`Clawdbot ${role}:`, text);
