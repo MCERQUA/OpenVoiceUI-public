@@ -97,9 +97,20 @@ def create_app(config_override: dict = None):
                             # handler secures itself via CLAWDBOT_AUTH_TOKEN to the gateway
     }
 
+    # Detect whether Clerk auth is configured at startup.
+    # Auth is opt-in: when no key is set, all routes are accessible (README § Authentication).
+    _clerk_key = (os.getenv('CLERK_PUBLISHABLE_KEY') or os.getenv('VITE_CLERK_PUBLISHABLE_KEY', '')).strip()
+
     @app.before_request
     def require_auth():
-        """Block unauthenticated requests to all non-exempt routes."""
+        """Block unauthenticated requests to all non-exempt routes.
+
+        Skipped entirely when Clerk is not configured (no CLERK_PUBLISHABLE_KEY),
+        matching the documented opt-in auth behaviour.
+        """
+        if not _clerk_key:
+            return  # No Clerk configured — open access (single-user / self-hosted)
+
         path = request.path
 
         # Always allow health probes and static assets
