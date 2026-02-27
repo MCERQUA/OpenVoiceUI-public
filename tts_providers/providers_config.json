@@ -75,7 +75,7 @@
       "cost_per_minute": 0.05,
       "quality": "high",
       "latency": "very-fast",
-      "voices": ["tara", "leah", "jess", "mia", "zoe", "leo", "dan", "zac"],
+      "voices": ["autumn", "diana", "hannah", "austin", "daniel", "troy"],
       "features": ["streaming", "natural", "empathetic", "cloud", "mp3-output"],
       "requires_api_key": true,
       "status": "active",

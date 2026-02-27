@@ -27,10 +27,10 @@ class TestGroqTTSProvider:
         assert isinstance(voices, list)
         assert len(voices) > 0
 
-    def test_list_voices_includes_alloy(self):
+    def test_list_voices_includes_autumn(self):
         provider = self._make_provider()
         voices = provider.list_voices()
-        assert "tara" in voices
+        assert "autumn" in voices
 
     def test_is_available_false_when_no_key(self):
         with patch.dict("os.environ", {}, clear=True):

@@ -25,7 +25,7 @@
 
   "voice": {
     "tts_provider": "groq",
-    "voice_id": "tara",
+    "voice_id": "autumn",
     "speed": 1.1,
     "parallel_sentences": true,
     "min_sentence_chars": 20,
