@@ -2796,6 +2796,9 @@ inject();
                     let streamingMsgEl = null;  // Reference to the streaming message element
                     let canvasCommandsProcessed = new Set();  // Track processed canvas commands
 
+                    // Helper: escape HTML to prevent XSS (must run before innerHTML)
+                    const escapeHtml = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
                     // Helper: strip canvas and music tags from display text
                     const stripCanvasTags = (text) => {
                         return text
@@ -2957,7 +2960,7 @@ inject();
                                         streamingMsgEl = this.displayMessage('assistant', stripCanvasTags(streamingText), true);
                                     } else if (streamingMsgEl) {
                                         // Update existing message in-place
-                                        const displayText = stripCanvasTags(streamingText).replace(/\n/g, '<br>');
+                                        const displayText = escapeHtml(stripCanvasTags(streamingText)).replace(/\n/g, '<br>');
                                         const textEl = streamingMsgEl.querySelector('.message-text') || streamingMsgEl;
                                         textEl.innerHTML = displayText;
                                         // Auto-scroll
@@ -3000,7 +3003,7 @@ inject();
                                     if (streamingMsgEl) {
                                         streamingMsgEl.classList.remove('streaming');
                                         const textEl = streamingMsgEl.querySelector?.('.message-text') || streamingMsgEl;
-                                        textEl.innerHTML = displayText.replace(/\n/g, '<br>');
+                                        textEl.innerHTML = escapeHtml(displayText).replace(/\n/g, '<br>');
                                     } else {
                                         this.displayMessage('assistant', displayText);
                                     }
