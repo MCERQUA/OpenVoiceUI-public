@@ -1,4 +1,6 @@
-# OpenVoiceUI
+<p align="center">
+  <img src="image.png" alt="OpenVoiceUI Banner" />
+</p>
 
 A plug-and-play browser-based voice agent platform. Connect any LLM, any TTS provider, and any AI framework — with a built-in music player, AI music generation, and a live web canvas display system.
 
