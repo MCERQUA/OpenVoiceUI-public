@@ -156,6 +156,16 @@
           "type": ["boolean", "null"],
           "default": null,
           "description": "Default UI to PTT mode on session start. null = continuous listening (current default)."
+        },
+        "identify_on_wake": {
+          "type": ["boolean", "null"],
+          "default": null,
+          "description": "Run face identification when wake word fires. Result is injected as context so agent can greet by name. null/true = enabled when camera is on."
+        },
+        "require_camera_auth": {
+          "type": ["boolean", "null"],
+          "default": null,
+          "description": "Block wake word activation unless a registered face is recognized (min 50% confidence). Requires camera to be on. null/false = disabled."
         }
       }
     },

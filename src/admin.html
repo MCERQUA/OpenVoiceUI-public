@@ -655,6 +655,12 @@ const Builder = {
         '<label class="fl">Wake Word(s) <span style="font-size:10px;color:var(--dim)">&mdash; comma-separated phrases that activate this agent</span></label>'+
         '<input type="text" id="be-wake-words" placeholder="wake up" value="'+esc((p.stt?.wake_words||['wake up']).join(', '))+'">'+
         '<div style="font-size:11px;color:var(--dim);margin-top:4px">Default: <code style="font-size:11px">wake up</code> &nbsp;&middot;&nbsp; Examples: <code style="font-size:11px">hey jarvis, jarvis</code> &nbsp;&middot;&nbsp; Leave blank to reset to default</div>'+
+      '</div>'+
+      '<div class="g2" style="margin-top:10px">'+
+        '<label class="tool-check"><input type="checkbox" id="be-identify-on-wake"'+(p.stt?.identify_on_wake!==false?' checked':'')+'>'+
+          '<span class="tool-check-label">Identify face on wake <span style="font-size:10px;color:var(--dim)">&mdash; greet by name if recognized</span></span></label>'+
+        '<label class="tool-check"><input type="checkbox" id="be-require-camera-auth"'+(p.stt?.require_camera_auth===true?' checked':'')+'>'+
+          '<span class="tool-check-label">Require camera auth to wake <span style="font-size:10px;color:var(--dim)">&mdash; blocks unrecognized users</span></span></label>'+
       '</div>';
 
     const instrTab=
@@ -732,7 +738,11 @@ const Builder = {
       system_prompt:$('be-prompt')?.value||undefined,
       llm:{provider:$('be-llm')?.value, parameters:{max_tokens:parseInt($('be-maxtok')?.value)||512}},
       voice:{tts_provider:$('be-tts')?.value, voice_id:this._voice||undefined},
-      stt:{wake_words:(()=>{const raw=($('be-wake-words')?.value||'').trim();return raw?raw.split(',').map(w=>w.trim()).filter(Boolean):['wake up'];})()},
+      stt:{
+        wake_words:(()=>{const raw=($('be-wake-words')?.value||'').trim();return raw?raw.split(',').map(w=>w.trim()).filter(Boolean):['wake up'];})(),
+        identify_on_wake:$('be-identify-on-wake')?.checked!==false,
+        require_camera_auth:$('be-require-camera-auth')?.checked===true,
+      },
       vision:{model:$('be-vision-model')?.value||'glm-4v-flash'},
       features:Object.keys(featObj).length?featObj:undefined,
       context:{max_history_messages:parseInt($('be-maxhist')?.value)||12},

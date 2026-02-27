@@ -4589,19 +4589,40 @@ inject();
 
             // Set up wake word callback to auto-trigger call button
             if (wakeDetector.isSupported()) {
-                wakeDetector.onWakeWordDetected = () => {
-                    console.log('Wake word detected - auto-starting conversation!');
+                wakeDetector.onWakeWordDetected = async () => {
+                    console.log('Wake word detected!');
+                    const profile  = window._activeProfileData || {};
+                    const sttCfg   = profile.stt || {};
+                    const camAuth  = sttCfg.require_camera_auth === true;
+                    const identifyOnWake = sttCfg.identify_on_wake !== false; // default true
+                    const camera   = window.cameraModule;
+                    const camOn    = camera && camera.stream;
+
                     const callButton = document.getElementById('call-button');
                     const wakeButton = document.getElementById('wake-button');
 
-                    // Both buttons flash yellow then green
+                    // If camera auth is required and camera is on, identify first
+                    if (camAuth && camOn) {
+                        StatusModule.update('thinking', 'VERIFYING...');
+                        await camera.identifyFace();
+                        const identity = camera.currentIdentity;
+                        if (!identity || identity.name === 'unknown' || identity.confidence < 50) {
+                            console.log('[CameraAuth] Face not recognized — wake blocked');
+                            StatusModule.update('idle', 'NOT RECOGNIZED');
+                            setTimeout(() => StatusModule.update('idle', 'READY'), 2500);
+                            return; // Block wake — person not authorized
+                        }
+                        console.log('[CameraAuth] Authorized:', identity.name);
+                    } else if (identifyOnWake && camOn) {
+                        // Non-blocking: identify in background, result injected into next request
+                        camera.identifyFace().catch(() => {});
+                    }
+
+                    // Flash buttons and start conversation
                     callButton.classList.add('auto-triggered');
                     wakeButton.classList.add('active');
-                    setTimeout(() => {
-                        callButton.classList.remove('auto-triggered');
-                    }, 500);
+                    setTimeout(() => { callButton.classList.remove('auto-triggered'); }, 500);
 
-                    // Start conversation via ModeManager (handles both Hume and Clawdbot)
                     ModeManager.toggleVoice();
                     UIModule.setCallButtonState('connected');
                 };
@@ -6103,10 +6124,10 @@ inject();
             async loadKnownFaces() {
                 try {
                     const response = await fetch(`${CONFIG.serverUrl}/api/faces`);
-                    const faces = await response.json();
+                    const data = await response.json();
+                    const faces = data.faces || [];
                     const el = document.getElementById('face-id-known');
-                    const names = Object.keys(faces);
-                    el.textContent = names.length ? `Known: ${names.join(', ')}` : 'No faces saved';
+                    if (el) el.textContent = faces.length ? `Known: ${faces.map(f=>f.name).join(', ')}` : 'No faces saved';
                 } catch (e) {
                     // ignore
                 }
@@ -6142,21 +6163,29 @@ inject();
             async loadFaces() {
                 try {
                     const response = await fetch(`${CONFIG.serverUrl}/api/faces`);
-                    const faces = await response.json();
+                    const data = await response.json();
+                    const faces = data.faces || [];
                     const list = document.getElementById('fp-face-list');
-                    const names = Object.keys(faces);
-                    if (names.length === 0) {
+                    if (faces.length === 0) {
                         list.innerHTML = '<li style="color:#6e7681">No faces registered</li>';
                         return;
                     }
-                    list.innerHTML = names.map(name => {
-                        const f = faces[name];
-                        const count = f.photos ? f.photos.length : (f.count || 0);
-                        return `<li><span>${name}</span><span class="confidence" style="color:#6e7681">${count} photo${count !== 1 ? 's' : ''}</span></li>`;
+                    list.innerHTML = faces.map(f => {
+                        const count = f.photo_count || 0;
+                        return `<li><span>${f.name}</span><span class="confidence" style="color:#6e7681">${count} photo${count !== 1 ? 's' : ''}</span>` +
+                               `<button onclick="FacePanel.deleteFace('${f.name}')" style="margin-left:8px;font-size:10px;padding:2px 6px;background:transparent;border:1px solid #f85149;color:#f85149;border-radius:3px;cursor:pointer">&#x2715;</button></li>`;
                     }).join('');
                 } catch (e) {
                     document.getElementById('fp-face-list').innerHTML = '<li style="color:#6e7681">Could not load faces</li>';
                 }
+            },
+
+            async deleteFace(name) {
+                if (!confirm(`Remove face profile for "${name}"?`)) return;
+                try {
+                    await fetch(`${CONFIG.serverUrl}/api/faces/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                    this.loadFaces();
+                } catch (e) { console.error('Delete face error:', e); }
             },
 
             async identify() {
@@ -6947,7 +6976,11 @@ inject();
             window._interruptionEnabled = profile?.conversation?.interruption_enabled === true;
             window._maxResponseChars   = profile?.conversation?.max_response_chars || null;
 
-            // 6. Wake words — update detector when profile overrides them
+            // 6. Camera auth / identify-on-wake flags (read at wake-time from _activeProfileData)
+            // These are read directly from window._activeProfileData in the wake callback —
+            // no extra storage needed here.
+
+            // 7. Wake words — update detector when profile overrides them
             if (window.wakeDetector) {
                 const profileWords = profile?.stt?.wake_words;
                 if (Array.isArray(profileWords) && profileWords.length > 0) {

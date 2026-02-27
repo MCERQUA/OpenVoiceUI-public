@@ -39,7 +39,9 @@
     "continuous": true,
     "wake_words": ["wake up"],
     "wake_word_required": null,
-    "ptt_default": null
+    "ptt_default": null,
+    "identify_on_wake": true,
+    "require_camera_auth": false
   },
 
   "context": {
