@@ -186,7 +186,7 @@ UNLIMITED_USERS: list = [
 ]
 DB_PATH = Path(__file__).parent / "usage.db"
 
-from db.pool import SQLitePool
+from services.db_pool import SQLitePool
 db_pool = SQLitePool(DB_PATH, pool_size=5)
 
 

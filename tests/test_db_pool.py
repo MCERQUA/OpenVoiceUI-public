@@ -1,5 +1,5 @@
 """
-Tests for db/pool.py — SQLite WAL mode + connection pool (P7-T1, ADR-010)
+Tests for services/db_pool.py — SQLite WAL mode + connection pool (P7-T1, ADR-010)
 """
 
 import sqlite3
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from db.pool import SQLitePool
+from services.db_pool import SQLitePool
 
 
 @pytest.fixture
