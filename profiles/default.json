@@ -37,7 +37,7 @@
     "language": "en-US",
     "silence_timeout_ms": 1800,
     "continuous": true,
-    "wake_words": null,
+    "wake_words": ["wake up"],
     "wake_word_required": null,
     "ptt_default": null
   },

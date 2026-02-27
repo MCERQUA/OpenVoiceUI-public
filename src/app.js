@@ -6947,7 +6947,20 @@ inject();
             window._interruptionEnabled = profile?.conversation?.interruption_enabled === true;
             window._maxResponseChars   = profile?.conversation?.max_response_chars || null;
 
-            console.log(`[Profile] applied: ${profile?.id} | silence=${profile?.stt?.silence_timeout_ms ?? 'default'}ms | interruption=${window._interruptionEnabled} | modes=${JSON.stringify(profile?.modes)}`);
+            // 6. Wake words — update detector when profile overrides them
+            if (window.wakeDetector) {
+                const profileWords = profile?.stt?.wake_words;
+                if (Array.isArray(profileWords) && profileWords.length > 0) {
+                    window.wakeDetector.wakeWords = profileWords;
+                } else if (profileWords === null || profileWords === undefined) {
+                    // null = use platform default
+                    window.wakeDetector.wakeWords = ['wake up'];
+                }
+                // [] = empty array means disable wake word (leave as-is, detector won't match anything)
+                console.log(`[Profile] wakeWords = ${JSON.stringify(window.wakeDetector.wakeWords)}`);
+            }
+
+            console.log(`[Profile] applied: ${profile?.id} | silence=${profile?.stt?.silence_timeout_ms ?? 'default'}ms | interruption=${window._interruptionEnabled} | wakeWords=${JSON.stringify(profile?.stt?.wake_words)} | modes=${JSON.stringify(profile?.modes)}`);
         };
 
         // Expose STT instance — lives at ModeManager.clawdbotMode.stt

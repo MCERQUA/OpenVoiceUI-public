@@ -185,8 +185,8 @@ class WakeWordDetector {
         this.isListening = false;
         this.onWakeWordDetected = null;
 
-        // Wake words to listen for
-        this.wakeWords = ['hey assistant', 'hey voice', 'hey computer', 'hello'];
+        // Wake words to listen for (overridden per-profile via applyProfile)
+        this.wakeWords = ['wake up'];
 
         // Check browser support
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
