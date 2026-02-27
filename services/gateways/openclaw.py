@@ -115,9 +115,15 @@ def _load_device_identity() -> dict:
         Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
     ).decode()
     identity = {"deviceId": device_id, "publicKeyPem": pub_pem, "privateKeyPem": priv_pem}
-    with open(identity_file, 'w') as f:
-        json.dump(identity, f)
-    logger.info(f"Generated new device identity: {device_id[:16]}...")
+    # Use exclusive create (O_EXCL) to prevent race condition — if another thread
+    # wins and writes first, catch FileExistsError and return what they wrote.
+    try:
+        with open(identity_file, 'x') as f:
+            json.dump(identity, f)
+        logger.info(f"Generated new device identity: {device_id[:16]}...")
+    except FileExistsError:
+        with open(identity_file) as f:
+            identity = json.load(f)
     return identity
 
 
@@ -209,11 +215,16 @@ class GatewayConnection:
             )
             self._loop_thread.start()
             ready.wait(timeout=5.0)
+            if not ready.is_set():
+                raise RuntimeError(
+                    "Gateway event loop failed to start within 5 seconds. "
+                    "Check for asyncio or threading issues on this system."
+                )
             self._started = True
             logger.info("### Gateway persistent WS background loop started")
 
     async def _handshake(self, ws):
-        challenge_response = await ws.recv()
+        challenge_response = await asyncio.wait_for(ws.recv(), timeout=10.0)
         challenge_data = json.loads(challenge_response)
         if (challenge_data.get('type') != 'event'
                 or challenge_data.get('event') != 'connect.challenge'):
@@ -242,7 +253,7 @@ class GatewayConnection:
             }
         }
         await ws.send(json.dumps(handshake))
-        hello_response = await ws.recv()
+        hello_response = await asyncio.wait_for(ws.recv(), timeout=10.0)
         hello_data = json.loads(hello_response)
         if hello_data.get('type') != 'res' or hello_data.get('error'):
             raise RuntimeError(f"Gateway auth failed: {hello_data.get('error')}")

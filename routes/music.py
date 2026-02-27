@@ -124,17 +124,19 @@ def load_generated_music_metadata():
 
 
 def save_music_metadata(metadata):
-    """Persist library playlist metadata."""
+    """Persist library playlist metadata (atomic write — safe against mid-write crashes)."""
     metadata_file = MUSIC_DIR / "music_metadata.json"
-    with open(metadata_file, "w") as f:
-        json.dump(metadata, f, indent=2)
+    tmp = metadata_file.with_suffix('.tmp')
+    tmp.write_text(json.dumps(metadata, indent=2))
+    tmp.replace(metadata_file)
 
 
 def save_generated_music_metadata(metadata):
-    """Persist AI-generated playlist metadata."""
+    """Persist AI-generated playlist metadata (atomic write — safe against mid-write crashes)."""
     metadata_file = GENERATED_MUSIC_DIR / "generated_metadata.json"
-    with open(metadata_file, "w") as f:
-        json.dump(metadata, f, indent=2)
+    tmp = metadata_file.with_suffix('.tmp')
+    tmp.write_text(json.dumps(metadata, indent=2))
+    tmp.replace(metadata_file)
 
 
 def load_playlist_order(playlist):
