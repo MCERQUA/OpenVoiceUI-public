@@ -83,6 +83,7 @@ canvas-manifest.bak
 # The example-gateway reference and README are tracked.
 plugins/*/
 !plugins/example-gateway/
+!plugins/openai-compat/
 !plugins/README.md
 !plugins/.gitkeep
 .coverage

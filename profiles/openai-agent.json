@@ -1,0 +1,87 @@
+{
+  "id": "openai-agent",
+  "name": "OpenAI Agent",
+  "description": "Voice assistant powered by any OpenAI-compatible API (no OpenClaw required)",
+  "version": "1.0",
+  "icon": "🌐",
+
+  "system_prompt": "You are a helpful, conversational voice assistant. Keep responses concise — under 3 sentences unless asked for detail. Be warm and natural.",
+
+  "llm": {
+    "provider": "gateway",
+    "parameters": {
+      "max_tokens": 1024,
+      "temperature": 0.7
+    }
+  },
+
+  "voice": {
+    "tts_provider": "groq",
+    "voice_id": "tara",
+    "speed": 1.1,
+    "parallel_sentences": true,
+    "min_sentence_chars": 20
+  },
+
+  "stt": {
+    "provider": "webspeech",
+    "language": "en-US",
+    "silence_timeout_ms": 1800,
+    "continuous": true
+  },
+
+  "context": {
+    "enable_fts": false,
+    "enable_briefing": false,
+    "enable_history": true,
+    "max_history_messages": 8
+  },
+
+  "features": {
+    "canvas": false,
+    "vision": false,
+    "music": false,
+    "tools": false
+  },
+
+  "ui": {
+    "theme": "dark",
+    "theme_preset": "green",
+    "face_enabled": true,
+    "face_mood": "neutral",
+    "transcript_panel": true,
+    "show_mode_badge": true,
+    "mode_badge_text": "OpenAI-Compatible"
+  },
+
+  "speech_normalization": {
+    "strip_markdown": true,
+    "strip_urls": true,
+    "strip_emoji": true,
+    "max_length": 300
+  },
+
+  "conversation": {
+    "greeting": null,
+    "interruption_enabled": false,
+    "max_response_chars": 300
+  },
+
+  "modes": {
+    "normal": true,
+    "listen": true,
+    "ptt": true,
+    "a2a": false
+  },
+
+  "session": {
+    "key_strategy": "persistent",
+    "key_prefix": "openai-voice"
+  },
+
+  "adapter": "clawdbot",
+  "adapter_config": {
+    "gateway_id": "openai-compat",
+    "sessionKey": "openai-voice-1"
+  }
+}

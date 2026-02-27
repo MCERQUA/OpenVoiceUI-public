@@ -33,8 +33,8 @@ Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are dro
 |----------|--------|
 | Any OpenClaw-compatible gateway | ✓ Built-in |
 | Z.AI (GLM models) | ✓ Built-in |
-| OpenAI-compatible APIs | ✓ Via adapter |
-| Ollama (local) | ✓ Via adapter |
+| OpenAI-compatible APIs (OpenAI, Groq, Together, Fireworks, vLLM) | ✓ [Gateway plugin](plugins/openai-compat/) |
+| Ollama (local) | ✓ Via [OpenAI-compat plugin](plugins/openai-compat/) (`/v1` endpoint) |
 | Hume EVI | ✓ Built-in adapter |
 | LangChain, AutoGen, custom agent framework | ✓ Via gateway plugin |
 | **Any LLM or framework you build a plugin for** | ✓ Drop a folder in `plugins/` |

@@ -1,0 +1,9 @@
+{
+  "id": "openai-compat",
+  "name": "OpenAI-Compatible Gateway",
+  "version": "1.0.0",
+  "provides": "gateway",
+  "gateway_class": "Gateway",
+  "requires_env": ["OPENAI_COMPAT_API_KEY"],
+  "description": "Connect any OpenAI-compatible API: OpenAI, Anthropic (via proxy), Groq, Together, Fireworks, vLLM, LiteLLM, Ollama /v1, etc."
+}
