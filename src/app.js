@@ -4688,21 +4688,20 @@ inject();
                     const callButton = document.getElementById('call-button');
                     const wakeButton = document.getElementById('wake-button');
 
-                    // If camera auth is required and camera is on, identify first
-                    if (camAuth && camOn) {
-                        StatusModule.update('thinking', 'VERIFYING...');
-                        await camera.identifyFace();
-                        const identity = camera.currentIdentity;
-                        if (!identity || identity.name === 'unknown' || identity.confidence < 50) {
-                            console.log('[CameraAuth] Face not recognized — wake blocked');
-                            StatusModule.update('idle', 'NOT RECOGNIZED');
-                            setTimeout(() => StatusModule.update('idle', 'READY'), 2500);
-                            return; // Block wake — person not authorized
+                    // Always await face ID on wake so currentIdentity is fresh for greeting
+                    if (identifyOnWake && camOn) {
+                        StatusModule.update('thinking', 'IDENTIFYING...');
+                        await camera.identifyFace().catch(() => {});
+                        if (camAuth) {
+                            const identity = camera.currentIdentity;
+                            if (!identity || identity.name === 'unknown' || identity.confidence < 50) {
+                                console.log('[CameraAuth] Face not recognized — wake blocked');
+                                StatusModule.update('idle', 'NOT RECOGNIZED');
+                                setTimeout(() => StatusModule.update('idle', 'READY'), 2500);
+                                return;
+                            }
+                            console.log('[CameraAuth] Authorized:', identity.name);
                         }
-                        console.log('[CameraAuth] Authorized:', identity.name);
-                    } else if (identifyOnWake && camOn) {
-                        // Non-blocking: identify in background, result injected into next request
-                        camera.identifyFace().catch(() => {});
                     }
 
                     // Flash buttons and start conversation
@@ -4793,18 +4792,17 @@ inject();
                     const camera         = window.cameraModule;
                     const camOn          = camera && camera.stream;
 
-                    if (camOn) {
+                    if (camOn && identifyOnWake) {
+                        // Always await so currentIdentity is fresh when greeting fires
+                        StatusModule.update('thinking', 'IDENTIFYING...');
+                        await camera.identifyFace().catch(() => {});
                         if (camAuth) {
-                            StatusModule.update('thinking', 'VERIFYING...');
-                            await camera.identifyFace();
                             const id = camera.currentIdentity;
                             if (!id || id.name === 'unknown' || id.confidence < 50) {
                                 StatusModule.update('idle', 'NOT RECOGNIZED');
                                 setTimeout(() => StatusModule.update('idle', 'READY'), 2500);
                                 return;
                             }
-                        } else if (identifyOnWake) {
-                            camera.identifyFace().catch(() => {});
                         }
                     }
                     agent.toggle();

@@ -553,10 +553,21 @@ def _conversation_inner():
     # Replace the legacy __session_start__ sentinel with a natural-language greeting
     # prompt so the LLM produces a real greeting instead of a system sentinel ("NO").
     # user_message is kept as-is so the sentinel suppression logic still works.
-    _gateway_message = (
-        'A new voice session has just started. Give a brief, friendly one-sentence greeting.'
-        if user_message == '__session_start__' else user_message
-    )
+    if user_message == '__session_start__':
+        _face = identified_person or {}
+        _face_name = _face.get('name', '') if _face.get('name', '') != 'unknown' else ''
+        if _face_name:
+            _gateway_message = (
+                f'A new voice session has just started. The person in front of the camera '
+                f'has been identified as {_face_name}. Greet them by name — '
+                f'one brief, friendly sentence.'
+            )
+        else:
+            _gateway_message = (
+                'A new voice session has just started. Give a brief, friendly one-sentence greeting.'
+            )
+    else:
+        _gateway_message = user_message
     message_with_context = context_prefix + _gateway_message if context_prefix else _gateway_message
     ai_response = None
     captured_actions = []
