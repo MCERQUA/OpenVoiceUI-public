@@ -13,7 +13,7 @@ Registers routes:
 import random
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request, send_file, send_from_directory
+from flask import Blueprint, jsonify, request, send_file
 
 # ---------------------------------------------------------------------------
 # Blueprint
@@ -125,8 +125,13 @@ def serve_sound(filepath):
 
 @static_files_bp.route('/uploads/<path:filename>')
 def serve_upload(filename):
-    """Serve uploaded files"""
-    return send_from_directory(UPLOADS_DIR, filename)
+    """Serve uploaded files (path traversal guarded)."""
+    upload_path = _safe_path(UPLOADS_DIR, filename)
+    if upload_path is None:
+        return jsonify({"error": "Invalid path"}), 400
+    if not upload_path.exists():
+        return jsonify({"error": "File not found"}), 404
+    return send_file(upload_path)
 
 
 @static_files_bp.route('/src/<path:filepath>')

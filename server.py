@@ -1020,6 +1020,28 @@ def clawdbot_websocket(ws):
 
 
 # ---------------------------------------------------------------------------
+# Per-endpoint rate limits (applied after all routes are registered)
+# ---------------------------------------------------------------------------
+# limiter.limit() returns a wrapped function — must assign it back into
+# app.view_functions or the limit is silently discarded.
+_limiter = getattr(app, 'limiter', None)
+if _limiter:
+    for _endpoint, _rate in {
+        'conversation.conversation': '30/minute',
+        'conversation.tts_generate': '10/minute',
+        'conversation.tts_preview':  '10/minute',
+        'upload_file':               '5/minute',
+        'groq_stt':                  '10/minute',
+        'local_stt':                 '10/minute',
+    }.items():
+        _view_fn = app.view_functions.get(_endpoint)
+        if _view_fn:
+            app.view_functions[_endpoint] = _limiter.limit(_rate)(_view_fn)
+        else:
+            logger.warning("Rate limit: endpoint %r not found — skipping", _endpoint)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

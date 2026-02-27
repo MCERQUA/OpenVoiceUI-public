@@ -18,7 +18,10 @@ import os
 
 from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_sock import Sock
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +63,11 @@ def create_app(config_override: dict = None):
     if config_override:
         app.config.update(config_override)
 
+    # Trust one level of X-Forwarded-* headers (nginx / reverse proxy).
+    # Without this, request.remote_addr is always 127.0.0.1 behind nginx,
+    # breaking per-IP rate limiting (all users share one bucket).
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     # Initialize Flask-Sock for WebSocket support
     sock = Sock(app)
 
@@ -71,6 +79,18 @@ def create_app(config_override: dict = None):
         r'^http://localhost:\d+$',
         *_extra_origins,
     ], supports_credentials=True)
+
+    # ── Rate limiting ─────────────────────────────────────────────────────────
+    # Per-IP limits protect expensive endpoints from abuse.
+    # Override default via RATELIMIT_DEFAULT env var (e.g. "100 per minute").
+    # Disable for tests: config_override={'RATELIMIT_ENABLED': False}.
+    limiter = Limiter(
+        get_remote_address,
+        app=app,
+        default_limits=[os.getenv('RATELIMIT_DEFAULT', '200 per minute')],
+        storage_uri='memory://',
+    )
+    app.limiter = limiter
 
     # ── Clerk auth gate ────────────────────────────────────────────────────────
     # Auth is only active when CLERK_PUBLISHABLE_KEY is set in .env.
@@ -153,6 +173,17 @@ def create_app(config_override: dict = None):
         # Allow microphone and camera for voice/vision app; block geolocation
         response.headers.setdefault(
             'Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()'
+        )
+        response.headers.setdefault(
+            'Content-Security-Policy',
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.clerk.accounts.dev; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "media-src 'self' blob:; "
+            "connect-src 'self' wss: https:; "
+            "frame-src 'self' https://*.clerk.accounts.dev; "
+            "worker-src 'self' blob:"
         )
         return response
 
