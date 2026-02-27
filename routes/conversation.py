@@ -1064,7 +1064,7 @@ def tts_generate():
             provider = get_provider(provider_id)
         except ValueError as e:
             available = ', '.join([p['provider_id'] for p in list_providers()])
-            return jsonify({'error': str(e), 'available_providers': available}), 400
+            return jsonify({'error': 'Invalid TTS provider', 'available_providers': available}), 400
 
         logger.info(
             f"TTS request: provider={provider_id}, text='{text[:50]}...', "

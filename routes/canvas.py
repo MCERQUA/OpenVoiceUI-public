@@ -484,7 +484,7 @@ def canvas_show_page():
         return canvas_update()
     except Exception as exc:
         logger.error(f'Canvas show error: {exc}')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Canvas operation failed'}), 500
 
 
 @canvas_bp.route('/canvas-proxy')
@@ -526,7 +526,7 @@ def canvas_sse_proxy(path):
         )
     except Exception as exc:
         logger.error(f'Canvas SSE proxy error: {exc}')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Canvas proxy error'}), 500
 
 
 def _safe_canvas_path(base: str, user_path: str) -> Path | None:
@@ -878,7 +878,7 @@ def create_canvas_page():
         })
     except Exception as exc:
         logger.error(f'Canvas page create error: {exc}')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Canvas page creation failed'}), 500
 
 
 @canvas_bp.route('/api/canvas/mtime/<path:filename>', methods=['GET'])

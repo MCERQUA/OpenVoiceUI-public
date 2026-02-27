@@ -96,7 +96,7 @@ def _read_file(path: Path) -> tuple[str | None, str | None]:
         return path.read_text(encoding='utf-8'), None
     except Exception as e:
         logger.warning(f'[instructions] read {path}: {e}')
-        return None, str(e)
+        return None, 'Read failed'
 
 
 def _write_file(path: Path, content: str) -> str | None:
@@ -107,7 +107,7 @@ def _write_file(path: Path, content: str) -> str | None:
         return None
     except Exception as e:
         logger.warning(f'[instructions] write {path}: {e}')
-        return str(e)
+        return 'Write failed'
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
