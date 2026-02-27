@@ -120,9 +120,27 @@ See [`plugins/README.md`](plugins/README.md) for the full event protocol and `ga
 
 1. Fork the repo and create a branch: `git checkout -b feature/my-thing`
 2. Make your changes
-3. Test end-to-end locally (voice in → TTS audio out if relevant)
-4. Submit a PR — fill out the PR template
-5. Keep PRs focused — one feature or fix per PR
+3. Run the test suite: `venv/bin/python3 -m pytest tests/ -q`
+4. Test end-to-end locally (voice in → TTS audio out if relevant)
+5. Submit a PR targeting `dev` (not `main`) — fill out the PR template
+6. Keep PRs focused — one feature or fix per PR
+
+**Before submitting security-related PRs**, read:
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Understand how systems connect
+- [docs/PR-REVIEW-CHECKLIST.md](docs/PR-REVIEW-CHECKLIST.md) — What reviewers check
+- [SECURITY.md](SECURITY.md) — Vulnerability reporting policy
+
+---
+
+## How PRs Are Reviewed
+
+Every PR is reviewed against the [PR Review Checklist](docs/PR-REVIEW-CHECKLIST.md). The maintainer will:
+
+1. **Code review** — Check the PR against the review checklist (security, tag system, display pipeline, tests)
+2. **Test locally** — Create a `devtest/pr-<number>` branch, apply changes, run full test suite + manual voice test
+3. **Merge or request changes** — If tests pass, the original PR is merged (you keep full commit credit). If tests fail, specific feedback is provided.
+
+This process ensures that every change is verified in context before it reaches `dev`. Security fixes in particular are tested carefully because they often touch systems that are tightly coupled (e.g., the tag system spans 4 files — see the Architecture doc).
 
 ---
 
