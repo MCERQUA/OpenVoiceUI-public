@@ -573,12 +573,12 @@ inject();
 
                     // Identify face after a moment (only when not in a live call)
                     setTimeout(() => {
-                        if (!voiceConversation?.isConnected) this.identifyFace();
+                        if (!window.voiceAgent?.isConnected) this.identifyFace();
                     }, 1000);
 
                     // Re-identify every 8 seconds while camera is on but call is not active
                     this.faceInterval = setInterval(() => {
-                        if (!voiceConversation?.isConnected) this.identifyFace();
+                        if (!window.voiceAgent?.isConnected) this.identifyFace();
                     }, 8000);
                 } catch (error) {
                     console.error('Camera error:', error);
@@ -651,10 +651,10 @@ inject();
                             statusEl.className = 'face-id-status identified';
                         }
                         // Show in main status bar so it's visible without opening the face panel
-                        if (!voiceConversation?.isConnected) {
+                        if (!window.voiceAgent?.isConnected) {
                             StatusModule.update('idle', `👤 ${data.name} (${data.confidence}%)`);
                             setTimeout(() => {
-                                if (!voiceConversation?.isConnected) StatusModule.update('idle', 'READY');
+                                if (!window.voiceAgent?.isConnected) StatusModule.update('idle', 'READY');
                             }, 4000);
                         }
                     } else {
