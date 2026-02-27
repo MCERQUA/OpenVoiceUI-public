@@ -175,6 +175,20 @@ class WebSpeechSTT {
         this.isProcessing = false;
         this.accumulatedText = '';
     }
+
+    /**
+     * Mute STT immediately — called when TTS starts speaking.
+     * Sets isProcessing=true so onresult ignores all incoming audio,
+     * and clears any pending silence timer so queued echo text is discarded.
+     */
+    mute() {
+        this.isProcessing = true;
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        this.accumulatedText = '';
+    }
 }
 
 // ===== WAKE WORD DETECTOR =====

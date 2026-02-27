@@ -93,6 +93,9 @@ export class VoiceSession {
             this._ttsPlaying = isSpeaking;
             if (isSpeaking) {
                 eventBus.emit('tts:start', {});
+                // Mute STT immediately when TTS starts — clears any queued echo text
+                // and blocks onresult until TTS finishes. PTT/text interrupts bypass this.
+                if (this.stt.mute) this.stt.mute();
             } else {
                 eventBus.emit('tts:stop', {});
                 // After TTS ends, signal STT can resume
@@ -317,8 +320,9 @@ export class VoiceSession {
                     if (data.type === 'audio') {
                         if (data.audio) {
                             console.log(`[VoiceSession] TTS ready (tts:${data.timing?.tts_ms}ms)`);
-                            // Stop STT while TTS plays (prevents echo)
-                            if (this.stt.resetProcessing) this.stt.resetProcessing();
+                            // Mute STT before queuing audio — onSpeakingChange(true) will
+                            // also mute, but muting here ensures no echo from audio buffering lag
+                            if (this.stt.mute) this.stt.mute();
                             this.tts.queue(data.audio);
                         } else {
                             console.warn('[VoiceSession] Audio event had no audio data');
@@ -473,11 +477,16 @@ export class VoiceSession {
      */
     _resumeListening() {
         if (!this._active) return;
-        if (this.stt.resetProcessing) this.stt.resetProcessing();
-        if (!this.stt.isListening) {
-            this.stt.start();
-            eventBus.emit('session:listening', {});
-        }
+        // 600ms settling delay: lets audio tail-off clear the mic before re-enabling
+        // STT so the last fragment of TTS audio isn't captured as user speech.
+        setTimeout(() => {
+            if (!this._active) return;
+            if (this.stt.resetProcessing) this.stt.resetProcessing();
+            if (!this.stt.isListening) {
+                this.stt.start();
+                eventBus.emit('session:listening', {});
+            }
+        }, 600);
     }
 
     /**
