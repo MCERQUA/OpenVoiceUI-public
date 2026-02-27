@@ -2569,6 +2569,11 @@ inject();
                 this.sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                 console.log('New conversation session:', this.sessionId);
 
+                // Show thinking state immediately so user sees feedback before any async work
+                FaceModule.setMood('thinking');
+                StatusModule.update('thinking', 'CONNECTING...');
+                document.getElementById('thought-bubbles')?.classList.add('active');
+
                 // Unlock AudioContext for iOS — MUST happen synchronously within the user
                 // gesture call stack, before any await. iOS suspends AudioContext by default
                 // and blocks async audio.play() calls that arrive via network responses.
@@ -4720,6 +4725,11 @@ inject();
                         }
                     }
 
+                    // Show thinking immediately — user gets feedback before async startup
+                    FaceModule.setMood('thinking');
+                    StatusModule.update('thinking', 'CONNECTING...');
+                    document.getElementById('thought-bubbles')?.classList.add('active');
+
                     // Flash buttons and start conversation
                     callButton.classList.add('auto-triggered');
                     wakeButton.classList.add('active');
@@ -4820,6 +4830,11 @@ inject();
                                 return;
                             }
                         }
+                    } else {
+                        // No camera — show thinking immediately so user gets instant feedback
+                        FaceModule.setMood('thinking');
+                        StatusModule.update('thinking', 'CONNECTING...');
+                        document.getElementById('thought-bubbles')?.classList.add('active');
                     }
                     agent.toggle();
                 });
