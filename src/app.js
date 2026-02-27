@@ -2803,6 +2803,30 @@ inject();
                             const spotifyArtist = spotifyMatch[2]?.trim() || '';
                             window.musicPlayer?.playSpotify(spotifyTrack, spotifyArtist);
                         }
+                        // Check for [REGISTER_FACE:name] — agent registers current camera frame
+                        const registerFaceMatch = text.match(/\[REGISTER_FACE:([^\]]+)\]/i);
+                        if (registerFaceMatch && !canvasCommandsProcessed.has('REGISTER_FACE')) {
+                            canvasCommandsProcessed.add('REGISTER_FACE');
+                            const personName = registerFaceMatch[1].trim();
+                            const cam = window.cameraModule;
+                            if (cam && cam.stream) {
+                                const ctx = cam.canvas.getContext('2d');
+                                cam.canvas.width = 640; cam.canvas.height = 480;
+                                ctx.drawImage(cam.video, 0, 0, 640, 480);
+                                const imageData = cam.canvas.toDataURL('image/jpeg', 0.8);
+                                fetch(`${CONFIG.serverUrl}/api/faces/${encodeURIComponent(personName)}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ image: imageData })
+                                }).then(() => {
+                                    console.log(`[FaceReg] Registered face: ${personName}`);
+                                    window.FacePanel?.loadFaces();
+                                    window.FaceID?.loadKnownFaces();
+                                }).catch(e => console.error('[FaceReg] Error:', e));
+                            } else {
+                                console.warn('[FaceReg] Camera not active — cannot register face');
+                            }
+                        }
                         // Check for [SLEEP] — agent-initiated return to wake-word mode
                         if (/\[SLEEP\]/i.test(text) && !canvasCommandsProcessed.has('SLEEP')) {
                             canvasCommandsProcessed.add('SLEEP');
