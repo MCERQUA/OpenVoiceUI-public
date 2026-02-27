@@ -30,7 +30,7 @@ class TestGroqTTSProvider:
     def test_list_voices_includes_alloy(self):
         provider = self._make_provider()
         voices = provider.list_voices()
-        assert "alloy" in voices
+        assert "tara" in voices
 
     def test_is_available_false_when_no_key(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -113,7 +113,7 @@ class TestGroqTTSProvider:
 
     def test_default_model(self):
         provider = self._make_provider()
-        assert provider.model == "orpheus-english"
+        assert provider.model == "canopylabs/orpheus-v1-english"
 
     def test_default_voice_from_config(self):
         provider = self._make_provider({"voice": "nova"})

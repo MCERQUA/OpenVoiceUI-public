@@ -418,13 +418,13 @@ def handle_music():
         # ── PAUSE ─────────────────────────────────────────────────────────
         elif action == "pause":
             current_music_state["playing"] = False
-            track_name = current_music_state.get("current_track", {}).get("name", "the music")
+            track_name = (current_music_state.get("current_track") or {}).get("name", "the music")
             return jsonify({"action": "pause", "response": f"Pausing {track_name}. Taking a breather."})
 
         # ── RESUME ────────────────────────────────────────────────────────
         elif action == "resume":
             current_music_state["playing"] = True
-            track_name = current_music_state.get("current_track", {}).get("name", "the music")
+            track_name = (current_music_state.get("current_track") or {}).get("name", "the music")
             return jsonify({"action": "resume", "response": f"Resuming {track_name}. Back on the air!"})
 
         # ── STOP ──────────────────────────────────────────────────────────
@@ -438,7 +438,7 @@ def handle_music():
             if not music_files:
                 return jsonify({"action": "error", "response": "No music to skip to!"})
 
-            current_name = current_music_state.get("current_track", {}).get("name")
+            current_name = (current_music_state.get("current_track") or {}).get("name")
             available = [t for t in music_files if t["name"] != current_name] or music_files
             selected = random.choice(available)
 
@@ -467,7 +467,7 @@ def handle_music():
             if not music_files:
                 return jsonify({"action": "error", "response": "No tracks available!"})
 
-            current_name = current_music_state.get("current_track", {}).get("name")
+            current_name = (current_music_state.get("current_track") or {}).get("name")
             available = [t for t in music_files if t["name"] != current_name] or music_files
             selected = random.choice(available)
             current_music_state["next_track"] = selected
@@ -638,7 +638,7 @@ def handle_dj_transition():
         remaining = data.get("remaining_seconds", 10)
 
         music_files = get_music_files()
-        current_name = current_music_state.get("current_track", {}).get("name")
+        current_name = (current_music_state.get("current_track") or {}).get("name")
         available = [t for t in music_files if t["name"] != current_name] or music_files
 
         if available:
