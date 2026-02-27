@@ -10,13 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 && \
     rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 # Writable dirs for runtime data
-RUN mkdir -p uploads canvas-pages known_faces music generated_music
+RUN mkdir -p runtime/uploads runtime/canvas-pages runtime/known_faces runtime/music runtime/generated_music runtime/faces runtime/transcripts
 
 # Run as non-root user
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app

@@ -8,12 +8,12 @@ services:
     volumes:
       # Persist runtime data outside the container so it survives restarts.
       # Note: if CANVAS_PAGES_DIR is set in .env, it must match this mount path.
-      # For Docker, leave CANVAS_PAGES_DIR unset in .env (defaults to /app/canvas-pages).
-      - ./uploads:/app/uploads
-      - ./canvas-pages:/app/canvas-pages
-      - ./known_faces:/app/known_faces
-      - ./music:/app/music
-      - ./generated_music:/app/generated_music
+      # For Docker, leave CANVAS_PAGES_DIR unset in .env (defaults to /app/runtime/canvas-pages).
+      - ./runtime/uploads:/app/runtime/uploads
+      - ./runtime/canvas-pages:/app/runtime/canvas-pages
+      - ./runtime/known_faces:/app/runtime/known_faces
+      - ./runtime/music:/app/runtime/music
+      - ./runtime/generated_music:/app/runtime/generated_music
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health/live')"]

@@ -32,8 +32,9 @@ from flask import Blueprint, jsonify, request
 # Paths & config
 # ---------------------------------------------------------------------------
 
-GENERATED_MUSIC_DIR = Path(__file__).parent.parent / 'generated_music'
-GENERATED_MUSIC_DIR.mkdir(exist_ok=True)
+from services.paths import GENERATED_MUSIC_DIR
+
+GENERATED_MUSIC_DIR.mkdir(parents=True, exist_ok=True)
 GENERATED_METADATA_FILE = GENERATED_MUSIC_DIR / 'generated_metadata.json'
 
 SUNO_API_KEY = os.environ.get('SUNO_API_KEY', '')

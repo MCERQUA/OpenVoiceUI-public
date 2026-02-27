@@ -25,14 +25,11 @@ static_files_bp = Blueprint('static_files', __name__)
 # Paths
 # ---------------------------------------------------------------------------
 
-BASE_DIR = Path(__file__).parent.parent
+from services.paths import APP_ROOT, SOUNDS_DIR, UPLOADS_DIR, KNOWN_FACES_DIR, STATIC_DIR
 
-SOUNDS_DIR = BASE_DIR / "sounds"
-UPLOADS_DIR = BASE_DIR / "uploads"
-KNOWN_FACES_DIR = BASE_DIR / "known_faces"
-STATIC_DIR = BASE_DIR / "static"
+BASE_DIR = APP_ROOT
 
-UPLOADS_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # DJ Sounds catalogue

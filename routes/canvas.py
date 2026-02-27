@@ -23,11 +23,7 @@ from flask import Blueprint, Response, jsonify, redirect, request, send_file
 # Constants
 # ---------------------------------------------------------------------------
 
-_APP_ROOT = Path(__file__).parent.parent
-CANVAS_MANIFEST_PATH = _APP_ROOT / 'canvas-manifest.json'
-# Default: per-instance pages dir inside the app root, so each deployment has its own pages.
-# Override with CANVAS_PAGES_DIR in .env if you want a custom location.
-CANVAS_PAGES_DIR = Path(os.getenv('CANVAS_PAGES_DIR', str(_APP_ROOT / 'canvas-pages')))
+from services.paths import APP_ROOT as _APP_ROOT, CANVAS_MANIFEST_PATH, CANVAS_PAGES_DIR
 CANVAS_SSE_PORT = int(os.getenv('CANVAS_SSE_PORT', '3030'))
 CANVAS_SESSION_PORT = int(os.getenv('CANVAS_SESSION_PORT', '3002'))
 BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
