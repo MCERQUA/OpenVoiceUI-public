@@ -45,13 +45,13 @@ def get_groq_client():
     return _groq_client
 
 
-def generate_groq_tts(text: str, voice: str = 'tara') -> bytes:
+def generate_groq_tts(text: str, voice: str = 'autumn') -> bytes:
     """
     Generate TTS audio using Groq Orpheus (canopylabs/orpheus-v1-english).
 
     Args:
         text: Text to synthesize.
-        voice: Orpheus voice name (default 'tara').
+        voice: Orpheus voice name (default 'autumn').
 
     Returns:
         MP3 audio bytes.

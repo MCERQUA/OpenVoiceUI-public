@@ -53,8 +53,8 @@ class LLMConfig:
 
 @dataclass
 class VoiceConfig:
-    tts_provider: str = "supertonic"
-    voice_id: str = "M1"
+    tts_provider: str = "groq"
+    voice_id: str = "autumn"
     speed: float = 1.0
     parameters: Dict = field(default_factory=dict)
     parallel_sentences: Optional[bool] = None

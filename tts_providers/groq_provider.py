@@ -29,9 +29,9 @@ class GroqProvider(TTSProvider):
     """
     TTS Provider using Groq Orpheus (canopylabs/orpheus-v1-english).
 
-    Voices: tara, leah, jess, mia, zoe, leo, dan, zac
-    Output: MP3 audio bytes
-    Latency: ~130-200ms (Groq LPU, streaming)
+    Voices: autumn, diana, hannah, austin, daniel, troy
+    Output: WAV audio bytes
+    Latency: ~130-200ms (Groq LPU)
     Cost: ~$0.05/1K chars
     """
 
@@ -51,13 +51,13 @@ class GroqProvider(TTSProvider):
                 raise RuntimeError("groq package not installed — run: pip install groq")
         return self._client
 
-    def generate_speech(self, text: str, voice: str = 'tara', **kwargs) -> bytes:
+    def generate_speech(self, text: str, voice: str = 'autumn', **kwargs) -> bytes:
         """
         Generate speech via Groq Orpheus.
 
         Args:
             text: Text to synthesize.
-            voice: One of AVAILABLE_VOICES. Default: 'tara'.
+            voice: One of AVAILABLE_VOICES. Default: 'autumn'.
 
         Returns:
             MP3 audio bytes.

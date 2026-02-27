@@ -24,7 +24,7 @@ class GroqTTSProvider(TTSProvider):
         super().__init__(config)
         self.api_key = self._resolve_api_key()
         self.model = self._config.get("model", "canopylabs/orpheus-v1-english")
-        self.default_voice = self._config.get("voice", "tara")
+        self.default_voice = self._config.get("voice", "autumn")
 
     def _resolve_api_key(self) -> str:
         key = self._config.get("api_key", "")
@@ -56,7 +56,7 @@ class GroqTTSProvider(TTSProvider):
             raise TTSError("groq", f"Generation failed: {exc}") from exc
 
     def list_voices(self) -> List[str]:
-        return ["tara", "leah", "jess", "mia", "zoe", "leo", "dan", "zac"]
+        return ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
 
     def is_available(self) -> bool:
         return bool(self.api_key)
