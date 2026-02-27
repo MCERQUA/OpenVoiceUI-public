@@ -1038,4 +1038,5 @@ if __name__ == "__main__":
     logger.info(f"  Admin     → http://localhost:{port}/src/admin.html")
     logger.info(f"  Gateway   → {os.getenv('CLAWDBOT_GATEWAY_URL', 'ws://127.0.0.1:18791')}")
 
-    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+    host = os.getenv("HOST", "0.0.0.0")
+    app.run(host=host, port=port, debug=False, threaded=True)

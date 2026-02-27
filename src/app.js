@@ -1902,6 +1902,12 @@ inject();
             dropdownOpen: false,
 
             async init() {
+                // If no Clerk key configured, skip auth entirely (local mode)
+                if (!window.AGENT_CONFIG?.clerkPublishableKey) {
+                    console.log('Auth disabled — no Clerk key configured (local mode)');
+                    return;
+                }
+
                 // Wait for Clerk SDK to load (retry up to 5s)
                 for (let i = 0; i < 10; i++) {
                     if (typeof Clerk !== 'undefined') break;

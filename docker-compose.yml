@@ -1,0 +1,14 @@
+services:
+  openvoiceui:
+    build: .
+    ports:
+      - "${PORT:-5001}:${PORT:-5001}"
+    env_file:
+      - .env
+    volumes:
+      # Live-reload: mount source so edits take effect without rebuild
+      - .:/app
+      # Persist runtime data outside container
+      - ./uploads:/app/uploads
+      - ./canvas-pages:/app/canvas-pages
+    restart: unless-stopped

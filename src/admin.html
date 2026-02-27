@@ -1236,16 +1236,17 @@ const CanvasPages = {
   }
 };
 
-// Clerk auth gate for admin panel
+// Clerk auth gate for admin panel (skipped in local mode)
 async function initAdminAuth() {
+  // If admin.html didn't load Clerk SDK (no key configured), skip auth entirely
+  if (!document.querySelector('script[data-clerk-publishable-key]')) return;
   for (let i = 0; i < 10; i++) {
     if (typeof Clerk !== 'undefined') break;
     await new Promise(r => setTimeout(r, 500));
   }
-  if (typeof Clerk === 'undefined') return; // skip if Clerk unavailable
+  if (typeof Clerk === 'undefined') return;
   await Clerk.load();
   if (!Clerk.user) {
-    // Redirect to main app login
     location.href = '/?redirect=/admin' + location.hash;
   }
 }
