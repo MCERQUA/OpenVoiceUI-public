@@ -1,5 +1,5 @@
 <p align="center">
-<img src="image.png" alt="OpenVoiceUI Banner" />
+<img src="docs/banner.png" alt="OpenVoiceUI Banner" />
 </p>
 
 # OpenVoiceUI
@@ -105,6 +105,10 @@ Define agents in JSON — each profile configures:
 │   ├── admin.py                Admin + server stats
 │   └── ...
 ├── services/
+│   ├── auth.py                 Clerk JWT authentication middleware
+│   ├── db_pool.py              SQLite WAL connection pool
+│   ├── health.py               Liveness + readiness health probes
+│   ├── paths.py                Canonical path constants (all dirs)
 │   ├── gateway_manager.py      Gateway registry + plugin loader + router
 │   ├── gateways/
 │   │   ├── base.py             GatewayBase abstract class
@@ -135,9 +139,14 @@ Define agents in JSON — each profile configures:
 │   ├── ui/                     AppShell, SettingsPanel, ThemeManager
 │   └── providers/              WebSpeechSTT, TTSPlayer
 ├── sounds/                     Soundboard audio files
-├── music/                      Music playlist folder
-├── generated_music/            AI-generated tracks
-└── canvas-manifest.json        Canvas page registry
+└── runtime/                    Runtime data (gitignored, docker-mounted)
+    ├── uploads/                User-uploaded files
+    ├── canvas-pages/           Canvas HTML pages
+    ├── known_faces/            Face recognition photos
+    ├── music/                  Music playlist folder
+    ├── generated_music/        AI-generated tracks
+    ├── transcripts/            Listen-mode transcriptions
+    └── canvas-manifest.json    Canvas page registry
 ```
 
 ---
@@ -161,8 +170,8 @@ git clone https://github.com/MCERQUA/OpenVoiceUI-public
 cd OpenVoiceUI-public
 cp .env.example .env
 # Edit .env — set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY at minimum
-# Edit setup-sudo.sh — set DOMAIN, PORT, EMAIL, INSTALL_DIR at the top
-sudo bash setup-sudo.sh
+# Edit deploy/setup-sudo.sh — set DOMAIN, PORT, EMAIL, INSTALL_DIR at the top
+sudo bash deploy/setup-sudo.sh
 ```
 
 The script is idempotent — safe to re-run. Skips SSL if cert already exists.
@@ -371,7 +380,7 @@ OpenVoiceUI is designed so you can host a single VPS and serve multiple clients,
    GROQ_API_KEY=their-groq-key
    ```
 
-4. **Run `setup-sudo.sh`** for their domain — creates systemd service, nginx vhost, and SSL cert automatically.
+4. **Run `deploy/setup-sudo.sh`** for their domain — creates systemd service, nginx vhost, and SSL cert automatically.
 
 5. **Each client** gets their own domain, their own agent session, and their own canvas/music library.
 
