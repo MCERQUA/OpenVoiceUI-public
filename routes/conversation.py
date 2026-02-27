@@ -485,12 +485,15 @@ def _conversation_inner():
 
     # Inject face recognition identity
     if identified_person and identified_person.get('name') and identified_person.get('name') != 'unknown':
-        name = identified_person['name']
+        # Sanitize: strip brackets and control chars to prevent prompt injection
+        # via a face registered as "]; ignore previous instructions"
+        name = re.sub(r'[\[\]{}()<>\n\r]', '', identified_person['name'])[:60].strip()
         confidence = identified_person.get('confidence', 0)
-        context_parts.append(
-            f'[FACE RECOGNITION: The person you are speaking with has been identified as {name} '
-            f'({confidence}% confidence). Address them by name naturally.]'
-        )
+        if name:
+            context_parts.append(
+                f'[FACE RECOGNITION: The person you are speaking with has been identified as {name} '
+                f'({confidence}% confidence). Address them by name naturally.]'
+            )
 
     if ui_context:
         if ui_context.get('canvasVisible') and ui_context.get('canvasDisplayed'):
@@ -555,7 +558,8 @@ def _conversation_inner():
     # user_message is kept as-is so the sentinel suppression logic still works.
     if user_message == '__session_start__':
         _face = identified_person or {}
-        _face_name = _face.get('name', '') if _face.get('name', '') != 'unknown' else ''
+        _raw_name = _face.get('name', '') if _face.get('name', '') != 'unknown' else ''
+        _face_name = re.sub(r'[\[\]{}()<>\n\r]', '', _raw_name)[:60].strip()
         if _face_name:
             _gateway_message = (
                 f'A new voice session has just started. The person in front of the camera '
