@@ -22,9 +22,11 @@ OpenVoiceUI is a modular voice UI shell. You bring the intelligence (LLM + TTS),
 
 ---
 
-## Plug-and-Play Architecture
+## Open Framework Philosophy
 
-### LLM Providers
+OpenVoiceUI is built as an **open voice UI shell** — it doesn't lock you into any specific LLM, TTS engine, STT provider, or AI framework. Every layer is a pluggable slot. Drop in a gateway plugin, a TTS provider, or a custom adapter and it just works. The built-in providers are defaults, not requirements.
+
+### LLM / Gateway Providers
 Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are drop-in:
 
 | Provider | Status |
@@ -34,7 +36,8 @@ Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are dro
 | OpenAI-compatible APIs | ✓ Via adapter |
 | Ollama (local) | ✓ Via adapter |
 | Hume EVI | ✓ Built-in adapter |
-| LangChain, AutoGen, custom LLM | ✓ Via gateway plugin |
+| LangChain, AutoGen, custom agent framework | ✓ Via gateway plugin |
+| **Any LLM or framework you build a plugin for** | ✓ Drop a folder in `plugins/` |
 
 ### TTS Providers
 | Provider | Type | Cost |
@@ -43,11 +46,13 @@ Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are dro
 | **Groq Orpheus** | Cloud, fast | ~$0.05/min |
 | **Qwen3-TTS** | Cloud, expressive | ~$0.003/min |
 | **Hume EVI** | Cloud, emotion-aware | ~$0.032/min |
+| **Any TTS engine you implement** | Local or cloud | Your choice |
 
 ### STT
 - Web Speech API (browser-native, no API key needed)
 - Whisper (local)
 - Hume EVI (full-duplex)
+- Any STT provider via a custom adapter
 
 ---
 
