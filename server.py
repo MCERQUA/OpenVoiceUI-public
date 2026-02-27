@@ -1020,6 +1020,32 @@ def clawdbot_websocket(ws):
 
 
 # ---------------------------------------------------------------------------
+# Rate limits on expensive endpoints (P7-T3 security hardening)
+# ---------------------------------------------------------------------------
+# Applied after all routes are registered so every endpoint name exists.
+# The global default (200/min) covers all routes. These overrides tighten
+# limits on endpoints that hit external APIs or write to disk.
+# We must replace the view function in the dict — just calling
+# limiter.limit()(func) without assignment is a no-op.
+_limiter = getattr(app, 'limiter', None)
+if _limiter:
+    _rate_limits = {
+        'conversation.conversation': '30/minute',
+        'conversation.tts_generate': '10/minute',
+        'conversation.tts_preview':  '10/minute',
+        'upload_file':               '5/minute',
+        'groq_stt':                  '10/minute',
+        'local_stt':                 '10/minute',
+    }
+    for _endpoint, _rate in _rate_limits.items():
+        _view_fn = app.view_functions.get(_endpoint)
+        if _view_fn:
+            app.view_functions[_endpoint] = _limiter.limit(_rate)(_view_fn)
+        else:
+            logger.warning(f"Rate limit: endpoint '{_endpoint}' not found — skipping")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
