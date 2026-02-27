@@ -2,6 +2,8 @@
 
 A plug-and-play browser-based voice agent platform. Connect any LLM, any TTS provider, and any AI framework — with a built-in music player, AI music generation, and a live web canvas display system.
 
+> **Hosting notice:** OpenVoiceUI is designed to run on a dedicated VPS (see [Hetzner setup](#hosting-multiple-users-hetzner-vps) below). Running it on a local machine is possible but not recommended — microphone access, SSL, and persistent uptime all work significantly better on a hosted server. For the best experience, deploy to a VPS before using it seriously.
+
 ---
 
 ## What It Is
