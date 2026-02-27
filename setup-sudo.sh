@@ -8,13 +8,57 @@ set -e
 
 # ── Configure these before running ──────────────────────────────────────────
 INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
-DOMAIN="your-domain.com"
-PORT=5001
-EMAIL="your@email.com"
+DOMAIN="your-domain.com"        # ← EDIT: your actual domain
+PORT=5001                        # ← match PORT in your .env (default: 5001)
+EMAIL="your@email.com"           # ← EDIT: for Let's Encrypt notifications
 SERVICE_NAME="openvoiceui"
 RUN_USER="${SUDO_USER:-$(whoami)}"
 WWW_DIR="/var/www/${SERVICE_NAME}"          # canvas pages + any web assets
 # ────────────────────────────────────────────────────────────────────────────
+
+# Guard: refuse to run with placeholder values
+if [ "$DOMAIN" = "your-domain.com" ] || [ "$EMAIL" = "your@email.com" ]; then
+    echo "ERROR: Edit DOMAIN and EMAIL at the top of this script before running."
+    echo "       Open setup-sudo.sh in a text editor and set your real domain and email."
+    exit 1
+fi
+
+# Check .env exists
+if [ ! -f "${INSTALL_DIR}/.env" ]; then
+    echo "ERROR: No .env file found at ${INSTALL_DIR}/.env"
+    echo "       Run: cp ${INSTALL_DIR}/.env.example ${INSTALL_DIR}/.env"
+    echo "       Then edit .env and set your API keys before running this script."
+    exit 1
+fi
+
+# Check OpenClaw gateway configuration
+OPENCLAW_TOKEN=$(grep -E "^CLAWDBOT_AUTH_TOKEN=" "${INSTALL_DIR}/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")
+if [ -z "$OPENCLAW_TOKEN" ] || [ "$OPENCLAW_TOKEN" = "your-openclaw-gateway-token" ]; then
+    echo ""
+    echo "⚠️  OpenClaw gateway not configured."
+    echo "   OpenClaw is the AI backend that powers all voice conversations."
+    echo "   Without it the server will start but cannot respond to anyone."
+    echo ""
+    echo "   To set up OpenClaw:"
+    echo "   1. Download and install OpenClaw: https://openclaw.ai"
+    echo "   2. Start the OpenClaw service (it runs on ws://127.0.0.1:18791 by default)"
+    echo "   3. Copy your auth token into .env:"
+    echo "        CLAWDBOT_AUTH_TOKEN=your-token-here"
+    echo "   4. Re-run this script"
+    echo ""
+    printf "   Continue setup without OpenClaw configured? [y/N] "
+    read -r REPLY
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Stopping. Configure OpenClaw first, then re-run this script."
+        exit 1
+    fi
+    echo "   Continuing — remember to configure OpenClaw before using the voice agent."
+else
+    OPENCLAW_URL=$(grep -E "^CLAWDBOT_GATEWAY_URL=" "${INSTALL_DIR}/.env" 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'")
+    echo "  ✓ OpenClaw token found. Gateway: ${OPENCLAW_URL:-ws://127.0.0.1:18791}"
+fi
+echo ""
 
 echo "=== OpenVoiceUI setup: ${DOMAIN} on port ${PORT} ==="
 echo "    Install dir : ${INSTALL_DIR}"

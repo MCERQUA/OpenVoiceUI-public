@@ -2,9 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps for cryptography, audio, and DeepFace/OpenCV
+# System deps for cryptography, audio processing, vision, and canvas features
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libffi-dev libgl1 libglib2.0-0 && \
+    build-essential libffi-dev \
+    libgl1 libglib2.0-0 \
+    ffmpeg \
+    libsndfile1 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .
