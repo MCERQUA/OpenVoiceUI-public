@@ -481,11 +481,15 @@ export class VoiceSession {
         // STT so the last fragment of TTS audio isn't captured as user speech.
         setTimeout(() => {
             if (!this._active) return;
-            if (this.stt.resetProcessing) this.stt.resetProcessing();
-            if (!this.stt.isListening) {
-                this.stt.start();
-                eventBus.emit('session:listening', {});
+            // resume() clears the mute flag AND restarts the engine — the engine
+            // may have stopped during TTS because onend no longer auto-restarts
+            // while muted. resetProcessing() alone won't restart a dead engine.
+            if (this.stt.resume) {
+                this.stt.resume();
+            } else if (this.stt.resetProcessing) {
+                this.stt.resetProcessing();
             }
+            eventBus.emit('session:listening', {});
         }, 600);
     }
 
