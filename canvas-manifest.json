@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "last_updated": "2026-02-27T08:27:49.584294",
+  "categories": {
+    "uncategorized": {
+      "name": "Uncategorized",
+      "icon": "\ud83d\udcc1",
+      "color": "#6e7681",
+      "pages": [
+        "about-me",
+        "test-pack-canvas",
+        "canvas-test-working",
+        "canvas-test"
+      ]
+    },
+    "dashboards": {
+      "name": "Dashboards",
+      "icon": "\ud83d\udcca",
+      "color": "#4a9eff",
+      "pages": []
+    },
+    "tasks": {
+      "name": "Tasks",
+      "icon": "\u2705",
+      "color": "#e74c3c",
+      "pages": []
+    },
+    "research": {
+      "name": "Research",
+      "icon": "\ud83d\udd2c",
+      "color": "#9b59b6",
+      "pages": []
+    },
+    "entertainment": {
+      "name": "Entertainment",
+      "icon": "\ud83c\udfb5",
+      "color": "#e91e63",
+      "pages": []
+    },
+    "social": {
+      "name": "Social",
+      "icon": "\ud83d\udc26",
+      "color": "#1da1f2",
+      "pages": []
+    },
+    "finance": {
+      "name": "Finance",
+      "icon": "\ud83d\udcb0",
+      "color": "#2ecc71",
+      "pages": []
+    }
+  },
+  "pages": {
+    "about-me": {
+      "filename": "about-me.html",
+      "display_name": "About Me",
+      "description": "",
+      "category": "uncategorized",
+      "tags": [],
+      "created": "2026-02-26T02:12:43.503834",
+      "modified": "2026-02-26T02:12:43.503834",
+      "starred": false,
+      "voice_aliases": [
+        "about me",
+        "about",
+        "me",
+        "about page"
+      ],
+      "access_count": 2
+    },
+    "test-pack-canvas": {
+      "filename": "test-pack-canvas.html",
+      "display_name": "Test Pack Canvas",
+      "description": "",
+      "category": "uncategorized",
+      "tags": [],
+      "created": "2026-02-26T18:11:40.257689",
+      "modified": "2026-02-26T18:11:40.257689",
+      "starred": false,
+      "voice_aliases": [
+        "pack",
+        "canvas",
+        "test",
+        "test pack canvas",
+        "test page"
+      ],
+      "access_count": 0
+    },
+    "canvas-test-working": {
+      "filename": "canvas-test-working.html",
+      "display_name": "Canvas Test Working",
+      "description": "",
+      "category": "uncategorized",
+      "tags": [],
+      "created": "2026-02-26T20:19:25.915319",
+      "modified": "2026-02-26T20:19:25.915319",
+      "starred": false,
+      "voice_aliases": [
+        "canvas test working",
+        "canvas page",
+        "canvas",
+        "working",
+        "test"
+      ],
+      "access_count": 0
+    },
+    "canvas-test": {
+      "filename": "canvas-test.html",
+      "display_name": "Canvas Test",
+      "description": "",
+      "category": "uncategorized",
+      "tags": [],
+      "created": "2026-02-26T21:46:37.082395",
+      "modified": "2026-02-26T21:46:37.082404",
+      "starred": false,
+      "is_public": false,
+      "voice_aliases": [
+        "canvas test",
+        "test",
+        "canvas",
+        "canvas page"
+      ],
+      "access_count": 0
+    }
+  },
+  "recently_viewed": [
+    "about-me"
+  ],
+  "user_custom_order": null
+}

@@ -151,7 +151,7 @@ def create_app(config_override: dict = None):
             if path.startswith('/pages/') or path.startswith('/canvas-proxy'):
                 return
 
-            from auth.middleware import get_token_from_request, verify_clerk_token
+            from services.auth import get_token_from_request, verify_clerk_token
             token = get_token_from_request()
             user_id = verify_clerk_token(token) if token else None
 

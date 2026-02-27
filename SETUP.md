@@ -20,6 +20,34 @@ This guide covers three install paths:
 
 ---
 
+## Upgrading from Pre-2.0
+
+If you have an existing installation, runtime data directories have moved under `runtime/`:
+
+| Old Location | New Location |
+|---|---|
+| `uploads/` | `runtime/uploads/` |
+| `canvas-pages/` | `runtime/canvas-pages/` |
+| `known_faces/` | `runtime/known_faces/` |
+| `music/` | `runtime/music/` |
+| `generated_music/` | `runtime/generated_music/` |
+| `faces/` | `runtime/faces/` |
+| `transcripts/` | `runtime/transcripts/` |
+| `usage.db` | `runtime/usage.db` |
+
+To migrate, move your existing data into the new paths:
+```bash
+mkdir -p runtime
+for dir in uploads canvas-pages known_faces music generated_music faces transcripts; do
+  [ -d "$dir" ] && mv "$dir" "runtime/$dir"
+done
+[ -f usage.db ] && mv usage.db runtime/usage.db
+```
+
+Docker users: `docker compose down`, pull the latest code, then `docker compose up --build`. Volume mounts in `docker-compose.yml` already point to `runtime/`.
+
+---
+
 ## OpenClaw Setup
 
 1. Download and install OpenClaw from [https://openclaw.ai](https://openclaw.ai)
@@ -91,7 +119,7 @@ CANVAS_PAGES_DIR=/var/www/openvoiceui/canvas-pages
 
 ```bash
 python3 -m venv venv
-venv/bin/pip install -r backend/requirements.txt
+venv/bin/pip install -r requirements.txt
 ```
 
 ### 3. Test the server runs
@@ -105,10 +133,10 @@ Open `http://your-server-ip:5001` to verify. Press Ctrl+C when done.
 
 ### 4. Run the setup script (nginx + SSL + systemd)
 
-Edit the top of `setup-sudo.sh` to set your domain and email, then:
+Edit the top of `deploy/setup-sudo.sh` to set your domain and email, then:
 
 ```bash
-sudo bash setup-sudo.sh
+sudo bash deploy/setup-sudo.sh
 ```
 
 This creates:
@@ -136,7 +164,7 @@ For contributors running without Docker or a VPS.
 git clone https://github.com/MCERQUA/OpenVoiceUI.git
 cd OpenVoiceUI
 python3 -m venv venv
-venv/bin/pip install -r backend/requirements.txt
+venv/bin/pip install -r requirements.txt
 cp .env.example .env
 # Edit .env — set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY at minimum
 venv/bin/python3 server.py

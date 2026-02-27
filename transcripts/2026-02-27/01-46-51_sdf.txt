@@ -1,0 +1,7 @@
+Title: sdf
+Date:  2026-02-27 01:46:51
+Words: 114
+
+---
+
+hello what are you doing with life this is supposed to be so that I like instead of just like sending the agent singular messages you could like create a large thing to send it or not yeah so this is supposed to be like building up all the text so that you can either save it to the server or send it as context to the agent so then he can process and reply to it it hasn't really fully been tested out especially not in this new one here but seems to still be working I guess I feel like this is missing some of the shit that I said earlier but

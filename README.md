@@ -1,5 +1,5 @@
 <p align="center">
-<img src="image.png" alt="OpenVoiceUI Banner" />
+<img src="docs/banner.png" alt="OpenVoiceUI Banner" />
 </p>
 
 # OpenVoiceUI
@@ -105,6 +105,10 @@ Define agents in JSON — each profile configures:
 │   ├── admin.py                Admin + server stats
 │   └── ...
 ├── services/
+│   ├── auth.py                 Clerk JWT authentication middleware
+│   ├── db_pool.py              SQLite WAL connection pool
+│   ├── health.py               Liveness + readiness health probes
+│   ├── paths.py                Canonical path constants (all dirs)
 │   ├── gateway_manager.py      Gateway registry + plugin loader + router
 │   ├── gateways/
 │   │   ├── base.py             GatewayBase abstract class
@@ -135,9 +139,14 @@ Define agents in JSON — each profile configures:
 │   ├── ui/                     AppShell, SettingsPanel, ThemeManager
 │   └── providers/              WebSpeechSTT, TTSPlayer
 ├── sounds/                     Soundboard audio files
-├── music/                      Music playlist folder
-├── generated_music/            AI-generated tracks
-└── canvas-manifest.json        Canvas page registry
+└── runtime/                    Runtime data (gitignored, docker-mounted)
+    ├── uploads/                User-uploaded files
+    ├── canvas-pages/           Canvas HTML pages
+    ├── known_faces/            Face recognition photos
+    ├── music/                  Music playlist folder
+    ├── generated_music/        AI-generated tracks
+    ├── transcripts/            Listen-mode transcriptions
+    └── canvas-manifest.json    Canvas page registry
 ```
 
 ---

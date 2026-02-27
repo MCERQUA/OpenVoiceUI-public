@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 profiles_bp = Blueprint("profiles", __name__)
 
 _DEFAULT_PROFILE = "default"
-_ACTIVE_PROFILE_FILE = Path(__file__).parent.parent / ".active-profile"
+from services.paths import ACTIVE_PROFILE_FILE as _ACTIVE_PROFILE_FILE
 
 
 def _load_active_profile_id() -> str:

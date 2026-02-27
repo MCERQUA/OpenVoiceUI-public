@@ -141,7 +141,8 @@ except Exception as _e:
 # Voice session management
 # ---------------------------------------------------------------------------
 
-VOICE_SESSION_FILE = Path(__file__).parent / ".voice-session-counter"
+from services.paths import VOICE_SESSION_FILE as _VSF_PATH, DB_PATH, UPLOADS_DIR
+VOICE_SESSION_FILE = Path(_VSF_PATH)
 _consecutive_empty_responses = 0
 
 
@@ -184,9 +185,7 @@ MONTHLY_LIMIT = int(os.getenv("MONTHLY_USAGE_LIMIT", "20"))
 UNLIMITED_USERS: list = [
     u.strip() for u in os.getenv("UNLIMITED_USER_IDS", "").split(",") if u.strip()
 ]
-DB_PATH = Path(__file__).parent / "usage.db"
-
-from db.pool import SQLitePool
+from services.db_pool import SQLitePool
 db_pool = SQLitePool(DB_PATH, pool_size=5)
 
 
@@ -289,8 +288,7 @@ init_db()
 # Upload directory
 # ---------------------------------------------------------------------------
 
-UPLOADS_DIR = Path(__file__).parent / "uploads"
-UPLOADS_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +322,7 @@ def serve_index():
 # Routes — health probes
 # ---------------------------------------------------------------------------
 
-from health import health_checker as _health_checker
+from services.health import health_checker as _health_checker
 
 
 @app.route("/health/live", methods=["GET"])
