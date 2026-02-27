@@ -324,7 +324,7 @@ def serve_index():
 # Routes — health probes
 # ---------------------------------------------------------------------------
 
-from health import health_checker as _health_checker
+from services.health import health_checker as _health_checker
 
 
 @app.route("/health/live", methods=["GET"])
