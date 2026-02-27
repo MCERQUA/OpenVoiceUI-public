@@ -4,13 +4,13 @@ routes/vision.py — Camera / Vision / Facial Recognition Blueprint
 Endpoints:
   POST /api/vision              — analyze camera frame with vision LLM
   POST /api/frame               — receive live frame (stored as latest_frame)
-  POST /api/identify            — identify person from camera frame
+  POST /api/identify            — identify person from camera frame (DeepFace)
   GET  /api/faces               — list registered faces
   POST /api/faces/<name>        — register a face photo
   DELETE /api/faces/<name>      — delete a registered face
 
-Vision model is configurable per-profile via profile.vision.model.
-Default: glm-4v-flash (free GLM vision model, ZhipuAI/Z.AI compatible).
+Face recognition: DeepFace (local, free, runs on-server — no API calls).
+Vision analysis ("look at"): configurable vision LLM (default: glm-4v-flash).
 """
 
 import base64
@@ -18,8 +18,8 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
-from io import BytesIO
 from pathlib import Path
 
 import requests
@@ -33,11 +33,35 @@ vision_bp = Blueprint('vision', __name__)
 # Storage
 # ---------------------------------------------------------------------------
 
-FACES_DIR = Path(__file__).parent.parent / 'faces'
+# known_faces/ is the DeepFace database directory.
+# Layout: known_faces/<PersonName>/photo_001.jpg  (one subdir per person)
+FACES_DIR = Path(__file__).parent.parent / 'known_faces'
 FACES_DIR.mkdir(exist_ok=True)
 
 # Latest frame received from browser (in-memory, ephemeral)
 _latest_frame: dict = {'image': None, 'ts': 0}
+
+# ---------------------------------------------------------------------------
+# DeepFace — lazy load (heavy import, downloads models on first use)
+# ---------------------------------------------------------------------------
+
+_deepface = None
+
+def _get_deepface():
+    global _deepface
+    if _deepface is None:
+        from deepface import DeepFace
+        _deepface = DeepFace
+    return _deepface
+
+
+def _clear_deepface_cache():
+    """Delete DeepFace's cached face index so newly registered/deleted faces are picked up."""
+    for pkl in FACES_DIR.glob('*.pkl'):
+        try:
+            pkl.unlink()
+        except OSError:
+            pass
 
 # ---------------------------------------------------------------------------
 # Vision model config
@@ -158,10 +182,10 @@ def receive_frame():
 @vision_bp.route('/api/identify', methods=['POST'])
 def identify_face():
     """
-    Identify who is in the camera frame.
+    Identify who is in the camera frame using DeepFace (local, free, no API calls).
 
-    Compares the submitted image against registered face photos using the
-    vision model — no biometric library required.
+    Uses the SFace model — fast on CPU, ~100ms after first load.
+    Face database: known_faces/<PersonName>/*.jpg
     """
     data  = request.get_json(silent=True) or {}
     image = data.get('image', '')
@@ -170,42 +194,62 @@ def identify_face():
     if not image:
         return jsonify({'name': 'unknown', 'confidence': 0, 'message': 'No image'}), 200
 
-    # Build list of registered faces
-    face_entries = _list_faces_data()
-    if not face_entries:
+    # Check if any faces are registered
+    known_people = [d.name for d in FACES_DIR.iterdir()
+                    if d.is_dir() and any(d.iterdir())]
+    if not known_people:
         return jsonify({'name': 'unknown', 'confidence': 0,
                         'message': 'No faces registered yet'}), 200
 
-    # Build a short description list for the model
-    names_str = ', '.join(e['name'] for e in face_entries)
-    model, _ = _get_vision_model()
+    # Decode and save to temp file (DeepFace needs a file path)
+    image_data = image
+    if ',' in image_data:
+        image_data = image_data.split(',', 1)[1]
+    image_bytes = base64.b64decode(image_data)
 
-    prompt = (
-        f"You are a facial recognition system. The registered people are: {names_str}.\n"
-        "Look at the person in the image. If you can identify them as one of the "
-        "registered people, respond with ONLY a JSON object like: "
-        '{"name": "PersonName", "confidence": 85}\n'
-        "If the person is not recognizable or not in the list, respond with: "
-        '{"name": "unknown", "confidence": 0}\n'
-        "Base confidence on how certain you are (0-100). No extra text."
-    )
-
+    tmp_path = None
     try:
-        raw = _call_vision(image, prompt, model)
-        # Extract JSON from response
-        m = re.search(r'\{[^}]+\}', raw)
-        if m:
-            result = json.loads(m.group())
-            name       = result.get('name', 'unknown')
-            confidence = int(result.get('confidence', 0))
-            if name.lower() == 'unknown' or confidence < 40:
-                return jsonify({'name': 'unknown', 'confidence': 0,
-                                'message': 'Not recognized'})
-            return jsonify({'name': name, 'confidence': confidence})
-        return jsonify({'name': 'unknown', 'confidence': 0, 'message': 'Parse error'})
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            tmp.write(image_bytes)
+            tmp_path = tmp.name
+
+        DeepFace = _get_deepface()
+        results = DeepFace.find(
+            img_path=tmp_path,
+            db_path=str(FACES_DIR),
+            model_name='SFace',
+            enforce_detection=False,
+            silent=True,
+        )
+
+        if results and len(results) > 0 and len(results[0]) > 0:
+            df           = results[0]
+            best         = df.iloc[0]
+            identity_path = best['identity']
+            distance     = float(best['distance'])
+            person_name  = Path(identity_path).parent.name
+
+            # SFace cosine distance threshold ~0.5; convert to confidence %
+            confidence = max(0, round((1 - distance / 0.7) * 100, 1))
+
+            if distance < 0.5:
+                return jsonify({'name': person_name, 'confidence': confidence})
+            else:
+                return jsonify({'name': 'unknown', 'confidence': confidence,
+                                'message': 'Face detected but not recognized'})
+        else:
+            return jsonify({'name': 'unknown', 'confidence': 0,
+                            'message': 'No face detected in frame'})
+
     except Exception as exc:
         logger.error('Face identification failed: %s', exc)
         return jsonify({'name': 'unknown', 'confidence': 0, 'message': str(exc)}), 200
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +302,10 @@ def register_face(name):
     out_path.write_bytes(base64.b64decode(image_data))
 
     logger.info('Registered face photo: %s (%s)', safe_name, out_path.name)
+
+    # Clear DeepFace's cached index so the new face is picked up immediately
+    _clear_deepface_cache()
+
     return jsonify({'ok': True, 'name': safe_name, 'file': out_path.name})
 
 
@@ -274,6 +322,7 @@ def delete_face(name):
 
     import shutil
     shutil.rmtree(face_dir)
+    _clear_deepface_cache()
     return jsonify({'ok': True, 'deleted': safe_name})
 
 

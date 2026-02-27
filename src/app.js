@@ -571,11 +571,15 @@ inject();
                     // Start sending frames to server
                     this.startFrameCapture();
 
-                    // Identify face after a moment
-                    setTimeout(() => this.identifyFace(), 1000);
+                    // Identify face after a moment (only when not in a live call)
+                    setTimeout(() => {
+                        if (!voiceConversation?.isConnected) this.identifyFace();
+                    }, 1000);
 
-                    // Re-identify every 10 seconds while camera is on
-                    this.faceInterval = setInterval(() => this.identifyFace(), 10000);
+                    // Re-identify every 8 seconds while camera is on but call is not active
+                    this.faceInterval = setInterval(() => {
+                        if (!voiceConversation?.isConnected) this.identifyFace();
+                    }, 8000);
                 } catch (error) {
                     console.error('Camera error:', error);
                     UIModule.showError('Camera access denied');
@@ -646,7 +650,15 @@ inject();
                             statusEl.textContent = data.name + ' (' + data.confidence + '%)';
                             statusEl.className = 'face-id-status identified';
                         }
+                        // Show in main status bar so it's visible without opening the face panel
+                        if (!voiceConversation?.isConnected) {
+                            StatusModule.update('idle', `👤 ${data.name} (${data.confidence}%)`);
+                            setTimeout(() => {
+                                if (!voiceConversation?.isConnected) StatusModule.update('idle', 'READY');
+                            }, 4000);
+                        }
                     } else {
+                        this.currentIdentity = null;
                         const statusEl = document.getElementById('face-id-status');
                         if (statusEl) {
                             statusEl.textContent = data.message || 'Not recognized';
@@ -4713,6 +4725,40 @@ inject();
             // Expose voice agent for mic button
             window.voiceAgent = voiceConversation;
             window.originalVoiceAgent = voiceConversation;
+
+            // Intercept call button click to run face ID before starting (if camera on)
+            const _callBtn = document.getElementById('call-button');
+            if (_callBtn) {
+                _callBtn.removeAttribute('onclick');
+                _callBtn.addEventListener('click', async () => {
+                    const agent = window.voiceAgent;
+                    if (!agent) return;
+                    // If already connected, just toggle off — no need to identify
+                    if (agent.isConnected) { agent.toggle(); return; }
+
+                    const profile        = window._activeProfileData || {};
+                    const identifyOnWake = profile?.stt?.identify_on_wake !== false;
+                    const camAuth        = profile?.stt?.require_camera_auth === true;
+                    const camera         = window.cameraModule;
+                    const camOn          = camera && camera.stream;
+
+                    if (camOn) {
+                        if (camAuth) {
+                            StatusModule.update('thinking', 'VERIFYING...');
+                            await camera.identifyFace();
+                            const id = camera.currentIdentity;
+                            if (!id || id.name === 'unknown' || id.confidence < 50) {
+                                StatusModule.update('idle', 'NOT RECOGNIZED');
+                                setTimeout(() => StatusModule.update('idle', 'READY'), 2500);
+                                return;
+                            }
+                        } else if (identifyOnWake) {
+                            camera.identifyFace().catch(() => {});
+                        }
+                    }
+                    agent.toggle();
+                });
+            }
 
             // If mode is hume, initialize HumeAdapter as voice agent
             const activeMode = localStorage.getItem('voice_mode') || 'supertonic';

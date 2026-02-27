@@ -24,6 +24,10 @@ groq==1.0.0                 # Groq Orpheus TTS (required if using groq provider)
 PyJWT==2.11.0
 cryptography==46.0.5
 
+# Face recognition (local, free — runs on-server, no API calls)
+deepface>=0.0.93            # DeepFace biometric face recognition
+tf-keras>=2.19.0            # Required by deepface (Keras backend)
+
 # AI providers (optional)
 google-generativeai==0.8.6  # Only if using Gemini
 
