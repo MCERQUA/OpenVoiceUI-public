@@ -21,7 +21,7 @@ Type=simple
 User=YOUR_USER                                              # ← your Linux username
 WorkingDirectory=/path/to/OpenVoiceUI                      # ← full path to repo
 ExecStart=/path/to/OpenVoiceUI/venv/bin/python3 /path/to/OpenVoiceUI/server.py
-Restart=always
+Restart=on-failure
 RestartSec=10
 Environment=PATH=/usr/bin:/usr/local/bin
 EnvironmentFile=/path/to/OpenVoiceUI/.env                  # ← full path to .env
