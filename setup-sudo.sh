@@ -236,7 +236,45 @@ WantedBy=multi-user.target
 SERVICE
 
 # 3. Nginx config
+# 3a. Write HTTP-only nginx config so certbot can serve ACME challenges
 echo "[3/5] Creating nginx config..."
+if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+    echo "  No SSL cert yet -- writing HTTP-only config for certbot..."
+    cat > /etc/nginx/sites-available/${DOMAIN} << NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    location / {
+        proxy_pass http://127.0.0.1:${PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 86400;
+    }
+
+    client_max_body_size 25M;
+}
+NGINX
+    ln -sf /etc/nginx/sites-available/${DOMAIN} /etc/nginx/sites-enabled/${DOMAIN}
+    nginx -t
+    systemctl reload nginx
+
+    # 4. Obtain SSL cert (nginx can now serve ACME challenge on port 80)
+    echo "[4/5] Obtaining SSL certificate..."
+    certbot certonly --nginx -d ${DOMAIN} --non-interactive --agree-tos -m ${EMAIL}
+else
+    echo "  SSL cert already exists, skipping certbot."
+fi
+
+# 3b. Write full HTTPS config (cert now exists)
+echo "  Writing HTTPS nginx config..."
 cat > /etc/nginx/sites-available/${DOMAIN} << NGINX
 server {
     listen 80;
@@ -272,19 +310,11 @@ server {
         proxy_read_timeout 86400;
     }
 
-    client_max_body_size 100M;
+    client_max_body_size 25M;
 }
 NGINX
 
 ln -sf /etc/nginx/sites-available/${DOMAIN} /etc/nginx/sites-enabled/${DOMAIN}
-
-# 4. SSL cert
-echo "[4/5] Obtaining SSL certificate..."
-if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
-    certbot certonly --nginx -d ${DOMAIN} --non-interactive --agree-tos -m ${EMAIL}
-else
-    echo "  SSL cert already exists, skipping."
-fi
 
 # 5. Enable and start service
 echo "[5/5] Enabling and starting service..."
