@@ -1264,8 +1264,10 @@ const CanvasPages = {
   }
 };
 
-// Clerk auth gate for admin panel
+// Clerk auth gate for admin panel (skipped in local mode — no Clerk key configured)
 async function initAdminAuth() {
+  // If Clerk SDK wasn't injected (no key in env), skip auth entirely
+  if (!document.querySelector('script[data-clerk-publishable-key]')) return;
   for (let i = 0; i < 10; i++) {
     if (typeof Clerk !== 'undefined') break;
     await new Promise(r => setTimeout(r, 500));

@@ -73,55 +73,63 @@ def create_app(config_override: dict = None):
     ], supports_credentials=True)
 
     # ── Clerk auth gate ────────────────────────────────────────────────────────
-    # Routes that never require authentication:
-    _PUBLIC_PREFIXES = (
-        '/src/',       # static JS/CSS (needed to render the login screen)
-        '/sounds/',
-        '/music/',
-        '/images/',    # canvas images (individual pages check their own flag)
-        '/static/',    # PWA icons, app icons
-        '/pages/',     # canvas pages — served without auth (CANVAS_REQUIRE_AUTH opt-in)
-        '/api/canvas/',  # canvas API — creation, manifest, context (no per-user auth needed)
-    )
-    _PUBLIC_EXACT = {
-        '/',           # main page — hosts the Clerk login gate itself
-        '/pi',         # Pi-optimized page — same login gate, different entry point
-        '/health/live',
-        '/health/ready',
-        '/api/auth/check',      # Auth check endpoint — does its own token verification
-        '/api/suno/callback',   # Suno's servers POST here from external IPs (no Clerk token)
-        '/sw.js',           # PWA service worker — browser fetches this before auth
-        '/manifest.json',   # PWA manifest — browser fetches this before auth
-        '/favicon.ico',     # Browser favicon request — before auth
-        '/ws/clawdbot',     # WebSocket — browsers can't send Clerk token in WS headers;
-                            # handler secures itself via CLAWDBOT_AUTH_TOKEN to the gateway
-    }
+    # Auth is only active when CLERK_PUBLISHABLE_KEY is set in .env.
+    # Without it, the app runs fully open (single-user / local mode).
+    _clerk_key = (os.getenv('CLERK_PUBLISHABLE_KEY') or os.getenv('VITE_CLERK_PUBLISHABLE_KEY', '')).strip()
+    _auth_enabled = bool(_clerk_key)
 
-    @app.before_request
-    def require_auth():
-        """Block unauthenticated requests to all non-exempt routes."""
-        path = request.path
+    if not _auth_enabled:
+        logger.info('No CLERK_PUBLISHABLE_KEY set — auth disabled (local mode)')
+    else:
+        # Routes that never require authentication:
+        _PUBLIC_PREFIXES = (
+            '/src/',       # static JS/CSS (needed to render the login screen)
+            '/sounds/',
+            '/music/',
+            '/images/',    # canvas images (individual pages check their own flag)
+            '/static/',    # PWA icons, app icons
+            '/pages/',     # canvas pages — served without auth (CANVAS_REQUIRE_AUTH opt-in)
+            '/api/canvas/',  # canvas API — creation, manifest, context (no per-user auth needed)
+        )
+        _PUBLIC_EXACT = {
+            '/',           # main page — hosts the Clerk login gate itself
+            '/pi',         # Pi-optimized page — same login gate, different entry point
+            '/health/live',
+            '/health/ready',
+            '/api/auth/check',      # Auth check endpoint — does its own token verification
+            '/api/suno/callback',   # Suno's servers POST here from external IPs (no Clerk token)
+            '/sw.js',           # PWA service worker — browser fetches this before auth
+            '/manifest.json',   # PWA manifest — browser fetches this before auth
+            '/favicon.ico',     # Browser favicon request — before auth
+            '/ws/clawdbot',     # WebSocket — browsers can't send Clerk token in WS headers;
+                                # handler secures itself via CLAWDBOT_AUTH_TOKEN to the gateway
+        }
 
-        # Always allow health probes and static assets
-        if path in _PUBLIC_EXACT:
-            return
-        if any(path.startswith(p) for p in _PUBLIC_PREFIXES):
-            return
-        # Canvas pages and images have their own auth logic (public flag)
-        # handled inside canvas_bp — let them through here
-        if path.startswith('/pages/') or path.startswith('/canvas-proxy'):
-            return
+        @app.before_request
+        def require_auth():
+            """Block unauthenticated requests to all non-exempt routes."""
+            path = request.path
 
-        from auth.middleware import get_token_from_request, verify_clerk_token
-        token = get_token_from_request()
-        user_id = verify_clerk_token(token) if token else None
+            # Always allow health probes and static assets
+            if path in _PUBLIC_EXACT:
+                return
+            if any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+                return
+            # Canvas pages and images have their own auth logic (public flag)
+            # handled inside canvas_bp — let them through here
+            if path.startswith('/pages/') or path.startswith('/canvas-proxy'):
+                return
 
-        if not user_id:
-            # For API calls return JSON 401; for page navigations redirect to /
-            if path.startswith('/api/') or request.headers.get('X-Requested-With'):
-                return jsonify({'error': 'Unauthorized', 'code': 'auth_required'}), 401
-            # HTML page request — redirect to root (login gate)
-            return redirect('/')
+            from auth.middleware import get_token_from_request, verify_clerk_token
+            token = get_token_from_request()
+            user_id = verify_clerk_token(token) if token else None
+
+            if not user_id:
+                # For API calls return JSON 401; for page navigations redirect to /
+                if path.startswith('/api/') or request.headers.get('X-Requested-With'):
+                    return jsonify({'error': 'Unauthorized', 'code': 'auth_required'}), 401
+                # HTML page request — redirect to root (login gate)
+                return redirect('/')
 
     # ── Security headers (P7-T3 security audit) ──────────────────────────────
     @app.after_request
