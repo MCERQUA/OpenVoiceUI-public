@@ -32,9 +32,9 @@ server.log
 *.log
 
 # Databases
-usage.db
-usage.db-shm
-usage.db-wal
+runtime/usage.db
+runtime/usage.db-shm
+runtime/usage.db-wal
 *.db-shm
 *.db-wal
 
@@ -42,8 +42,8 @@ usage.db-wal
 .device-identity.json
 
 # Sensitive / private
-known_faces/
-faces/*/*
+runtime/known_faces/
+runtime/faces/*/*
 agent_config_backup.json
 docs/agent-snapshot-*.json
 TOOLS.md
@@ -65,23 +65,23 @@ job_runner.log
 refactor-state/
 
 # Runtime / private
-.active-profile
-.voice-session-counter
+runtime/.active-profile
+runtime/.voice-session-counter
 face_owners.json
 agent_config_backup.json
-known_faces/
-generated_music/*.mp3
-generated_music/generated_metadata.json
-music/*.mp3
-canvas-pages/*.html
-canvas-pages/*.bak
-uploads/*
-transcripts/*
-!uploads/.gitkeep
-!transcripts/.gitkeep
-!generated_music/.gitkeep
-canvas-manifest.json
-canvas-manifest.bak
+runtime/generated_music/*
+runtime/music/*.mp3
+runtime/canvas-pages/*.html
+runtime/canvas-pages/*.bak
+runtime/uploads/*
+runtime/transcripts/*
+!runtime/uploads/.gitkeep
+!runtime/transcripts/.gitkeep
+!runtime/generated_music/.gitkeep
+!runtime/canvas-pages/.gitkeep
+!runtime/music/.gitkeep
+runtime/canvas-manifest.json
+runtime/canvas-manifest.bak
 
 # Plugins — installed locally, not committed to the base repo.
 # Each plugin is its own repo: git clone <url> plugins/<id>

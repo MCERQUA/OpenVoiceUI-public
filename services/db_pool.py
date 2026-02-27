@@ -1,11 +1,11 @@
-# db/pool.py
+# services/db_pool.py
 """SQLite connection pool with WAL mode enabled.
 
 Recipe R2 — SQLite WAL + Connection Pool
 Fixes SQLite write contention under concurrent Flask request handling.
 
 Usage:
-    from db.pool import SQLitePool
+    from services.db_pool import SQLitePool
     db = SQLitePool("usage.db")
 
     # Write (auto-commit, retries on busy)

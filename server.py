@@ -141,7 +141,8 @@ except Exception as _e:
 # Voice session management
 # ---------------------------------------------------------------------------
 
-VOICE_SESSION_FILE = Path(__file__).parent / ".voice-session-counter"
+from services.paths import VOICE_SESSION_FILE as _VSF_PATH, DB_PATH, UPLOADS_DIR
+VOICE_SESSION_FILE = Path(_VSF_PATH)
 _consecutive_empty_responses = 0
 
 
@@ -184,9 +185,7 @@ MONTHLY_LIMIT = int(os.getenv("MONTHLY_USAGE_LIMIT", "20"))
 UNLIMITED_USERS: list = [
     u.strip() for u in os.getenv("UNLIMITED_USER_IDS", "").split(",") if u.strip()
 ]
-DB_PATH = Path(__file__).parent / "usage.db"
-
-from db.pool import SQLitePool
+from services.db_pool import SQLitePool
 db_pool = SQLitePool(DB_PATH, pool_size=5)
 
 
@@ -289,8 +288,7 @@ init_db()
 # Upload directory
 # ---------------------------------------------------------------------------
 
-UPLOADS_DIR = Path(__file__).parent / "uploads"
-UPLOADS_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +322,7 @@ def serve_index():
 # Routes — health probes
 # ---------------------------------------------------------------------------
 
-from health import health_checker as _health_checker
+from services.health import health_checker as _health_checker
 
 
 @app.route("/health/live", methods=["GET"])
@@ -514,7 +512,7 @@ def get_hume_token():
         })
     except Exception as e:
         logger.error(f"Hume token error: {e}")
-        return jsonify({"error": str(e), "available": False}), 500
+        return jsonify({"error": "Failed to retrieve token", "available": False}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +549,7 @@ def groq_stt():
         return jsonify({"transcript": transcription.text, "success": True})
     except Exception as e:
         logger.error(f"Groq STT error: {e}")
-        return jsonify({"error": f"STT failed: {e}"}), 500
+        return jsonify({"error": "Speech-to-text failed"}), 500
 
 
 @app.route("/api/stt/local", methods=["POST"])
@@ -593,7 +591,7 @@ def local_stt():
         return jsonify({"transcript": transcript, "success": True})
     except Exception as e:
         logger.error(f"Local STT error: {e}")
-        return jsonify({"error": f"STT failed: {e}"}), 500
+        return jsonify({"error": "Speech-to-text failed"}), 500
     finally:
         for f in [tmp_path, tmp_path.replace(".webm", ".wav")]:
             try:
@@ -637,7 +635,7 @@ def brave_search():
         return jsonify({"query": query, "results": results, "success": True})
     except Exception as e:
         logger.error(f"Brave Search error: {e}")
-        return jsonify({"error": f"Search failed: {e}"}), 500
+        return jsonify({"error": "Search failed"}), 500
 
 
 @app.route("/api/search", methods=["GET", "POST"])
@@ -701,7 +699,7 @@ def web_search():
         return jsonify({"query": query, "results": results, "success": True})
     except Exception as e:
         logger.error(f"DuckDuckGo search error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Search failed"}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -828,7 +826,7 @@ def run_command():
         return jsonify({"error": f"'{matched}' timed out after 30s"}), 504
     except Exception as e:
         logger.error(f"Command error ({matched}): {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Command execution failed"}), 500
 
 
 @app.route("/api/commands", methods=["GET"])
@@ -1010,7 +1008,7 @@ def clawdbot_websocket(ws):
             ws.close()
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
-            ws.send(json.dumps({"type": "error", "message": str(e)}))
+            ws.send(json.dumps({"type": "error", "message": "Connection error"}))
             ws.close()
 
     try:

@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-DB_PATH = Path(__file__).parent.parent / 'usage.db'
+from services.paths import DB_PATH, VOICE_SESSION_FILE
+
 BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
-VOICE_SESSION_FILE = str(Path(__file__).parent.parent / '.voice-session-counter')
 MAX_HISTORY_MESSAGES = 20
 
 # ---------------------------------------------------------------------------
@@ -290,6 +290,8 @@ def clean_for_tts(text: str) -> str:
     text = re.sub(r'\[SLEEP\]', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\[REGISTER_FACE:[^\]]*\]', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\[SPOTIFY:[^\]]*\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\[SOUND:[^\]]*\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\[SESSION_RESET\]', '', text, flags=re.IGNORECASE)
 
     # Remove code blocks
     text = re.sub(r'```[\s\S]*?```', '', text)
@@ -493,6 +495,7 @@ def _conversation_inner():
         )
 
     if ui_context:
+        # Canvas state
         if ui_context.get('canvasVisible') and ui_context.get('canvasDisplayed'):
             page_name = (ui_context['canvasDisplayed']
                          .replace('/pages/', '')
@@ -503,7 +506,8 @@ def _conversation_inner():
             context_parts.append('[Canvas CLOSED]')
         if ui_context.get('canvasMenuOpen'):
             context_parts.append('[Canvas menu visible to user]')
-        # Use server-side music state as authoritative source
+
+        # Music state (server-side is authoritative)
         _srv_track = _music_state.get('current_track')
         _srv_playing = _music_state.get('playing', False)
         if _srv_playing and _srv_track:
@@ -513,25 +517,28 @@ def _conversation_inner():
             _track_name = _srv_track.get('title') or _srv_track.get('name', 'unknown')
             context_parts.append(f'[Music PAUSED/STOPPED — last track: {_track_name}]')
         elif ui_context.get('musicPlaying'):
-            # Fallback: frontend reported playing but server has no state
             track = ui_context.get('musicTrack', 'unknown')
             context_parts.append(f'[Music PLAYING: {track}]')
-        context_parts.append(
-            '[MUSIC CONTROL: You can control the music player with text tags. '
-            '[MUSIC_PLAY] plays a random track, [MUSIC_PLAY:track name] plays a '
-            'specific track, [MUSIC_STOP] stops music, [MUSIC_NEXT] skips to next. '
-            'Tracks are loaded from the music library. Only use when asked.]'
-        )
-        context_parts.append(
-            '[SONG GENERATION: To create a new AI song, include '
-            '[SUNO_GENERATE:description of the song] in your response. '
-            'Example: [SUNO_GENERATE:upbeat pop track about summer vibes] '
-            'The frontend handles the Suno API (~45s) and shows a notification when done. '
-            'Song generation and the music player are independent — use [MUSIC_PLAY] '
-            'separately if you want to open the player. '
-            'DO NOT try to call any Suno APIs yourself — just include the tag.]'
-        )
-        # Always include page list — agent needs IDs to open pages correctly
+
+        # Available music tracks (so agent can use [MUSIC_PLAY:exact name])
+        try:
+            from routes.music import get_music_files
+            _lib_tracks = get_music_files('library')
+            _gen_tracks = get_music_files('generated')
+            _track_names = []
+            for t in _lib_tracks:
+                _track_names.append(t.get('title') or t.get('name', ''))
+            for t in _gen_tracks:
+                _track_names.append(t.get('title') or t.get('name', ''))
+            _track_names = [n for n in _track_names if n]
+            if _track_names:
+                context_parts.append(
+                    f'[Available tracks: {", ".join(_track_names[:30])}]'
+                )
+        except Exception:
+            pass
+
+        # Available canvas pages (agent needs IDs for [CANVAS:page-id])
         try:
             from routes.canvas import load_canvas_manifest
             _manifest = load_canvas_manifest()
@@ -539,10 +546,12 @@ def _conversation_inner():
             _page_list = ', '.join(_page_ids) if _page_ids else 'none'
         except Exception:
             _page_list = 'unknown'
+        context_parts.append(f'[Canvas pages: {_page_list}]')
+
+        # Available DJ sounds (for [SOUND:name] in DJ mode)
         context_parts.append(
-            f'[CANVAS: To CREATE a new page output the full HTML inside a fenced code block (```html...```) in your reply — the interface saves and displays it automatically, do NOT also use [CANVAS:]. '
-            f'To OPEN an existing page embed [CANVAS:page-id] in your text. '
-            f'Existing pages: {_page_list}.]'
+            '[DJ sounds: air_horn, scratch_long, rewind, record_stop, '
+            'crowd_cheer, crowd_hype, yeah, lets_go, gunshot, bruh, sad_trombone]'
         )
     if context_parts:
         context_prefix = ' '.join(context_parts) + ' '
@@ -1064,7 +1073,7 @@ def tts_generate():
             provider = get_provider(provider_id)
         except ValueError as e:
             available = ', '.join([p['provider_id'] for p in list_providers()])
-            return jsonify({'error': str(e), 'available_providers': available}), 400
+            return jsonify({'error': 'Invalid TTS provider', 'available_providers': available}), 400
 
         logger.info(
             f"TTS request: provider={provider_id}, text='{text[:50]}...', "

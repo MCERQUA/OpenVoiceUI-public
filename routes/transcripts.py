@@ -19,7 +19,9 @@ from flask import Blueprint, jsonify, request
 
 transcripts_bp = Blueprint('transcripts', __name__)
 
-TRANSCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'transcripts')
+from services.paths import TRANSCRIPTS_DIR as _TRANSCRIPTS_DIR_PATH
+
+TRANSCRIPTS_DIR = str(_TRANSCRIPTS_DIR_PATH)
 
 
 def _slug(title: str) -> str:

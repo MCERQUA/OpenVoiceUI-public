@@ -28,11 +28,10 @@ from routes.static_files import _safe_path
 # Paths
 # ---------------------------------------------------------------------------
 
-MUSIC_DIR = Path(__file__).parent.parent / "music"
-MUSIC_DIR.mkdir(exist_ok=True)
+from services.paths import MUSIC_DIR, GENERATED_MUSIC_DIR
 
-GENERATED_MUSIC_DIR = Path(__file__).parent.parent / "generated_music"
-GENERATED_MUSIC_DIR.mkdir(exist_ok=True)
+MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+GENERATED_MUSIC_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Shared music state (in-process; single-worker deployments only)
@@ -153,11 +152,12 @@ def load_playlist_order(playlist):
 
 
 def save_playlist_order(playlist, order):
-    """Persist track order for the given playlist."""
+    """Persist track order for the given playlist (atomic write)."""
     music_dir = GENERATED_MUSIC_DIR if playlist == "generated" else MUSIC_DIR
     order_file = music_dir / "order.json"
-    with open(order_file, "w") as f:
-        json.dump(order, f, indent=2)
+    tmp = order_file.with_suffix('.tmp')
+    tmp.write_text(json.dumps(order, indent=2))
+    tmp.replace(order_file)
 
 
 def get_music_files(playlist="library"):
@@ -623,7 +623,7 @@ def handle_music():
 
     except Exception as e:
         print(f"Music error: {e}")
-        return jsonify({"action": "error", "response": f"My DJ equipment malfunctioned: {str(e)}"})
+        return jsonify({"action": "error", "response": "Music playback error"})
 
 
 @music_bp.route("/api/music/transition", methods=["POST", "GET"])

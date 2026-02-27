@@ -30,8 +30,10 @@ def _load() -> dict:
 
 
 def _save(data: dict) -> None:
-    with open(GREETINGS_PATH, 'w') as f:
-        json.dump(data, f, indent=2)
+    """Persist greetings (atomic write)."""
+    tmp = GREETINGS_PATH.with_suffix('.tmp')
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.replace(GREETINGS_PATH)
 
 
 @greetings_bp.route('/api/greetings', methods=['GET'])

@@ -93,6 +93,9 @@ export class VoiceSession {
             this._ttsPlaying = isSpeaking;
             if (isSpeaking) {
                 eventBus.emit('tts:start', {});
+                // Mute STT immediately when TTS starts — clears any queued echo text
+                // and blocks onresult until TTS finishes. PTT/text interrupts bypass this.
+                if (this.stt.mute) this.stt.mute();
             } else {
                 eventBus.emit('tts:stop', {});
                 // After TTS ends, signal STT can resume
@@ -317,8 +320,9 @@ export class VoiceSession {
                     if (data.type === 'audio') {
                         if (data.audio) {
                             console.log(`[VoiceSession] TTS ready (tts:${data.timing?.tts_ms}ms)`);
-                            // Stop STT while TTS plays (prevents echo)
-                            if (this.stt.resetProcessing) this.stt.resetProcessing();
+                            // Mute STT before queuing audio — onSpeakingChange(true) will
+                            // also mute, but muting here ensures no echo from audio buffering lag
+                            if (this.stt.mute) this.stt.mute();
                             this.tts.queue(data.audio);
                         } else {
                             console.warn('[VoiceSession] Audio event had no audio data');
@@ -404,12 +408,21 @@ export class VoiceSession {
     _stripCmdTags(text) {
         if (!text) return '';
         return text
+            .replace(/```html[\s\S]*?```/gi, '')
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/```html[\s\S]*/gi, '')
+            .replace(/```[\s\S]*/g, '')
             .replace(/\[CANVAS_MENU\]/gi, '')
             .replace(/\[CANVAS:[^\]]*\]/gi, '')
             .replace(/\[MUSIC_PLAY(?::[^\]]*)?\]/gi, '')
             .replace(/\[MUSIC_STOP\]/gi, '')
             .replace(/\[MUSIC_NEXT\]/gi, '')
             .replace(/\[SESSION_RESET\]/gi, '')
+            .replace(/\[SUNO_GENERATE:[^\]]*\]/gi, '')
+            .replace(/\[SPOTIFY:[^\]]*\]/gi, '')
+            .replace(/\[SLEEP\]/gi, '')
+            .replace(/\[REGISTER_FACE:[^\]]*\]/gi, '')
+            .replace(/\[SOUND:[^\]]*\]/gi, '')
             .trim();
     }
 
@@ -452,6 +465,35 @@ export class VoiceSession {
             eventBus.emit('cmd:music_next', {});
             if (this.musicPlayer) this.musicPlayer.next();
         }
+
+        const sunoMatch = text.match(/\[SUNO_GENERATE:([^\]]+)\]/i);
+        if (sunoMatch && !seen.has('SUNO_GENERATE')) {
+            seen.add('SUNO_GENERATE');
+            eventBus.emit('cmd:suno_generate', { prompt: sunoMatch[1].trim() });
+        }
+
+        const spotifyMatch = text.match(/\[SPOTIFY:([^|\]]+)(?:\|([^\]]+))?\]/i);
+        if (spotifyMatch && !seen.has('SPOTIFY')) {
+            seen.add('SPOTIFY');
+            eventBus.emit('cmd:spotify', { track: spotifyMatch[1].trim(), artist: spotifyMatch[2]?.trim() || '' });
+        }
+
+        const soundMatch = text.match(/\[SOUND:([^\]]+)\]/i);
+        if (soundMatch && !seen.has('SOUND')) {
+            seen.add('SOUND');
+            eventBus.emit('cmd:sound', { sound: soundMatch[1].trim() });
+        }
+
+        const faceMatch = text.match(/\[REGISTER_FACE:([^\]]+)\]/i);
+        if (faceMatch && !seen.has('REGISTER_FACE')) {
+            seen.add('REGISTER_FACE');
+            eventBus.emit('cmd:register_face', { name: faceMatch[1].trim() });
+        }
+
+        if (/\[SLEEP\]/i.test(text) && !seen.has('SLEEP')) {
+            seen.add('SLEEP');
+            eventBus.emit('cmd:sleep', {});
+        }
     }
 
     /**
@@ -473,11 +515,20 @@ export class VoiceSession {
      */
     _resumeListening() {
         if (!this._active) return;
-        if (this.stt.resetProcessing) this.stt.resetProcessing();
-        if (!this.stt.isListening) {
-            this.stt.start();
+        // 600ms settling delay: lets audio tail-off clear the mic before re-enabling
+        // STT so the last fragment of TTS audio isn't captured as user speech.
+        setTimeout(() => {
+            if (!this._active) return;
+            // resume() clears the mute flag AND restarts the engine — the engine
+            // may have stopped during TTS because onend no longer auto-restarts
+            // while muted. resetProcessing() alone won't restart a dead engine.
+            if (this.stt.resume) {
+                this.stt.resume();
+            } else if (this.stt.resetProcessing) {
+                this.stt.resetProcessing();
+            }
             eventBus.emit('session:listening', {});
-        }
+        }, 600);
     }
 
     /**

@@ -50,7 +50,7 @@ class WebSpeechSTT {
 
             // Only process FINAL results, ignore interim spam
             let finalTranscript = '';
-            for (let i = 0; i < event.results.length; i++) {
+            for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
                     finalTranscript += event.results[i][0].transcript;
                 }
@@ -96,11 +96,14 @@ class WebSpeechSTT {
         };
 
         this.recognition.onend = () => {
-            if (this.isListening) {
+            // Don't restart during TTS mute — avoids rapid abort loop when
+            // the browser's engine chokes on speaker audio. resume() will
+            // restart explicitly once TTS finishes.
+            if (this.isListening && !this.isProcessing) {
                 // iOS needs more time between stop and restart — 300ms can cause silent failures
                 const restartDelay = _isIOS ? 500 : 300;
                 setTimeout(() => {
-                    if (this.isListening) {
+                    if (this.isListening && !this.isProcessing) {
                         try {
                             this.recognition.start();
                         } catch (e) {
@@ -174,6 +177,42 @@ class WebSpeechSTT {
     resetProcessing() {
         this.isProcessing = false;
         this.accumulatedText = '';
+    }
+
+    /**
+     * Mute STT immediately — called when TTS starts speaking.
+     * Sets isProcessing=true so onresult ignores all incoming audio,
+     * and clears any pending silence timer so queued echo text is discarded.
+     * onend will not restart the engine while muted, stopping the abort loop.
+     */
+    mute() {
+        this.isProcessing = true;
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        this.accumulatedText = '';
+    }
+
+    /**
+     * Resume STT after TTS finishes — clears mute flag and explicitly
+     * restarts the recognition engine (which may have stopped during mute).
+     * Called by VoiceSession._resumeListening() after the settling delay.
+     */
+    resume() {
+        this.isProcessing = false;
+        this.accumulatedText = '';
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        if (this.isListening) {
+            try {
+                this.recognition.start();
+            } catch (e) {
+                // Already running — fine
+            }
+        }
     }
 }
 

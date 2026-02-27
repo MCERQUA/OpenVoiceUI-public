@@ -34,7 +34,7 @@ def client(flask_app):
 @pytest.fixture(scope="session")
 def health_checker():
     """Return a HealthChecker instance for unit-testing health logic directly."""
-    from health import HealthChecker
+    from services.health import HealthChecker
     return HealthChecker()
 
 

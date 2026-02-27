@@ -23,11 +23,7 @@ from flask import Blueprint, Response, jsonify, redirect, request, send_file
 # Constants
 # ---------------------------------------------------------------------------
 
-_APP_ROOT = Path(__file__).parent.parent
-CANVAS_MANIFEST_PATH = _APP_ROOT / 'canvas-manifest.json'
-# Default: per-instance pages dir inside the app root, so each deployment has its own pages.
-# Override with CANVAS_PAGES_DIR in .env if you want a custom location.
-CANVAS_PAGES_DIR = Path(os.getenv('CANVAS_PAGES_DIR', str(_APP_ROOT / 'canvas-pages')))
+from services.paths import APP_ROOT as _APP_ROOT, CANVAS_MANIFEST_PATH, CANVAS_PAGES_DIR
 CANVAS_SSE_PORT = int(os.getenv('CANVAS_SSE_PORT', '3030'))
 CANVAS_SESSION_PORT = int(os.getenv('CANVAS_SESSION_PORT', '3002'))
 BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
@@ -484,7 +480,7 @@ def canvas_show_page():
         return canvas_update()
     except Exception as exc:
         logger.error(f'Canvas show error: {exc}')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Canvas operation failed'}), 500
 
 
 @canvas_bp.route('/canvas-proxy')
@@ -526,7 +522,7 @@ def canvas_sse_proxy(path):
         )
     except Exception as exc:
         logger.error(f'Canvas SSE proxy error: {exc}')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Canvas proxy error'}), 500
 
 
 def _safe_canvas_path(base: str, user_path: str) -> Path | None:
@@ -557,7 +553,7 @@ def canvas_pages_proxy(path):
             page_meta = manifest.get('pages', {}).get(page_id, {})
             is_public = page_meta.get('is_public', False)
             if not is_public:
-                from auth.middleware import get_token_from_request, verify_clerk_token
+                from services.auth import get_token_from_request, verify_clerk_token
                 token = get_token_from_request()
                 user_id = verify_clerk_token(token) if token else None
                 if not user_id:
@@ -878,7 +874,7 @@ def create_canvas_page():
         })
     except Exception as exc:
         logger.error(f'Canvas page create error: {exc}')
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'Canvas page creation failed'}), 500
 
 
 @canvas_bp.route('/api/canvas/mtime/<path:filename>', methods=['GET'])

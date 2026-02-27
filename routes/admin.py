@@ -184,7 +184,7 @@ def auth_check():
         401 {"allowed": false, "user_id": null}    — not signed in at all
     """
     try:
-        from auth.middleware import get_token_from_request, verify_clerk_token
+        from services.auth import get_token_from_request, verify_clerk_token
         token = get_token_from_request()
         if not token:
             return jsonify({'allowed': False, 'user_id': None, 'reason': 'not_signed_in'}), 401

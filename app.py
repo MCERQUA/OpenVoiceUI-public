@@ -151,7 +151,7 @@ def create_app(config_override: dict = None):
             if path.startswith('/pages/') or path.startswith('/canvas-proxy'):
                 return
 
-            from auth.middleware import get_token_from_request, verify_clerk_token
+            from services.auth import get_token_from_request, verify_clerk_token
             token = get_token_from_request()
             user_id = verify_clerk_token(token) if token else None
 
@@ -179,7 +179,7 @@ def create_app(config_override: dict = None):
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.clerk.accounts.dev; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
+            "img-src 'self' data: blob: https://img.clerk.com https://images.clerk.dev https://lh3.googleusercontent.com https://avatars.githubusercontent.com; "
             "media-src 'self' blob:; "
             "connect-src 'self' wss: https:; "
             "frame-src 'self' https://*.clerk.accounts.dev; "

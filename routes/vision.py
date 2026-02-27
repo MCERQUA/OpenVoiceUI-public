@@ -33,10 +33,9 @@ vision_bp = Blueprint('vision', __name__)
 # Storage
 # ---------------------------------------------------------------------------
 
-# known_faces/ is the DeepFace database directory.
-# Layout: known_faces/<PersonName>/photo_001.jpg  (one subdir per person)
-FACES_DIR = Path(__file__).parent.parent / 'known_faces'
-FACES_DIR.mkdir(exist_ok=True)
+from services.paths import KNOWN_FACES_DIR as FACES_DIR
+
+FACES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Latest frame received from browser (in-memory, ephemeral)
 _latest_frame: dict = {'image': None, 'ts': 0}
@@ -249,7 +248,7 @@ def identify_face():
 
     except Exception as exc:
         logger.error('Face identification failed: %s', exc)
-        return jsonify({'name': 'unknown', 'confidence': 0, 'message': str(exc)}), 200
+        return jsonify({'name': 'unknown', 'confidence': 0, 'message': 'Face identification failed'}), 200
     finally:
         if tmp_path:
             try:
