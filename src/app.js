@@ -2377,6 +2377,22 @@ inject();
             resetProcessing() {
                 this.isProcessing = false;
             }
+
+            mute() {
+                this.isProcessing = true;
+                this.hadSpeechInChunk = false;
+                if (this.silenceTimer) {
+                    clearTimeout(this.silenceTimer);
+                    this.silenceTimer = null;
+                }
+            }
+
+            resume() {
+                this.isProcessing = false;
+                this.stoppingRecorder = false;
+                this.hadSpeechInChunk = false;
+                this.audioChunks = [];  // Discard audio captured during mute
+            }
         }
 
         // WebSpeechSTT and WakeWordDetector imported from /src/providers/WebSpeechSTT.js
@@ -2636,11 +2652,18 @@ inject();
                     await this._sendGreetingTrigger();
                 }
 
-                // Start listening AFTER greeting finishes
+                // Start STT (muted — mute() was called during greeting's onSpeaking)
                 if (await this.stt.start()) {
                     console.log('Voice input started');
                     ActionConsole.addEntry('stt', 'Microphone active — listening');
-                    this.callbacks.onListening();
+                    // Only fire onListening if no audio is playing and no fetch is in-flight.
+                    // If the greeting is still streaming/playing, the audio playback chain
+                    // will fire onListening (with echo guard delay) when TTS actually finishes.
+                    if (!this.isPlaying && this.audioQueue.length === 0 && !this._fetchAbortController) {
+                        this._ttsPlaying = false;
+                        if (this.stt.resume) this.stt.resume();
+                        this.callbacks.onListening();
+                    }
                 } else {
                     console.error('Failed to start voice input');
                     this.callbacks.onError('Failed to start voice input');
@@ -2698,6 +2721,24 @@ inject();
 
             async sendMessage(text) {
                 if (!text || !text.trim()) return;
+
+                // Interrupt: abort any in-flight request and stop current audio FIRST
+                // (must happen before the _sending guard so interrupts aren't blocked)
+                if (this._fetchAbortController) {
+                    this._fetchAbortController.abort();
+                    this._fetchAbortController = null;
+                }
+                this.stopAudio();
+
+                // Wait for previous send to finish unwinding after abort
+                if (this._sending) {
+                    await new Promise(r => setTimeout(r, 150));
+                }
+                if (this._sending) {
+                    console.warn('sendMessage: previous send still unwinding, forcing reset');
+                    this._sending = false;
+                }
+                this._sending = true;
 
                 // System trigger messages are invisible to the user
                 const isSystemTrigger = text.startsWith('__session_start__');
@@ -2770,6 +2811,9 @@ inject();
                             .replace(/\[SESSION_RESET\]/gi, '')
                             .replace(/\[SUNO_GENERATE:[^\]]*\]/gi, '')
                             .replace(/\[SPOTIFY:[^\]]*\]/gi, '')
+                            .replace(/\[SLEEP\]/gi, '')
+                            .replace(/\[REGISTER_FACE:[^\]]*\]/gi, '')
+                            .replace(/\[SOUND:[^\]]*\]/gi, '')
                             .trim();
                     };
 
@@ -2854,6 +2898,14 @@ inject();
                             } else {
                                 console.warn('[FaceReg] Camera not active — cannot register face');
                             }
+                        }
+                        // Check for [SOUND:name] — DJ soundboard effect
+                        const soundMatch = text.match(/\[SOUND:([^\]]+)\]/i);
+                        if (soundMatch && !canvasCommandsProcessed.has('SOUND')) {
+                            canvasCommandsProcessed.add('SOUND');
+                            const soundName = soundMatch[1].trim();
+                            console.log('[Sound] DJ sound trigger:', soundName);
+                            DJSoundboard.play(soundName);
                         }
                         // Check for [SLEEP] — agent-initiated return to wake-word mode
                         if (/\[SLEEP\]/i.test(text) && !canvasCommandsProcessed.has('SLEEP')) {
@@ -3007,8 +3059,12 @@ inject();
                                     setTimeout(() => FaceModule.setMood('neutral'), 3000);
                                     // Restart STT so the mic comes back (only if call still active)
                                     if (this._voiceActive && this.stt) {
-                                        if (this.stt.resetProcessing) this.stt.resetProcessing();
-                                        this.stt.start();
+                                        if (this.stt.resume) {
+                                            this.stt.resume();
+                                        } else {
+                                            if (this.stt.resetProcessing) this.stt.resetProcessing();
+                                            if (!this.stt.isListening) this.stt.start();
+                                        }
                                         this.callbacks.onListening?.();
                                     }
                                 }
@@ -3020,8 +3076,12 @@ inject();
                                     ActionConsole.addEntry('system', 'Silent response — canvas/action only, mic re-enabled');
                                     FaceModule.setMood('neutral');
                                     if (this._voiceActive && this.stt) {
-                                        if (this.stt.resetProcessing) this.stt.resetProcessing();
-                                        if (!this.stt.isListening) this.stt.start();
+                                        if (this.stt.resume) {
+                                            this.stt.resume();
+                                        } else {
+                                            if (this.stt.resetProcessing) this.stt.resetProcessing();
+                                            if (!this.stt.isListening) this.stt.start();
+                                        }
                                         this.callbacks.onListening?.();
                                     }
                                 }
@@ -3032,24 +3092,34 @@ inject();
                         }
                     }
                 } catch (error) {
-                    console.error('Conversation error:', error);
-                    this.addSystemMessage(`Error: ${error.message}`);
-                    ActionConsole.addEntry('error', `Error: ${error.message}`);
-                    // Clear thinking state on error
-                    FaceModule.setMood('sad');
-                    TranscriptPanel.removeThinking();
-                    TranscriptPanel.finalizeStreaming(null);
-                    document.getElementById('thought-bubbles')?.classList.remove('active');
-                    setTimeout(() => FaceModule.setMood('neutral'), 2000);
+                    if (error.name === 'AbortError') {
+                        console.log('Previous request aborted (interrupt)');
+                    } else {
+                        console.error('Conversation error:', error);
+                        this.addSystemMessage(`Error: ${error.message}`);
+                        ActionConsole.addEntry('error', `Error: ${error.message}`);
+                        // Clear thinking state on error
+                        FaceModule.setMood('sad');
+                        TranscriptPanel.removeThinking();
+                        TranscriptPanel.finalizeStreaming(null);
+                        document.getElementById('thought-bubbles')?.classList.remove('active');
+                        setTimeout(() => FaceModule.setMood('neutral'), 2000);
+                    }
                 } finally {
+                    this._sending = false;
                     // Safety net: if no audio was queued/played, STT never gets restarted
                     // via onListening callback. Ensure mic comes back after a short delay.
                     // Only fires if call is still active (_voiceActive) — prevents restart after hang-up.
                     setTimeout(() => {
-                        if (this._voiceActive && this.stt && !this.stt.isListening && !this._ttsPlaying && !this.isPlaying) {
+                        if (this._voiceActive && this.stt && !this.isPlaying) {
                             console.log('🎤 Safety net: restarting STT (no audio played)');
-                            if (this.stt.resetProcessing) this.stt.resetProcessing();
-                            this.stt.start();
+                            this._ttsPlaying = false;
+                            if (this.stt.resume) {
+                                this.stt.resume();
+                            } else {
+                                if (this.stt.resetProcessing) this.stt.resetProcessing();
+                                if (!this.stt.isListening) this.stt.start();
+                            }
                             this.callbacks.onListening();
                         }
                     }, 2000);
@@ -3277,11 +3347,12 @@ inject();
 
             playAudio(base64Audio, format = 'wav') {
                 try {
-                    // Queue raw data — playNextAudio() decides the playback path
-                    this.audioQueue.push({ base64: base64Audio, format });
-                    if (!this.isPlaying) {
-                        this.playNextAudio();
+                    // Stop any currently playing audio — only one response plays at a time
+                    if (this.isPlaying) {
+                        this.stopAudio();
                     }
+                    this.audioQueue.push({ base64: base64Audio, format });
+                    this.playNextAudio();
                 } catch (error) {
                     console.error('Failed to queue audio:', error);
                 }
@@ -3437,14 +3508,15 @@ inject();
                         WaveformModule.setSpeaking(true);  // Start mouth animation
                         MusicModule.duck(true);
                         document.getElementById('stop-button').style.display = '';
-                        // Stop microphone while agent speaks to prevent feedback loop
-                        if (this.clawdbotMode.stt && this.clawdbotMode.stt.isListening) {
+                        // Mute mic while agent speaks to prevent echo feedback
+                        if (this.clawdbotMode.stt) {
                             console.log('🔇 Muting mic during TTS');
-                            this.clawdbotMode.stt.stop();
-                        }
-                        // Clear any buffered text in STT so leftover audio doesn't send garbage
-                        if (this.clawdbotMode.stt && this.clawdbotMode.stt.resetProcessing) {
-                            this.clawdbotMode.stt.resetProcessing();
+                            if (this.clawdbotMode.stt.mute) {
+                                this.clawdbotMode.stt.mute();
+                            } else {
+                                if (this.clawdbotMode.stt.isListening) this.clawdbotMode.stt.stop();
+                                if (this.clawdbotMode.stt.resetProcessing) this.clawdbotMode.stt.resetProcessing();
+                            }
                         }
                         this.clawdbotMode._ttsPlaying = true;
                     },
@@ -3455,18 +3527,19 @@ inject();
                         WaveformModule.setAmplitude(0);
                         MusicModule.duck(false);
                         document.getElementById('stop-button').style.display = 'none';
-                        // Keep _ttsPlaying = true through the entire delay window so the
-                        // stt.onResult filter blocks any echo/reverb that STT picks up
-                        // the moment the mic restarts. Clearing it here (before the timeout)
-                        // was the root cause of the self-echo loop.
+                        // _ttsPlaying stays true through the delay window to block echo
                         setTimeout(() => {
-                            this.clawdbotMode._ttsPlaying = false;  // clear AFTER delay
-                            if (this.clawdbotMode._voiceActive && this.clawdbotMode.stt && !this.clawdbotMode.stt.isListening) {
-                                console.log('🎤 Unmuting mic after TTS (echo guard expired)');
-                                if (this.clawdbotMode.stt && this.clawdbotMode.stt.resetProcessing) {
-                                    this.clawdbotMode.stt.resetProcessing();
+                            this.clawdbotMode._ttsPlaying = false;
+                            if (this.clawdbotMode._voiceActive && this.clawdbotMode.stt) {
+                                // Skip resume if PTT is held — user is actively speaking
+                                if (this.clawdbotMode.stt._pttHolding) return;
+                                console.log('🎤 Unmuting mic after TTS');
+                                if (this.clawdbotMode.stt.resume) {
+                                    this.clawdbotMode.stt.resume();
+                                } else {
+                                    if (this.clawdbotMode.stt.resetProcessing) this.clawdbotMode.stt.resetProcessing();
+                                    if (!this.clawdbotMode.stt.isListening) this.clawdbotMode.stt.start();
                                 }
-                                this.clawdbotMode.stt.start();
                             }
                         }, 1500);
                     },
@@ -3605,6 +3678,14 @@ inject();
 
             stopAll() {
                 console.log('STOP ALL - killing audio and resetting');
+                // Stop voiceConversation TTS and abort its fetch
+                if (window._voiceConversation) {
+                    window._voiceConversation.stopAudio?.();
+                    if (window._voiceConversation._fetchAbortController) {
+                        window._voiceConversation._fetchAbortController.abort();
+                        window._voiceConversation._fetchAbortController = null;
+                    }
+                }
                 // Stop Clawdbot mode
                 if (this.clawdbotMode) {
                     this.clawdbotMode.stopAudio();
@@ -3659,6 +3740,8 @@ inject();
                 this.analyserAnimationId = null;
                 this.restartWakeAfter = false;  // Flag to resume wake detector after conversation
                 this.sessionId = null;
+                this._fetchAbortController = null;
+                this.currentSource = null;
 
                 this.callbacks = {
                     onConnect: () => {},
@@ -3750,12 +3833,16 @@ inject();
                     FaceModule.setMood('thinking');
                     StatusModule.update('thinking', 'THINKING');
 
+                    const uiContext = ModeManager.clawdbotMode?.getUIContext?.() || {};
+                    const gatewayAgentId = localStorage.getItem('gateway_agent_id') || null;
                     const body = {
                         message: '__session_start__',
                         tts_provider: this.ttsProvider,
                         voice: this.ttsVoice,
                         session_id: this.sessionId,
+                        ui_context: uiContext,
                         identified_person: window.cameraModule?.currentIdentity || null,
+                        ...(gatewayAgentId ? { agent_id: gatewayAgentId } : {}),
                     };
 
                     const resp = await fetch(`${this.config.serverUrl}/api/conversation`, {
@@ -3772,8 +3859,17 @@ inject();
                     StatusModule.update('listening', 'LISTENING');
 
                     if (data.response) {
-                        this.callbacks.onTranscript(data.response, false);
-                        TranscriptPanel.addMessage('assistant', data.response);
+                        await this._processCommandTags(data.response);
+                        const displayText = data.response
+                            .replace(/\[CANVAS_MENU\]/gi, '')
+                            .replace(/\[CANVAS:[^\]]*\]/gi, '')
+                            .replace(/\[MUSIC_PLAY(?::[^\]]*)?\]/gi, '')
+                            .replace(/\[MUSIC_STOP\]/gi, '')
+                            .replace(/\[MUSIC_NEXT\]/gi, '')
+                            .replace(/\[SLEEP\]/gi, '')
+                            .trim();
+                        this.callbacks.onTranscript(displayText, false);
+                        TranscriptPanel.addMessage('assistant', displayText);
                     }
                     if (data.audio) {
                         await this.playTTS(data.audio);
@@ -3816,6 +3912,13 @@ inject();
                     return;
                 }
 
+                // Interrupt: abort any in-flight request and stop current audio
+                if (this._fetchAbortController) {
+                    this._fetchAbortController.abort();
+                    this._fetchAbortController = null;
+                }
+                this.stopAudio();
+
                 console.log('User said:', transcript);
                 this.callbacks.onTranscript(transcript, true);
                 TranscriptPanel.addMessage('user', transcript);
@@ -3829,16 +3932,25 @@ inject();
                 // NOTE: STT stays running - isProcessing flag blocks new transcripts
 
                 try {
+                    // Gather UI context so the LLM knows about canvas pages, music state, etc.
+                    const uiContext = ModeManager.clawdbotMode?.getUIContext?.() || {};
+                    const gatewayAgentId = localStorage.getItem('gateway_agent_id') || null;
+
                     // Get AI response from backend
+                    this._fetchAbortController = new AbortController();
                     const response = await fetch(`${this.config.serverUrl}/api/conversation`, {
                         method: 'POST',
+                        signal: this._fetchAbortController.signal,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             message: transcript,
                             tts_provider: this.ttsProvider,
                             voice: this.ttsVoice,
                             session_id: this.sessionId,
+                            ui_context: uiContext,
                             identified_person: window.cameraModule?.currentIdentity || null,
+                            ...(gatewayAgentId ? { agent_id: gatewayAgentId } : {}),
+                            ...(window._maxResponseChars ? { max_response_chars: window._maxResponseChars } : {})
                         })
                     });
 
@@ -3855,8 +3967,29 @@ inject();
                         document.getElementById('thought-bubbles')?.classList.remove('active');
 
                         console.log('AI responded:', data.response);
-                        this.callbacks.onTranscript(data.response, false);
-                        TranscriptPanel.addMessage('assistant', data.response);
+                        const rawResponse = data.response;
+
+                        // Process command tags from response
+                        await this._processCommandTags(rawResponse);
+
+                        // Strip tags from display text
+                        const displayText = rawResponse
+                            .replace(/```html[\s\S]*?```/gi, '')
+                            .replace(/```[\s\S]*?```/g, '')
+                            .replace(/\[CANVAS_MENU\]/gi, '')
+                            .replace(/\[CANVAS:[^\]]*\]/gi, '')
+                            .replace(/\[MUSIC_PLAY(?::[^\]]*)?\]/gi, '')
+                            .replace(/\[MUSIC_STOP\]/gi, '')
+                            .replace(/\[MUSIC_NEXT\]/gi, '')
+                            .replace(/\[SESSION_RESET\]/gi, '')
+                            .replace(/\[SUNO_GENERATE:[^\]]*\]/gi, '')
+                            .replace(/\[SPOTIFY:[^\]]*\]/gi, '')
+                            .replace(/\[REGISTER_FACE:[^\]]*\]/gi, '')
+                            .replace(/\[SLEEP\]/gi, '')
+                            .trim();
+
+                        this.callbacks.onTranscript(displayText, false);
+                        TranscriptPanel.addMessage('assistant', displayText);
 
                         // Play TTS if audio provided
                         if (data.audio) {
@@ -3865,12 +3998,17 @@ inject();
                     }
 
                 } catch (error) {
-                    console.error('Conversation error:', error);
-                    this.callbacks.onError(`Failed to get response: ${error.message}`);
-                    // Clear thinking on error
-                    FaceModule.setMood('sad');
-                    setTimeout(() => FaceModule.setMood('neutral'), 2000);
+                    if (error.name === 'AbortError') {
+                        console.log('Previous request aborted (interrupt)');
+                    } else {
+                        console.error('Conversation error:', error);
+                        this.callbacks.onError(`Failed to get response: ${error.message}`);
+                        // Clear thinking on error
+                        FaceModule.setMood('sad');
+                        setTimeout(() => FaceModule.setMood('neutral'), 2000);
+                    }
                 } finally {
+                    this._fetchAbortController = null;
                     // Reset processing flag to allow new transcripts
                     TranscriptPanel.removeThinking();
                     document.getElementById('thought-bubbles')?.classList.remove('active');
@@ -3879,28 +4017,125 @@ inject();
                 }
             }
 
+            async _processCommandTags(text) {
+                // [CANVAS_MENU]
+                if (/\[CANVAS_MENU\]/i.test(text)) {
+                    console.log('[Canvas] CANVAS_MENU trigger detected');
+                    CanvasControl.showMenu?.() || document.getElementById('canvas-menu-button')?.click();
+                }
+                // [CANVAS:pagename]
+                const canvasMatch = text.match(/\[CANVAS:([^\]]+)\]/i);
+                if (canvasMatch) {
+                    const pageName = canvasMatch[1].trim();
+                    console.log('[Canvas] CANVAS page trigger:', pageName);
+                    ActionConsole.addEntry('system', `Canvas: opening ${pageName}`);
+                    try {
+                        await fetch(`${CONFIG.serverUrl}/api/canvas/manifest/sync`, { method: 'POST' });
+                        await window.CanvasMenu?.loadManifest();
+                    } catch (e) { console.warn('[Canvas] manifest sync failed:', e); }
+                    CanvasControl.showPage?.(pageName);
+                }
+                // [MUSIC_PLAY] or [MUSIC_PLAY:track]
+                const musicPlay = text.match(/\[MUSIC_PLAY(?::([^\]]+))?\]/i);
+                if (musicPlay) {
+                    const trackName = musicPlay[1]?.trim();
+                    if (trackName) {
+                        window.musicPlayer?.play(trackName);
+                    } else {
+                        window.musicPlayer?.play();
+                    }
+                }
+                // [MUSIC_STOP]
+                if (/\[MUSIC_STOP\]/i.test(text)) {
+                    window.musicPlayer?.stop();
+                }
+                // [MUSIC_NEXT]
+                if (/\[MUSIC_NEXT\]/i.test(text)) {
+                    window.musicPlayer?.next();
+                }
+                // [SUNO_GENERATE:prompt]
+                const sunoMatch = text.match(/\[SUNO_GENERATE:([^\]]+)\]/i);
+                if (sunoMatch) {
+                    window.sunoModule?.generate(sunoMatch[1].trim());
+                }
+                // [SPOTIFY:track|artist]
+                const spotifyMatch = text.match(/\[SPOTIFY:([^|\]]+)(?:\|([^\]]+))?\]/i);
+                if (spotifyMatch) {
+                    window.musicPlayer?.playSpotify(spotifyMatch[1].trim(), spotifyMatch[2]?.trim() || '');
+                }
+                // [REGISTER_FACE:name]
+                const registerFaceMatch = text.match(/\[REGISTER_FACE:([^\]]+)\]/i);
+                if (registerFaceMatch) {
+                    const personName = registerFaceMatch[1].trim();
+                    const cam = window.cameraModule;
+                    if (cam && cam.stream) {
+                        const ctx = cam.canvas.getContext('2d');
+                        cam.canvas.width = 640; cam.canvas.height = 480;
+                        ctx.drawImage(cam.video, 0, 0, 640, 480);
+                        const imageData = cam.canvas.toDataURL('image/jpeg', 0.8);
+                        fetch(`${CONFIG.serverUrl}/api/faces/${encodeURIComponent(personName)}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image: imageData })
+                        }).then(() => {
+                            console.log(`[FaceReg] Registered face: ${personName}`);
+                            window.FacePanel?.loadFaces();
+                            window.FaceID?.loadKnownFaces();
+                        }).catch(e => console.error('[FaceReg] Error:', e));
+                    }
+                }
+                // [SLEEP]
+                if (/\[SLEEP\]/i.test(text)) {
+                    console.log('[Sleep] Agent requested sleep — will disconnect after audio');
+                    window._sleepAfterResponse = true;
+                }
+                // HTML canvas page
+                const htmlMatch =
+                    text.match(/```html\s*(<!DOCTYPE\s+html[\s\S]*?<\/html>)/i) ||
+                    text.match(/```html\s*(<html[\s\S]*?<\/html>)/i);
+                if (htmlMatch && ModeManager.clawdbotMode?._saveAndShowHtml) {
+                    console.log('[Canvas] Complete HTML detected, saving...');
+                    ModeManager.clawdbotMode._saveAndShowHtml(htmlMatch[1].trim());
+                }
+            }
+
             async playTTS(audioBase64) {
+                // Stop any currently playing audio — only one TTS plays at a time
+                this.stopAudio();
                 this.callbacks.onSpeaking();
 
                 try {
                     const audioData = this.base64ToArrayBuffer(audioBase64);
                     const audioBuffer = await this.audioContext.decodeAudioData(audioData);
 
-                    const source = this.audioContext.createBufferSource();
-                    source.buffer = audioBuffer;
-                    source.connect(this.analyser);
-                    source.onended = () => {
-                        this.stopAnalyserAnimation();
-                        WaveformModule.setAmplitude(0);
-                        this.callbacks.onListening();
-                    };
-
-                    source.start(0);
-                    this.startAnalyserAnimation();
+                    // Await audio completion so callers' finally blocks don't fire
+                    // onListening() while TTS is still playing (which was restarting
+                    // the mic mid-speech and causing echo).
+                    await new Promise((resolve) => {
+                        const source = this.audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(this.analyser);
+                        source.onended = () => {
+                            this.stopAnalyserAnimation();
+                            WaveformModule.setAmplitude(0);
+                            resolve();
+                        };
+                        this.currentSource = source;
+                        source.start(0);
+                        this.startAnalyserAnimation();
+                    });
+                    this.currentSource = null;
 
                 } catch (error) {
                     console.error('TTS playback error:', error);
-                    this.callbacks.onListening();
+                    // onListening is called by the caller's finally block
+                }
+            }
+
+            stopAudio() {
+                if (this.currentSource) {
+                    try { this.currentSource.stop(); } catch (_) {}
+                    this.currentSource = null;
                 }
             }
 
@@ -4680,6 +4915,7 @@ inject();
             // Initialize Voice Conversation system (Web Speech STT + TTS)
             console.log('Initializing VoiceConversation system...');
             const voiceConversation = new VoiceConversation(CONFIG);
+            window._voiceConversation = voiceConversation; // expose for stopAll()
 
             // Initialize Mode Manager with shared STT (handles Hume/Clawdbot switching)
             ModeManager.init(voiceConversation.stt);
@@ -4785,12 +5021,43 @@ inject();
                     StatusModule.update('speaking', 'SPEAKING');
                     FaceModule.setMood('neutral');
                     MusicModule.duck(true);
+                    document.getElementById('stop-button').style.display = '';
+                    // Clear thinking state when TTS starts — agent is now speaking, not thinking
+                    document.getElementById('thought-bubbles')?.classList.remove('active');
+                    TranscriptPanel.removeThinking?.();
+                    if (voiceConversation.stt) {
+                        console.log('🔇 Muting mic during TTS');
+                        if (voiceConversation.stt.mute) {
+                            voiceConversation.stt.mute();
+                        } else {
+                            if (voiceConversation.stt.isListening) voiceConversation.stt.stop();
+                            if (voiceConversation.stt.resetProcessing) voiceConversation.stt.resetProcessing();
+                        }
+                    }
+                    if (ModeManager.clawdbotMode) ModeManager.clawdbotMode._ttsPlaying = true;
                 },
                 onListening: () => {
                     StatusModule.update('listening', 'LISTENING');
                     FaceModule.setMood('listening');
                     WaveformModule.setAmplitude(0);
                     MusicModule.duck(false);
+                    document.getElementById('stop-button').style.display = 'none';
+                    // _ttsPlaying stays true through the delay window to block echo
+                    setTimeout(() => {
+                        if (ModeManager.clawdbotMode) ModeManager.clawdbotMode._ttsPlaying = false;
+                        if (voiceConversation.stt) {
+                            // Skip resume if PTT is held — user is actively speaking,
+                            // don't clear their accumulatedText
+                            if (voiceConversation.stt._pttHolding) return;
+                            console.log('🎤 Unmuting mic after TTS');
+                            if (voiceConversation.stt.resume) {
+                                voiceConversation.stt.resume();
+                            } else {
+                                if (voiceConversation.stt.resetProcessing) voiceConversation.stt.resetProcessing();
+                                if (!voiceConversation.stt.isListening) voiceConversation.stt.start();
+                            }
+                        }
+                    }, 1500);
                 },
                 onTranscript: (text, isUser) => {
                     console.log(`${isUser ? 'User' : 'AI'}: ${text}`);
@@ -6894,6 +7161,14 @@ inject();
                     if (cm._fetchAbortController) {
                         cm._fetchAbortController.abort();
                         cm._fetchAbortController = null;
+                    }
+                    // Also stop VoiceConversation TTS (separate audio path)
+                    if (window._voiceConversation) {
+                        window._voiceConversation.stopAudio?.();
+                        if (window._voiceConversation._fetchAbortController) {
+                            window._voiceConversation._fetchAbortController.abort();
+                            window._voiceConversation._fetchAbortController = null;
+                        }
                     }
                     // STT was muted during TTS — we'll open it below
                 }

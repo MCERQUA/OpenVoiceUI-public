@@ -408,12 +408,21 @@ export class VoiceSession {
     _stripCmdTags(text) {
         if (!text) return '';
         return text
+            .replace(/```html[\s\S]*?```/gi, '')
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/```html[\s\S]*/gi, '')
+            .replace(/```[\s\S]*/g, '')
             .replace(/\[CANVAS_MENU\]/gi, '')
             .replace(/\[CANVAS:[^\]]*\]/gi, '')
             .replace(/\[MUSIC_PLAY(?::[^\]]*)?\]/gi, '')
             .replace(/\[MUSIC_STOP\]/gi, '')
             .replace(/\[MUSIC_NEXT\]/gi, '')
             .replace(/\[SESSION_RESET\]/gi, '')
+            .replace(/\[SUNO_GENERATE:[^\]]*\]/gi, '')
+            .replace(/\[SPOTIFY:[^\]]*\]/gi, '')
+            .replace(/\[SLEEP\]/gi, '')
+            .replace(/\[REGISTER_FACE:[^\]]*\]/gi, '')
+            .replace(/\[SOUND:[^\]]*\]/gi, '')
             .trim();
     }
 
@@ -455,6 +464,35 @@ export class VoiceSession {
             seen.add('MUSIC_NEXT');
             eventBus.emit('cmd:music_next', {});
             if (this.musicPlayer) this.musicPlayer.next();
+        }
+
+        const sunoMatch = text.match(/\[SUNO_GENERATE:([^\]]+)\]/i);
+        if (sunoMatch && !seen.has('SUNO_GENERATE')) {
+            seen.add('SUNO_GENERATE');
+            eventBus.emit('cmd:suno_generate', { prompt: sunoMatch[1].trim() });
+        }
+
+        const spotifyMatch = text.match(/\[SPOTIFY:([^|\]]+)(?:\|([^\]]+))?\]/i);
+        if (spotifyMatch && !seen.has('SPOTIFY')) {
+            seen.add('SPOTIFY');
+            eventBus.emit('cmd:spotify', { track: spotifyMatch[1].trim(), artist: spotifyMatch[2]?.trim() || '' });
+        }
+
+        const soundMatch = text.match(/\[SOUND:([^\]]+)\]/i);
+        if (soundMatch && !seen.has('SOUND')) {
+            seen.add('SOUND');
+            eventBus.emit('cmd:sound', { sound: soundMatch[1].trim() });
+        }
+
+        const faceMatch = text.match(/\[REGISTER_FACE:([^\]]+)\]/i);
+        if (faceMatch && !seen.has('REGISTER_FACE')) {
+            seen.add('REGISTER_FACE');
+            eventBus.emit('cmd:register_face', { name: faceMatch[1].trim() });
+        }
+
+        if (/\[SLEEP\]/i.test(text) && !seen.has('SLEEP')) {
+            seen.add('SLEEP');
+            eventBus.emit('cmd:sleep', {});
         }
     }
 
