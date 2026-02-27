@@ -557,7 +557,7 @@ def canvas_pages_proxy(path):
             page_meta = manifest.get('pages', {}).get(page_id, {})
             is_public = page_meta.get('is_public', False)
             if not is_public:
-                from auth.middleware import get_token_from_request, verify_clerk_token
+                from services.auth import get_token_from_request, verify_clerk_token
                 token = get_token_from_request()
                 user_id = verify_clerk_token(token) if token else None
                 if not user_id:

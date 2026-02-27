@@ -6,7 +6,7 @@ Verifies Clerk session tokens from:
   2. __session cookie (set automatically by Clerk for browser requests)
 
 Usage:
-    from auth.middleware import verify_clerk_token, get_token_from_request
+    from services.auth import verify_clerk_token, get_token_from_request
 
     token = get_token_from_request()
     user_id = verify_clerk_token(token)   # returns str or None
