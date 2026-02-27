@@ -131,9 +131,9 @@ def create_app(config_override: dict = None):
         response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
         response.headers.setdefault('X-XSS-Protection', '1; mode=block')
         response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
-        # Allow microphone for voice app; block camera/geolocation
+        # Allow microphone and camera for voice/vision app; block geolocation
         response.headers.setdefault(
-            'Permissions-Policy', 'camera=(), microphone=(self), geolocation=()'
+            'Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()'
         )
         return response
 

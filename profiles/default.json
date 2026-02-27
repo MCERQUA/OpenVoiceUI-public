@@ -49,6 +49,11 @@
     "max_history_messages": 8
   },
 
+  "vision": {
+    "model": "glm-4v-flash",
+    "provider": "zai"
+  },
+
   "features": {
     "canvas": true,
     "vision": true,

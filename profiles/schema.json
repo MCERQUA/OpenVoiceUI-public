@@ -172,6 +172,18 @@
       }
     },
 
+    "vision": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Vision / camera AI model configuration.",
+      "properties": {
+        "model":    { "type": "string", "default": "glm-4v-flash",
+                      "description": "Vision model ID for camera analysis and face recognition." },
+        "provider": { "type": "string", "default": "zai",
+                      "description": "Vision provider (zai = ZhipuAI/GLM)." }
+      }
+    },
+
     "features": {
       "type": "object",
       "additionalProperties": true,

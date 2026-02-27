@@ -640,6 +640,16 @@ const Builder = {
         '</div>'+
         '<div style="font-size:11px;color:var(--dim);margin-top:5px"><span style="color:var(--blue)">&#9632;</span> Male &nbsp;<span style="color:var(--purple)">&#9632;</span> Female</div>'+
       '</div>'+
+      '<div class="sect-label">Vision / Camera AI</div>'+
+      '<div class="fg">'+
+        '<label class="fl">Vision Model <span style="font-size:10px;color:var(--dim)">&mdash; used for &ldquo;look at&rdquo; triggers and face recognition</span></label>'+
+        '<select id="be-vision-model">'+
+          '<option value="glm-4v-flash"'+(  (p.vision?.model||'glm-4v-flash')==='glm-4v-flash'  ?' selected':'')+'>GLM-4V Flash (Free &middot; Fast)</option>'+
+          '<option value="glm-4v"'+(        (p.vision?.model||'glm-4v-flash')==='glm-4v'         ?' selected':'')+'>GLM-4V (Better &middot; Paid)</option>'+
+          '<option value="glm-4v-plus"'+(   (p.vision?.model||'glm-4v-flash')==='glm-4v-plus'    ?' selected':'')+'>GLM-4V Plus (Best &middot; Paid)</option>'+
+        '</select>'+
+        '<div style="font-size:11px;color:var(--dim);margin-top:4px">Requires camera to be enabled. Model processes frames for &ldquo;what do you see&rdquo; and face ID.</div>'+
+      '</div>'+
       '<div class="sect-label">Wake Word</div>'+
       '<div class="fg">'+
         '<label class="fl">Wake Word(s) <span style="font-size:10px;color:var(--dim)">&mdash; comma-separated phrases that activate this agent</span></label>'+
@@ -723,6 +733,7 @@ const Builder = {
       llm:{provider:$('be-llm')?.value, parameters:{max_tokens:parseInt($('be-maxtok')?.value)||512}},
       voice:{tts_provider:$('be-tts')?.value, voice_id:this._voice||undefined},
       stt:{wake_words:(()=>{const raw=($('be-wake-words')?.value||'').trim();return raw?raw.split(',').map(w=>w.trim()).filter(Boolean):['wake up'];})()},
+      vision:{model:$('be-vision-model')?.value||'glm-4v-flash'},
       features:Object.keys(featObj).length?featObj:undefined,
       context:{max_history_messages:parseInt($('be-maxhist')?.value)||12},
     };

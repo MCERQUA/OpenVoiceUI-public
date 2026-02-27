@@ -119,6 +119,9 @@ app.register_blueprint(greetings_bp)
 from routes.suno import suno_bp
 app.register_blueprint(suno_bp)
 
+from routes.vision import vision_bp
+app.register_blueprint(vision_bp)
+
 from routes.transcripts import transcripts_bp
 app.register_blueprint(transcripts_bp)
 
