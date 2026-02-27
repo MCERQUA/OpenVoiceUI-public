@@ -6,7 +6,7 @@ Thanks for your interest in contributing. This is a voice agent platform — con
 
 ## Before You Start
 
-The voice pipeline requires a running gateway. The default is [OpenClaw](https://openclaw.dev), but any gateway plugin works — including the `example-gateway` stub for offline development. If you don't have a gateway, you can still contribute to:
+The voice pipeline requires a running gateway. The default is [OpenClaw](https://openclaw.ai), but any gateway plugin works — including the `example-gateway` stub for offline development. If you don't have a gateway, you can still contribute to:
 
 - Frontend UI (the face, settings panel, music player)
 - TTS provider implementations (unit-testable in isolation)
