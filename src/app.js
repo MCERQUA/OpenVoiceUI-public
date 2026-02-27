@@ -83,13 +83,13 @@ inject();
                 this.providers.forEach(p => {
                     const option = document.createElement('option');
                     option.value = p.provider_id;
-                    const isFree = p.cost_per_minute === 0;
-                    const costText = isFree ? 'Free' : `$${p.cost_per_minute}/min`;
-                    option.textContent = `🗣️ ${p.name} (${costText})`;
-                    // Disable inactive providers
                     if (p.status !== 'active') {
                         option.disabled = true;
-                        option.textContent += ' [Unavailable]';
+                        option.textContent = `🗣️ ${p.name} [Unavailable]`;
+                    } else {
+                        const isFree = p.cost_per_minute === 0;
+                        const costText = isFree ? 'Free' : `$${p.cost_per_minute}/min`;
+                        option.textContent = `🗣️ ${p.name} (${costText})`;
                     }
                     select.appendChild(option);
                 });
