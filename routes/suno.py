@@ -74,8 +74,10 @@ def _load_generated_metadata() -> dict:
 
 
 def _save_generated_metadata(metadata: dict) -> None:
-    with open(GENERATED_METADATA_FILE, 'w') as f:
-        json.dump(metadata, f, indent=2)
+    """Persist generated music metadata (atomic write)."""
+    tmp = GENERATED_METADATA_FILE.with_suffix('.tmp')
+    tmp.write_text(json.dumps(metadata, indent=2))
+    tmp.replace(GENERATED_METADATA_FILE)
 
 
 def _add_song_to_metadata(filename: str, title: str, prompt: str, style: str,

@@ -153,11 +153,12 @@ def load_playlist_order(playlist):
 
 
 def save_playlist_order(playlist, order):
-    """Persist track order for the given playlist."""
+    """Persist track order for the given playlist (atomic write)."""
     music_dir = GENERATED_MUSIC_DIR if playlist == "generated" else MUSIC_DIR
     order_file = music_dir / "order.json"
-    with open(order_file, "w") as f:
-        json.dump(order, f, indent=2)
+    tmp = order_file.with_suffix('.tmp')
+    tmp.write_text(json.dumps(order, indent=2))
+    tmp.replace(order_file)
 
 
 def get_music_files(playlist="library"):
