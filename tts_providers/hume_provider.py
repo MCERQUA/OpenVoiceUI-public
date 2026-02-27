@@ -22,6 +22,7 @@ Future Implementation Reference:
 """
 
 import logging
+import os
 from typing import List, Dict, Any, Optional
 
 from .base_provider import TTSProvider
@@ -176,13 +177,16 @@ class HumeProvider(TTSProvider):
                 - emotion_aware: Supports emotional expression
                 - real_time: Supports real-time streaming
         """
+        _api_key = os.environ.get('HUME_API_KEY', '').strip()
+        _secret = os.environ.get('HUME_SECRET_KEY', '').strip()
+        _status = 'active' if (_api_key and _secret) else 'inactive'
         return {
-            'name': 'Hume EVI',
-            'status': 'active',
-            'cost_per_minute': 0.032,
+            'name': 'Hume EVI (subscription)',
+            'status': _status,
+            'cost_per_minute': 0.06,
             'quality': 'high',
             'latency': 'medium',
-            'description': 'Hume Empathic Voice Interface - voice I/O for Clawdbot',
+            'description': 'Hume Expressive Voice Interface — full real-time voice agent (STT + TTS + emotion)',
             'capabilities': {
                 'emotion_aware': True,
                 'real_time': True
@@ -190,11 +194,10 @@ class HumeProvider(TTSProvider):
             'voice_id': self.DEFAULT_VOICE_ID,
             'config_id': self.DEFAULT_CONFIG_ID,
             'notes': [
-                'INACTIVE - No API funds available',
-                'Use SupertonicTTS for actual TTS functionality',
-                'When funded: connect via WebSocket to EVI chat endpoint',
-                'Will use custom cloned voice',
-                'Docs: https://dev.hume.ai/docs/speech-to-speech-evi/overview'
+                'Subscription required. Plans: Starter $3/mo (40 min), Creator $14/mo (200 min), Pro $70/mo (1,200 min).',
+                'Overage: $0.06/min (~$3.60/hr). Effective cost on lower plans can be $5-10+/hr.',
+                'Set HUME_API_KEY and HUME_SECRET_KEY in .env to activate.',
+                'Docs: https://platform.hume.ai/pricing'
             ],
             'api_endpoints': {
                 'websocket': f"{self.HUME_API_BASE.replace('https', 'wss')}{self.HUME_WS_PATH}",
