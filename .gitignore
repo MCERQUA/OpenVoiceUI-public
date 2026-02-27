@@ -50,8 +50,9 @@ TOOLS.md
 prompts/dj_prompt_*.txt
 prompts/hume_config_snapshot*.txt
 
-# Claude Code project instructions (private dev notes — keep local only)
+# Claude Code project instructions and local dev notes — never commit these
 CLAUDE.md
+development-notes/
 
 # Netlify
 .netlify/
