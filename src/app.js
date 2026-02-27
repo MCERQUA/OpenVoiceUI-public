@@ -3703,9 +3703,59 @@ inject();
                     this.isProcessing = false;
                     this.callbacks.onConnect();
                     this.callbacks.onListening();
+
+                    // Auto-greet — sends session start so agent speaks first.
+                    // Do NOT await; greeting runs in background while STT listens.
+                    this._sendSessionGreeting();
                 } else {
                     this.isProcessing = false;
                     this.callbacks.onError('Failed to start speech recognition');
+                }
+            }
+
+            async _sendSessionGreeting() {
+                // Pause STT so it doesn't pick up the agent's own greeting audio
+                this.stt.pause?.();
+
+                try {
+                    FaceModule.setMood('thinking');
+                    StatusModule.update('thinking', 'THINKING');
+
+                    const body = {
+                        message: '__session_start__',
+                        tts_provider: this.ttsProvider,
+                        voice: this.ttsVoice,
+                        session_id: this.sessionId,
+                        identified_person: window.cameraModule?.currentIdentity || null,
+                    };
+
+                    const resp = await fetch(`${this.config.serverUrl}/api/conversation`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+
+                    if (!resp.ok) throw new Error('Greeting request failed');
+                    const data = await resp.json();
+
+                    FaceModule.setMood('neutral');
+                    TranscriptPanel.removeThinking();
+                    StatusModule.update('listening', 'LISTENING');
+
+                    if (data.response) {
+                        this.callbacks.onTranscript(data.response, false);
+                        TranscriptPanel.addMessage('assistant', data.response);
+                    }
+                    if (data.audio) {
+                        await this.playTTS(data.audio);
+                    }
+                } catch (err) {
+                    console.warn('Session greeting failed:', err);
+                    FaceModule.setMood('neutral');
+                    StatusModule.update('listening', 'LISTENING');
+                } finally {
+                    this.stt.resume?.();
+                    this.callbacks.onListening();
                 }
             }
 
@@ -3758,7 +3808,8 @@ inject();
                             message: transcript,
                             tts_provider: this.ttsProvider,
                             voice: this.ttsVoice,
-                            session_id: this.sessionId
+                            session_id: this.sessionId,
+                            identified_person: window.cameraModule?.currentIdentity || null,
                         })
                     });
 
