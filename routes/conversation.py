@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-DB_PATH = Path(__file__).parent.parent / 'usage.db'
+from services.paths import DB_PATH, VOICE_SESSION_FILE
+
 BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
-VOICE_SESSION_FILE = str(Path(__file__).parent.parent / '.voice-session-counter')
 MAX_HISTORY_MESSAGES = 20
 
 # ---------------------------------------------------------------------------

@@ -222,7 +222,7 @@ class TestSQLiteWAL:
         import os
         db_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "usage.db"
+            "runtime", "usage.db"
         )
         if not os.path.exists(db_path):
             pytest.skip("usage.db not found")

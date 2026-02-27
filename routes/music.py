@@ -28,11 +28,10 @@ from routes.static_files import _safe_path
 # Paths
 # ---------------------------------------------------------------------------
 
-MUSIC_DIR = Path(__file__).parent.parent / "music"
-MUSIC_DIR.mkdir(exist_ok=True)
+from services.paths import MUSIC_DIR, GENERATED_MUSIC_DIR
 
-GENERATED_MUSIC_DIR = Path(__file__).parent.parent / "generated_music"
-GENERATED_MUSIC_DIR.mkdir(exist_ok=True)
+MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+GENERATED_MUSIC_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Shared music state (in-process; single-worker deployments only)

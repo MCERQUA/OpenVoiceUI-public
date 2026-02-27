@@ -67,7 +67,8 @@ _PROMPT_FALLBACK = (
 def _load_generated_tracks() -> str:
     """Return a formatted list of generated tracks for injection into the system prompt."""
     try:
-        metadata_file = Path(__file__).parent.parent.parent / 'generated_music' / 'generated_metadata.json'
+        from services.paths import GENERATED_MUSIC_DIR
+        metadata_file = GENERATED_MUSIC_DIR / 'generated_metadata.json'
         if not metadata_file.exists():
             return ''
         with open(metadata_file) as f:
