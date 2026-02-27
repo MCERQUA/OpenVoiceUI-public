@@ -144,57 +144,60 @@ Define agents in JSON — each profile configures:
 
 ## Prerequisites
 
-- **Python 3.10+**
-- **OpenClaw gateway** running locally — [openclaw.dev](https://openclaw.dev)
-  - Default port: `18791` (configure in `.env`)
-  - For OpenClaw ≥ 2026.2.24: device identity signing is handled automatically on first connect
+- **OpenClaw gateway** — [openclaw.dev](https://openclaw.dev)
 - **Groq API key** for TTS — [console.groq.com](https://console.groq.com) (free tier available)
-- Optional: Gemini API key (vision), Suno API key (music generation), Clerk (auth)
+- Optional: Suno API key (music generation), Clerk (auth for multi-user deployments)
 
 ---
 
-## Quick Start
+## Deployment (Recommended: VPS)
+
+The recommended way to run OpenVoiceUI is on a dedicated VPS — microphone access, SSL, and always-on uptime all work significantly better hosted than on a local machine.
+
+A setup script handles nginx, Let's Encrypt SSL, and systemd automatically:
 
 ```bash
 git clone https://github.com/MCERQUA/OpenVoiceUI-public
 cd OpenVoiceUI-public
-python3 -m venv venv
-venv/bin/pip install -r backend/requirements.txt
 cp .env.example .env
-# Edit .env — at minimum set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY
-venv/bin/python3 server.py
-```
-
-Open `http://localhost:5001` in your browser.
-
-### Minimum `.env` for local use
-
-```bash
-PORT=5001
-CLAWDBOT_GATEWAY_URL=ws://127.0.0.1:18791
-CLAWDBOT_AUTH_TOKEN=your-openclaw-gateway-token
-GATEWAY_SESSION_KEY=voice-main-1
-GROQ_API_KEY=your-groq-key
-```
-
----
-
-## Production Deployment (Nginx + SSL + systemd)
-
-A setup script handles nginx config, Let's Encrypt SSL, and systemd service creation:
-
-```bash
-# Edit variables at top of script (DOMAIN, PORT, EMAIL, INSTALL_DIR), then:
+# Edit .env — set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY at minimum
+# Edit setup-sudo.sh — set DOMAIN, PORT, EMAIL, INSTALL_DIR at the top
 sudo bash setup-sudo.sh
 ```
 
-The script is idempotent — safe to re-run. It will skip SSL if cert already exists.
+The script is idempotent — safe to re-run. Skips SSL if cert already exists.
 
-**After deploy:**
 ```bash
 sudo systemctl status openvoiceui
 sudo journalctl -u openvoiceui -f
 ```
+
+---
+
+## Local Install (Docker)
+
+If you want to run OpenVoiceUI on a local machine, Docker is the easiest path. Note that browser microphone access requires HTTPS — on localhost Chrome/Edge will still allow it, but other devices on your network won't work without a cert.
+
+```bash
+git clone https://github.com/MCERQUA/OpenVoiceUI-public
+cd OpenVoiceUI-public
+cp .env.example .env
+# Edit .env — set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY
+docker compose up --build
+```
+
+Open `http://localhost:5001` in your browser.
+
+### Minimum `.env`
+
+```bash
+PORT=5001
+CLAWDBOT_GATEWAY_URL=ws://host.docker.internal:18791
+CLAWDBOT_AUTH_TOKEN=your-openclaw-gateway-token
+GROQ_API_KEY=your-groq-key
+```
+
+> **Note:** `host.docker.internal` lets the container reach your local OpenClaw gateway. On Linux add `extra_hosts: ["host.docker.internal:host-gateway"]` to `docker-compose.yml` if needed.
 
 ---
 
