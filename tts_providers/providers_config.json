@@ -1,9 +1,9 @@
 {
   "providers": {
     "hume": {
-      "name": "Hume EVI",
+      "name": "Hume EVI (subscription)",
       "provider_id": "hume",
-      "cost_per_minute": 0.032,
+      "cost_per_minute": 0.06,
       "quality": "high",
       "latency": "medium",
       "voices": ["your-hume-voice-id"],
@@ -15,11 +15,11 @@
       ],
       "requires_api_key": true,
       "status": "active",
-      "description": "Hume Empathic Voice Interface - voice I/O for Clawdbot",
-      "documentation_url": "https://dev.hume.ai/docs",
+      "description": "Hume Expressive Voice Interface — full real-time voice agent (STT + TTS + emotion)",
+      "documentation_url": "https://platform.hume.ai/pricing",
       "languages": ["en"],
       "max_characters": 5000,
-      "notes": "Voice interface for Clawdbot. Hume handles STT/TTS, Clawdbot does the thinking.",
+      "notes": "Subscription required. Plans: Starter $3/mo (40 min), Creator $14/mo (200 min), Pro $70/mo (1,200 min). Overage: $0.06/min (~$3.60/hr). Effective cost on lower plans can be $5-10+/hr depending on usage. Includes STT+TTS+emotion — not just TTS.",
       "requires_microphone": true,
       "requires_websocket": true,
       "mode": "full-voice"
