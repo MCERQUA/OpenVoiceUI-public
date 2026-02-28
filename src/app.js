@@ -3398,6 +3398,12 @@ inject();
                             this._audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
                         });
 
+                        // Race condition fix: check if stopAudio was called during decode
+                        if (!this.isPlaying) {
+                            console.log('[ClawdBot] Audio cancelled during decode, skipping playback');
+                            return;
+                        }
+
                         await new Promise((resolve) => {
                             const source = this._audioCtx.createBufferSource();
                             source.buffer = audioBuffer;
@@ -3415,6 +3421,11 @@ inject();
                     this.playNextAudio();
                 } else {
                     // Fallback: HTMLAudioElement path (non-iOS or AudioContext unavailable)
+                    // Race condition fix: check if stopAudio was called
+                    if (!this.isPlaying) {
+                        console.log('[ClawdBot] Audio cancelled, skipping playback');
+                        return;
+                    }
                     const mimeType = format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
                     const audioBlob = this.base64ToBlob(base64, mimeType);
                     const audioUrl = URL.createObjectURL(audioBlob);
