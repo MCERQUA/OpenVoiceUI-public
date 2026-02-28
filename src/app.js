@@ -3350,12 +3350,12 @@ inject();
 
             playAudio(base64Audio, format = 'wav') {
                 try {
-                    // Stop any currently playing audio — only one response plays at a time
-                    if (this.isPlaying) {
-                        this.stopAudio();
-                    }
+                    // Queue audio - if already playing, it will play after current finishes
                     this.audioQueue.push({ base64: base64Audio, format });
-                    this.playNextAudio();
+                    // Only start playback if nothing is currently playing
+                    if (!this.isPlaying) {
+                        this.playNextAudio();
+                    }
                 } catch (error) {
                     console.error('Failed to queue audio:', error);
                 }
