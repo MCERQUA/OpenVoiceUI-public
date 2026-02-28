@@ -644,9 +644,8 @@ const Builder = {
       '<div class="fg">'+
         '<label class="fl">Vision Model <span style="font-size:10px;color:var(--dim)">&mdash; used for &ldquo;look at&rdquo; triggers and face recognition</span></label>'+
         '<select id="be-vision-model">'+
-          '<option value="glm-4v-flash"'+(  (p.vision?.model||'glm-4v-flash')==='glm-4v-flash'  ?' selected':'')+'>GLM-4V Flash (Free &middot; Fast)</option>'+
-          '<option value="glm-4v"'+(        (p.vision?.model||'glm-4v-flash')==='glm-4v'         ?' selected':'')+'>GLM-4V (Better &middot; Paid)</option>'+
-          '<option value="glm-4v-plus"'+(   (p.vision?.model||'glm-4v-flash')==='glm-4v-plus'    ?' selected':'')+'>GLM-4V Plus (Best &middot; Paid)</option>'+
+          '<option value="glm-4.6v"'+(     (p.vision?.model||'glm-4.6v')==='glm-4.6v'      ?' selected':'')+'>GLM-4.6V (128K &middot; Paid)</option>'+
+          '<option value="glm-4v-plus"'+(  (p.vision?.model||'glm-4.6v')==='glm-4v-plus'   ?' selected':'')+'>GLM-4V Plus (Legacy &middot; Paid)</option>'+
         '</select>'+
         '<div style="font-size:11px;color:var(--dim);margin-top:4px">Requires camera to be enabled. Model processes frames for &ldquo;what do you see&rdquo; and face ID.</div>'+
       '</div>'+
@@ -743,7 +742,7 @@ const Builder = {
         identify_on_wake:$('be-identify-on-wake')?.checked!==false,
         require_camera_auth:$('be-require-camera-auth')?.checked===true,
       },
-      vision:{model:$('be-vision-model')?.value||'glm-4v-flash'},
+      vision:{model:$('be-vision-model')?.value||'glm-4.6v'},
       features:Object.keys(featObj).length?featObj:undefined,
       context:{max_history_messages:parseInt($('be-maxhist')?.value)||12},
     };

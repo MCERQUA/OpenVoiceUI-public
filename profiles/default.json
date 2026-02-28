@@ -52,7 +52,7 @@
   },
 
   "vision": {
-    "model": "glm-4v-flash",
+    "model": "glm-4.6v",
     "provider": "zai"
   },
 

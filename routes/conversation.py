@@ -48,6 +48,24 @@ from services.paths import DB_PATH, VOICE_SESSION_FILE
 BRAIN_EVENTS_PATH = Path('/tmp/openvoiceui-events.jsonl')
 MAX_HISTORY_MESSAGES = 20
 
+# Vision keyword detection — triggers camera frame analysis via GLM-4V
+_VISION_KEYWORDS = (
+    'what do you see', 'what can you see', 'what are you seeing',
+    'look at', 'what is in front', "what's in front",
+    'describe what', 'tell me what you see', 'can you see',
+    'what is that', "what's that", 'who is that', "who's that",
+    'what am i holding', 'what am i wearing', 'what does it look like',
+    'show me what you see', 'use the camera', 'check the camera',
+    'look through the camera',
+)
+_VISION_FRAME_MAX_AGE = 10  # seconds — ignore frames older than this
+
+
+def _is_vision_request(msg: str) -> bool:
+    """Return True if the user message looks like a request to use the camera/vision."""
+    lower = msg.lower()
+    return any(kw in lower for kw in _VISION_KEYWORDS)
+
 # ---------------------------------------------------------------------------
 # DB write queue — background thread so DB writes don't block HTTP responses
 # (FIND-01 / FIND-08 fix from performance audit)
@@ -293,8 +311,9 @@ def clean_for_tts(text: str) -> str:
     text = re.sub(r'\[SOUND:[^\]]*\]', '', text, flags=re.IGNORECASE)
     text = re.sub(r'\[SESSION_RESET\]', '', text, flags=re.IGNORECASE)
 
-    # Remove code blocks
+    # Remove code blocks (complete fences first, then any unclosed fence to end of text)
     text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r'```[\s\S]*', '', text)
     text = re.sub(r'`[^`]+`', '', text)
 
     # Add natural pauses for structured content (must happen before stripping markdown)
@@ -493,6 +512,26 @@ def _conversation_inner():
             f'[FACE RECOGNITION: The person you are speaking with has been identified as {name} '
             f'({confidence}% confidence). Address them by name naturally.]'
         )
+
+    # Vision: if user asks about what the camera sees, call vision model with latest frame
+    if _is_vision_request(user_message):
+        from routes.vision import _latest_frame, _call_vision
+        _frame_img = _latest_frame.get('image')
+        _frame_age = time.time() - _latest_frame.get('ts', 0)
+        if _frame_img and _frame_age < _VISION_FRAME_MAX_AGE:
+            try:
+                _vision_desc = _call_vision(
+                    _frame_img,
+                    'Describe what you see in this image concisely. Focus on people, objects, and actions.',
+                )
+                context_parts.append(f'[CAMERA VISION: {_vision_desc}]')
+            except Exception as exc:
+                logger.warning('Vision analysis failed: %s', exc)
+                context_parts.append('[CAMERA VISION: Camera is on but vision analysis failed.]')
+        elif not _frame_img:
+            context_parts.append('[CAMERA VISION: No camera frame available — camera may be off.]')
+        else:
+            context_parts.append('[CAMERA VISION: Camera frame is stale — camera may have been turned off.]')
 
     if ui_context:
         # Canvas state
@@ -833,7 +872,7 @@ def _conversation_inner():
                             if not _tts_pending and full_response:
                                 tts_text = clean_for_tts(full_response)
                                 if tts_text and tts_text.strip():
-                                    _tts_pending.append(_fire_tts(full_response))
+                                    _tts_pending.append(_fire_tts(tts_text))
 
                             if not _tts_pending:
                                 logger.info('Skipping TTS — no speakable text')
