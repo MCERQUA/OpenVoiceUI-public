@@ -152,7 +152,7 @@ def _save_session_counter(counter: int) -> None:
 
 def get_voice_session_key() -> str:
     """Return the current voice session key, e.g. 'voice-main-6'."""
-    prefix = os.getenv("GATEWAY_SESSION_KEY_PREFIX", "voice-main")
+    prefix = os.getenv("VOICE_SESSION_PREFIX", "voice-main")
     try:
         counter = int(VOICE_SESSION_FILE.read_text().strip())
     except (FileNotFoundError, ValueError):
@@ -164,7 +164,7 @@ def get_voice_session_key() -> str:
 def bump_voice_session() -> str:
     """Increment the session counter and return the new session key."""
     global _consecutive_empty_responses
-    prefix = os.getenv("GATEWAY_SESSION_KEY_PREFIX", "voice-main")
+    prefix = os.getenv("VOICE_SESSION_PREFIX", "voice-main")
     try:
         counter = int(VOICE_SESSION_FILE.read_text().strip())
     except (FileNotFoundError, ValueError):

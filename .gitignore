@@ -42,11 +42,13 @@ runtime/usage.db-wal
 .device-identity.json
 
 # Sensitive / private
-runtime/known_faces/
+runtime/known_faces/*
+!runtime/known_faces/.gitkeep
 runtime/faces/*/*
 agent_config_backup.json
 docs/agent-snapshot-*.json
 TOOLS.md
+!setup/openvoiceui-agent/TOOLS.md
 prompts/dj_prompt_*.txt
 prompts/hume_config_snapshot*.txt
 
@@ -108,6 +110,20 @@ test_supertonic.py
 tools_health_check.py
 job_runner.sh
 pi_notes/
+
+# Root-level runtime data (canonical location is runtime/)
+.active-profile
+.voice-session-counter
+canvas-manifest.json
+usage.db
+/faces/
+/known_faces/
+/generated_music/
+/transcripts/
+/uploads/
+
+# Local reference docs
+OpenVoiceUi-system-prompt-tags
 
 # Legacy doc locations (moved to docs/)
 README_SUPERTONIC.md

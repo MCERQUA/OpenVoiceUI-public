@@ -188,13 +188,41 @@ echo "    WWW dir     : ${WWW_DIR}"
 echo ""
 
 # 0. Per-instance www directory (canvas pages, isolated from other users)
-echo "[0/5] Creating www directory for ${RUN_USER}..."
+echo "[0/6] Creating www directory for ${RUN_USER}..."
 mkdir -p "${WWW_DIR}/canvas-pages"
 chown -R "${RUN_USER}:${RUN_USER}" "${WWW_DIR}"
 chmod -R 755 "${WWW_DIR}"
 
+# 0b. OpenVoiceUI agent workspace (dedicated agent — does NOT touch user's main agent)
+OPENCLAW_DIR="$(eval echo "~${RUN_USER}")/.openclaw"
+AGENT_TEMPLATE_DIR="${INSTALL_DIR}/setup/openvoiceui-agent"
+AGENT_DEST_DIR="${OPENCLAW_DIR}/agents/openvoiceui"
+
+if [ -d "${AGENT_TEMPLATE_DIR}" ] && [ -d "${OPENCLAW_DIR}" ]; then
+    if [ -d "${AGENT_DEST_DIR}" ]; then
+        echo "  OpenVoiceUI agent already exists at ${AGENT_DEST_DIR} — skipping (not overwriting)"
+    else
+        echo "  Creating OpenVoiceUI agent workspace at ${AGENT_DEST_DIR}..."
+        mkdir -p "${AGENT_DEST_DIR}/memory"
+        for f in SOUL.md TOOLS.md AGENTS.md IDENTITY.md MEMORY.md USER.md; do
+            if [ -f "${AGENT_TEMPLATE_DIR}/${f}" ]; then
+                # Fill in instance-specific placeholder values
+                sed "s|{{CANVAS_PAGES_DIR}}|${WWW_DIR}/canvas-pages|g" \
+                    "${AGENT_TEMPLATE_DIR}/${f}" > "${AGENT_DEST_DIR}/${f}"
+            fi
+        done
+        chown -R "${RUN_USER}:${RUN_USER}" "${AGENT_DEST_DIR}"
+        echo "  Agent workspace created. Register it in ~/.openclaw/openclaw.json:"
+        echo "    { id: \"openvoiceui\", workspace: \"${AGENT_DEST_DIR}\", model: { primary: \"your-model\" } }"
+        echo "  Then set VOICE_SESSION_PREFIX=voice-openvoiceui in your .env"
+    fi
+elif [ ! -d "${OPENCLAW_DIR}" ]; then
+    echo "  OpenClaw not configured yet (~/.openclaw missing) — skipping agent setup"
+    echo "  Run setup again after configuring OpenClaw, or manually copy setup/openvoiceui-agent/"
+fi
+
 # 1. Prestart script (kills stale process on port before service starts)
-echo "[1/5] Creating prestart script..."
+echo "[1/6] Creating prestart script..."
 cat > /usr/local/bin/prestart-${SERVICE_NAME}.sh << PRESTART
 #!/bin/bash
 PORT=${PORT}
@@ -214,7 +242,7 @@ PRESTART
 chmod +x /usr/local/bin/prestart-${SERVICE_NAME}.sh
 
 # 2. Systemd service
-echo "[2/5] Creating systemd service..."
+echo "[2/6] Creating systemd service..."
 cat > /etc/systemd/system/${SERVICE_NAME}.service << SERVICE
 [Unit]
 Description=OpenVoiceUI Voice Agent (${DOMAIN})
@@ -237,7 +265,7 @@ SERVICE
 
 # 3. Nginx config
 # 3a. Write HTTP-only nginx config so certbot can serve ACME challenges
-echo "[3/5] Creating nginx config..."
+echo "[3/6] Creating nginx config..."
 if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
     echo "  No SSL cert yet -- writing HTTP-only config for certbot..."
     cat > /etc/nginx/sites-available/${DOMAIN} << NGINX
@@ -267,7 +295,7 @@ NGINX
     systemctl reload nginx
 
     # 4. Obtain SSL cert (nginx can now serve ACME challenge on port 80)
-    echo "[4/5] Obtaining SSL certificate..."
+    echo "[4/6] Obtaining SSL certificate..."
     certbot certonly --nginx -d ${DOMAIN} --non-interactive --agree-tos -m ${EMAIL}
 else
     echo "  SSL cert already exists, skipping certbot."
@@ -317,7 +345,7 @@ NGINX
 ln -sf /etc/nginx/sites-available/${DOMAIN} /etc/nginx/sites-enabled/${DOMAIN}
 
 # 5. Enable and start service
-echo "[5/5] Enabling and starting service..."
+echo "[5/6] Enabling and starting service..."
 nginx -t
 systemctl reload nginx
 systemctl daemon-reload
@@ -327,6 +355,7 @@ systemctl restart ${SERVICE_NAME}.service
 sleep 3
 systemctl status ${SERVICE_NAME}.service --no-pager
 
+echo "[6/6] Setup complete."
 echo ""
 echo "=== Done! OpenVoiceUI running at https://${DOMAIN} ==="
 echo ""

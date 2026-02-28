@@ -5085,10 +5085,11 @@ inject();
             if (_callBtn) {
                 _callBtn.removeAttribute('onclick');
                 _callBtn.addEventListener('click', async () => {
-                    const agent = window.voiceAgent;
-                    if (!agent) return;
-                    // If already connected, just toggle off — no need to identify
-                    if (agent.isConnected) { agent.toggle(); return; }
+                    // If already listening, toggle off via ModeManager — no need to identify
+                    if (ModeManager.clawdbotMode?.stt?.isListening) {
+                        ModeManager.toggleVoice();
+                        return;
+                    }
 
                     const profile        = window._activeProfileData || {};
                     const identifyOnWake = profile?.stt?.identify_on_wake !== false;
@@ -5114,7 +5115,7 @@ inject();
                         StatusModule.update('thinking', 'CONNECTING...');
                         document.getElementById('thought-bubbles')?.classList.add('active');
                     }
-                    agent.toggle();
+                    ModeManager.toggleVoice();
                 });
             }
 

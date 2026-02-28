@@ -10,7 +10,7 @@ Endpoints:
   DELETE /api/faces/<name>      — delete a registered face
 
 Face recognition: DeepFace (local, free, runs on-server — no API calls).
-Vision analysis ("look at"): configurable vision LLM (default: glm-4v-flash).
+Vision analysis ("look at"): configurable vision LLM (default: glm-4.6v).
 """
 
 import base64
@@ -68,12 +68,11 @@ def _clear_deepface_cache():
 
 # Known vision-capable models (shown in admin UI dropdown)
 VISION_MODELS = [
-    {'id': 'glm-4v-flash',  'label': 'GLM-4V Flash (Free · Fast)',      'provider': 'zai'},
-    {'id': 'glm-4v',        'label': 'GLM-4V (Better · Paid)',           'provider': 'zai'},
-    {'id': 'glm-4v-plus',   'label': 'GLM-4V Plus (Best · Paid)',        'provider': 'zai'},
+    {'id': 'glm-4.6v',      'label': 'GLM-4.6V (128K · Paid)',          'provider': 'zai'},
+    {'id': 'glm-4v-plus',   'label': 'GLM-4V Plus (Legacy · Paid)',     'provider': 'zai'},
 ]
 
-DEFAULT_VISION_MODEL    = os.environ.get('VISION_MODEL', 'glm-4v-flash')
+DEFAULT_VISION_MODEL    = os.environ.get('VISION_MODEL', 'glm-4.6v')
 DEFAULT_VISION_PROVIDER = 'zai'
 
 
