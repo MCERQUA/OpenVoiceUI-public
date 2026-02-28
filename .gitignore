@@ -125,6 +125,9 @@ usage.db
 # Local reference docs
 OpenVoiceUi-system-prompt-tags
 
+# Local admin scripts (never commit — use ~/scripts/ or project scripts/ for local-only ops)
+scripts/
+
 # Legacy doc locations (moved to docs/)
 README_SUPERTONIC.md
 SUPERTONIC_SETUP.md
