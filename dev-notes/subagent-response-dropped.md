@@ -3,9 +3,31 @@
 **Date:** 2026-02-28
 **Observed on:** Foamology session (research task with 5 subagents)
 **Priority:** High — breaks multi-agent research workflows
-**Status:** NOT RESOLVED — the existing subagent code detects spawns but doesn't prevent the HTTP response from closing
+**Status:** NOT RESOLVED
 
-## What the User Sees
+## What Happened (Plain English)
+
+The user asked the AI to research Foamology's company. The AI said "I've launched 5 research agents, I'll summarize when they're done." Then... nothing. Silence. The mic stopped working and the research results never came back.
+
+The 5 research agents actually DID launch and were doing their work inside OpenClaw (the AI brain). The problem is how the app talks to your browser. It uses a one-shot phone call, not an open line:
+
+1. Your browser calls the server: "Hey, the user asked a question"
+2. The server calls OpenClaw: "Process this"
+3. OpenClaw's main agent says "I'm spawning 5 helpers" and then says "I'm done for now"
+4. The server hears "I'm done" and hangs up the phone — sends the audio back to your browser and closes the connection
+5. The 5 helpers are still working, but there's no phone line open anymore to send their results back
+
+It's like calling a restaurant, ordering food, and the waiter says "the chef is making it now" — but then they hang up the phone. The food gets made but nobody calls you back to tell you it's ready.
+
+The code actually HAS logic that says "wait, don't hang up, subagents are still working!" but the other part of the code ignores that and hangs up anyway. The two parts aren't talking to each other properly.
+
+**The mic issue:** After the AI's "I've launched 5 agents" message played as audio, the mic never turned back on. This is because 3 empty/broken audio clips arrived before the real audio, and those broke the "I'm done playing" signal that tells the app to turn the mic back on. So the app thinks audio is still playing forever.
+
+---
+
+## Technical Details
+
+### What the User Sees
 
 1. Ask the AI to research something
 2. AI says "I've launched 5 research agents, I'll summarize when they're done"

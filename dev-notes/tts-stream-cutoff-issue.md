@@ -4,7 +4,21 @@
 **Observed on:** Foamology session (researching company, 5 subagents launched)
 **Priority:** Next sprint item
 
-## Symptom
+## What Happened (Plain English)
+
+The user asked the AI to research Foamology. The AI responded with a list of 5 things it was going to research. Instead of hearing that as smooth speech, the user heard choppy, cut-off audio — like someone rapidly starting and stopping a recording.
+
+Here's why: When the AI streams a response, the app breaks it into sentences and sends each sentence to the voice engine (Groq) separately. The problem is it sends ALL sentences at the same time — so 5 audio clips come back almost simultaneously. The audio player is supposed to queue them and play one after another, but they arrive so fast that they pile up and step on each other.
+
+Think of it like 5 people trying to talk through the same walkie-talkie at once. Each one starts talking before the last one finishes. The app has a queue system that should prevent this (like a "wait your turn" line), but it's not working reliably — probably because some of the audio clips are so short or arrive so fast that the browser can't keep up.
+
+There are three settings in the app config that were designed to fix this, but none of them are actually connected to the code yet. They're just placeholder settings that do nothing. See `unwired-tts-config-options.md` for details on those.
+
+---
+
+## Technical Details
+
+### Symptom
 When LLM streams a long response, TTS audio chunks play rapidly and cut each other off instead of playing as smooth sequential speech.
 
 ## Root Cause Analysis
