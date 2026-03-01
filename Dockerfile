@@ -10,13 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 && \
     rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Writable dirs for runtime data
-RUN mkdir -p uploads canvas-pages known_faces music generated_music
+# Writable dirs for runtime data (DATA_DIR set in docker-compose)
+RUN mkdir -p data/uploads data/canvas-pages data/known_faces data/music data/generated_music
 
 # Run as non-root user
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
