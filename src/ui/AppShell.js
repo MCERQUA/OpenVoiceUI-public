@@ -107,7 +107,11 @@ const SHELL_HTML = `
             <input type="text" class="tp-text-input" id="tp-text-input"
                    placeholder="Type a message..."
                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();TranscriptPanel.sendText()}">
-            <button class="tp-send-btn" onclick="TranscriptPanel.sendText()" title="Send">➤</button>
+        </div>
+        <div class="tp-action-bar">
+            <button class="tp-action-btn tp-save-btn" onclick="TranscriptPanel.saveToServer()" title="Save transcript to server">💾 Save</button>
+            <button class="tp-action-btn tp-send-btn" onclick="TranscriptPanel.sendToAgent()" title="Send to agent as context">📤 Send</button>
+            <button class="tp-action-btn tp-talk-btn" onclick="TranscriptPanel.saveAndTalk()" title="Save and start voice call">📞 Save+Talk</button>
         </div>
     </div>
 

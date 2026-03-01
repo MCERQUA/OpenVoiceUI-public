@@ -6379,6 +6379,138 @@ inject();
                 }
 
                 return await resp.json();
+            },
+
+            // --- Action buttons: Save, Send, Save+Talk ---
+
+            // Get all transcript messages as text
+            _getTranscriptText() {
+                const messages = document.getElementById('transcript-messages');
+                if (!messages) return '';
+                const msgs = messages.querySelectorAll('.tp-msg');
+                const lines = [];
+                msgs.forEach(msg => {
+                    const meta = msg.querySelector('.tp-meta')?.textContent || '';
+                    const text = msg.querySelector('.tp-text')?.textContent || '';
+                    if (text) lines.push(`[${meta}] ${text}`);
+                });
+                return lines.join('\n\n');
+            },
+
+            // Save transcript to server only
+            async saveToServer() {
+                const btn = document.querySelector('.tp-save-btn');
+                if (btn) btn.classList.add('saving');
+
+                const text = this._getTranscriptText();
+                if (!text.trim()) {
+                    alert('No transcript to save');
+                    if (btn) btn.classList.remove('saving');
+                    return;
+                }
+
+                try {
+                    const serverUrl = window.CONFIG?.serverUrl || '';
+                    const res = await fetch(`${serverUrl}/api/transcripts/save`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: `Transcript ${new Date().toLocaleString()}`,
+                            text: text
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.saved) {
+                        this.addMessage('system', `✓ Saved to ${data.path}`);
+                        console.log('Transcript saved:', data.path);
+                    } else {
+                        throw new Error(data.error || 'Save failed');
+                    }
+                } catch (e) {
+                    console.error('Save failed:', e);
+                    alert('Save failed: ' + e.message);
+                } finally {
+                    if (btn) btn.classList.remove('saving');
+                }
+            },
+
+            // Send transcript to agent as context (no voice call)
+            async sendToAgent() {
+                const text = this._getTranscriptText();
+                if (!text.trim()) {
+                    alert('No transcript to send');
+                    return;
+                }
+
+                const input = document.getElementById('tp-text-input');
+                const userText = input?.value?.trim() || '';
+
+                const messageToSend = `[TRANSCRIPT CONTEXT - Previous conversation summary:]\n${text}\n\n[User's current message:]\n${userText || '(no additional message)'}`;
+
+                // Clear input
+                if (input) input.value = '';
+
+                // Send through voice conversation path (no call)
+                if (window.ModeManager?.clawdbotMode) {
+                    window.ModeManager.clawdbotMode.sendMessage(messageToSend);
+                    this.addMessage('user', '📤 Sent transcript as context');
+                }
+            },
+
+            // Save transcript AND start voice call
+            async saveAndTalk() {
+                const btn = document.querySelector('.tp-talk-btn');
+                if (btn) btn.classList.add('saving');
+
+                const text = this._getTranscriptText();
+
+                // Save first
+                if (text.trim()) {
+                    try {
+                        const serverUrl = window.CONFIG?.serverUrl || '';
+                        const res = await fetch(`${serverUrl}/api/transcripts/save`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                title: `Transcript ${new Date().toLocaleString()}`,
+                                text: text
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.saved) {
+                            console.log('Transcript saved before call:', data.path);
+                        }
+                    } catch (e) {
+                        console.warn('Auto-save before call failed:', e);
+                    }
+                }
+
+                // Get user's typed message
+                const input = document.getElementById('tp-text-input');
+                const userText = input?.value?.trim() || '';
+
+                // Prepare context message
+                const contextMsg = text.trim()
+                    ? `[Continuing from previous conversation. Here's what we discussed:\n${text.substring(0, 2000)}${text.length > 2000 ? '...' : ''}]\n\n${userText}`
+                    : userText;
+
+                // Clear input
+                if (input) input.value = '';
+
+                // Send message to agent
+                if (window.ModeManager?.clawdbotMode) {
+                    window.ModeManager.clawdbotMode.sendMessage(contextMsg || "Let's continue our conversation.");
+                }
+
+                // Start voice call
+                if (window.ModeManager?.toggleVoice) {
+                    // Make sure we're not already in a call
+                    if (!ModeManager.clawdbotMode?.stt?.isListening) {
+                        ModeManager.toggleVoice();
+                    }
+                }
+
+                if (btn) btn.classList.remove('saving');
             }
         };
 
