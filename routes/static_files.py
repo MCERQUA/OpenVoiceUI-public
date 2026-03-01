@@ -135,7 +135,7 @@ def serve_upload(filename):
 def serve_src(filepath):
     """Serve frontend source files (JS, CSS modules)"""
     # P7-T3 security: prevent path traversal (same guard used by serve_sound)
-    src_path = _safe_path(BASE_DIR / 'src', filepath)
+    src_path = _safe_path(APP_ROOT / 'src', filepath)
     if src_path is None:
         return jsonify({"error": "Invalid path"}), 400
     if not src_path.exists():
@@ -281,7 +281,7 @@ def serve_install():
 @static_files_bp.route('/admin')
 def serve_admin():
     """Serve the OpenUI admin dashboard"""
-    admin_path = BASE_DIR / 'src' / 'admin.html'
+    admin_path = APP_ROOT / 'src' / 'admin.html'
     if not admin_path.exists():
         return jsonify({"error": "Admin dashboard not found"}), 404
     resp = send_file(admin_path, mimetype='text/html')
