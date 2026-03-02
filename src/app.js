@@ -2847,6 +2847,8 @@ inject();
                         if (musicPlay && !canvasCommandsProcessed.has('MUSIC_PLAY')) {
                             canvasCommandsProcessed.add('MUSIC_PLAY');
                             const trackName = musicPlay[1]?.trim();
+                            // Always open the panel regardless of whether tracks exist
+                            if (window.musicPlayer?.panelState === 'closed') window.musicPlayer.openPanel();
                             if (trackName) {
                                 window.musicPlayer?.play(trackName);
                             } else {
@@ -4053,6 +4055,8 @@ inject();
                 const musicPlay = text.match(/\[MUSIC_PLAY(?::([^\]]+))?\]/i);
                 if (musicPlay) {
                     const trackName = musicPlay[1]?.trim();
+                    // Always open the panel regardless of whether tracks exist
+                    if (window.musicPlayer?.panelState === 'closed') window.musicPlayer.openPanel();
                     if (trackName) {
                         window.musicPlayer?.play(trackName);
                     } else {

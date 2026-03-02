@@ -61,6 +61,11 @@ Docker users: `docker compose down`, pull the latest code, then `docker compose 
 
 **Fastest path. Recommended for trying OpenVoiceUI.**
 
+The stack starts three containers automatically:
+- **openclaw** — AI gateway (OpenClaw) on port 18791
+- **openvoiceui** — the UI/API server on port 5001 (shares openclaw's network)
+- **supertonic** — local TTS engine
+
 ```bash
 git clone https://github.com/MCERQUA/OpenVoiceUI.git
 cd OpenVoiceUI
@@ -87,7 +92,7 @@ Open [http://localhost:5001](http://localhost:5001) in your browser. Allow micro
 docker compose down
 ```
 
-**Persistent data** (canvas pages, music, uploads) lives in local folders and survives container restarts.
+**Persistent data** (canvas pages, music, uploads, transcripts) lives in Docker named volumes and survives container restarts.
 
 ---
 
@@ -246,10 +251,25 @@ venv/bin/python -m pytest tests/
 - Verify PORT in `.env` matches nginx proxy port (default 5001)
 - Check nginx error log: `sudo tail -f /var/log/nginx/error.log`
 
-**Canvas pages not loading**
+**Canvas pages not loading / black screen**
 - Verify `CANVAS_PAGES_DIR` path exists and is writable by the server user
 - Docker: leave `CANVAS_PAGES_DIR` unset so it uses the mounted volume
+- Docker: both `openclaw` and `openvoiceui` share the `canvas-pages` named volume — if you
+  customised the compose file make sure both services mount it at the same paths as the
+  default `docker-compose.yml`
 - Check logs for canvas route errors
 
 **Permission errors on VPS**
 - Canvas dir and uploads must be owned by the service user: `sudo chown -R $USER /var/www/openvoiceui`
+
+**Separate openclaw container (not using docker-compose)**
+- If you run openclaw outside of this compose stack (e.g. an existing installation), make sure
+  openclaw's gateway `bind` is set to `"lan"` (not `"loopback"`) so openvoiceui can reach it:
+  ```json
+  "gateway": {
+    "bind": "lan",
+    "controlUi": { "dangerouslyAllowHostHeaderOriginFallback": true }
+  }
+  ```
+- Share the canvas-pages directory between the two containers via a bind mount so openclaw
+  can write pages that openvoiceui serves.

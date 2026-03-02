@@ -120,6 +120,52 @@ def serve_sound(filepath):
     return jsonify({"error": "Sound not found"}), 404
 
 
+@static_files_bp.route('/api/upload', methods=['POST'])
+def upload_file():
+    """Accept a file upload from the text panel and save to uploads/."""
+    import uuid, mimetypes, os
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+
+    # Sanitize filename
+    original_name = Path(f.filename).name
+    ext = Path(original_name).suffix.lower()
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    dest = UPLOADS_DIR / safe_name
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    f.save(str(dest))
+
+    # Determine type
+    mime = f.mimetype or mimetypes.guess_type(original_name)[0] or ''
+    is_image = mime.startswith('image/')
+
+    result = {
+        'original_name': original_name,
+        'path': str(dest),
+        'filename': safe_name,
+        'url': f'/uploads/{safe_name}',
+    }
+
+    if is_image:
+        result['type'] = 'image'
+    else:
+        result['type'] = 'file'
+        # Preview first 3000 chars of text files
+        text_types = {'text/', 'application/json', 'application/xml', 'application/javascript'}
+        if any(mime.startswith(t) for t in text_types) or ext in {'.txt', '.md', '.csv', '.log', '.py', '.js', '.json', '.yaml', '.yml'}:
+            try:
+                result['content_preview'] = dest.read_text(errors='replace')[:3000]
+            except Exception:
+                pass
+
+    return jsonify(result)
+
+
 @static_files_bp.route('/uploads/<path:filename>')
 def serve_upload(filename):
     """Serve uploaded files (path traversal guarded)."""
