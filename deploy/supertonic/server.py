@@ -40,7 +40,7 @@ app = FastAPI(title="Supertonic TTS", lifespan=lifespan)
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "M1"
+    voice: str = "F3"
     speed: float = Field(default=1.05, gt=0, le=3)
     steps: int = Field(default=5, ge=1, le=50)
     lang: str = "en"

@@ -22,7 +22,7 @@ inject();
 
             // TTS provider to use: 'supertonic', 'hume', 'elevenlabs', 'openai', etc.
             ttsProvider: 'supertonic',
-            ttsVoice: 'M1',
+            ttsVoice: 'F3',
 
             // Hume EVI config (loaded from server)
             hume: {
@@ -35,12 +35,12 @@ inject();
         const ProviderManager = {
             selectedProvider: null,
             providers: [],
-            currentVoice: 'M1',
+            currentVoice: 'F3',
 
             async init() {
                 // Load provider selection from localStorage, default to 'supertonic'
                 this.selectedProvider = localStorage.getItem('voice_provider') || 'supertonic';
-                this.currentVoice = localStorage.getItem('voice_voice') || 'M1';
+                this.currentVoice = localStorage.getItem('voice_voice') || 'F3';
 
                 await this.loadProviders();
                 this.initProviderUI();
@@ -3769,7 +3769,7 @@ inject();
                 this.isProcessing = false;
                 this.stt = new WebSpeechSTT();
                 this.ttsProvider = 'supertonic';
-                this.ttsVoice = 'M1';
+                this.ttsVoice = 'F3';
                 this.audioContext = null;
                 this.analyser = null;
                 this.analyserData = null;

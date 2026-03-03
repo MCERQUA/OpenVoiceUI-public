@@ -105,7 +105,7 @@ class SupertonicProvider(TTSProvider):
         self,
         onnx_dir: Optional[str] = None,
         voice_styles_dir: Optional[str] = None,
-        default_voice: str = 'M1',
+        default_voice: str = 'F3',
         use_gpu: bool = False
     ):
         """
