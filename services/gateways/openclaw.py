@@ -494,10 +494,13 @@ class GatewayConnection:
                             return
 
             except asyncio.TimeoutError:
+                elapsed = int(time.time() - start_time)
                 if subagent_active and not collected_text:
-                    elapsed = int(time.time() - start_time)
                     if elapsed % 30 < 6:
                         logger.info(f"### Waiting for subagent announce-back... ({elapsed}s elapsed)")
+                    # Send heartbeat every ~10s so the browser stream stays alive
+                    if elapsed % 10 < 6:
+                        event_queue.put({'type': 'heartbeat', 'elapsed': elapsed})
                     continue
                 if collected_text and lifecycle_ended:
                     event_queue.put({'type': 'text_done', 'response': collected_text, 'actions': captured_actions})
@@ -505,6 +508,9 @@ class GatewayConnection:
                 if lifecycle_ended and chat_final_seen:
                     event_queue.put({'type': 'text_done', 'response': None, 'actions': captured_actions})
                     return
+                # Send heartbeat even for non-subagent waits (tool execution)
+                if elapsed % 15 < 6:
+                    event_queue.put({'type': 'heartbeat', 'elapsed': elapsed})
                 continue
 
         logger.warning(f"[GW] hard timeout. collected_text ({len(collected_text)} chars): {repr(collected_text[:200])}")

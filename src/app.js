@@ -2862,6 +2862,19 @@ inject();
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
+
+                    // Inactivity timeout: abort if no data received for 60s
+                    // (heartbeats arrive every 10-15s during tool execution)
+                    let _inactivityTimer = null;
+                    const INACTIVITY_TIMEOUT_MS = 60000;
+                    const _resetInactivity = () => {
+                        if (_inactivityTimer) clearTimeout(_inactivityTimer);
+                        _inactivityTimer = setTimeout(() => {
+                            console.warn('[Stream] No data for 60s — aborting');
+                            this._fetchAbortController?.abort();
+                        }, INACTIVITY_TIMEOUT_MS);
+                    };
+                    _resetInactivity();
                     let streamingText = '';  // Accumulate delta text
                     let firstDeltaReceived = false;
                     let streamingMsgEl = null;  // Reference to the streaming message element
@@ -3017,6 +3030,7 @@ inject();
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
+                        _resetInactivity();
                         buffer += decoder.decode(value, { stream: true });
 
                         // Process complete NDJSON lines
@@ -3057,6 +3071,12 @@ inject();
 
                                     // Check for canvas commands as they stream in
                                     checkCanvasInStream(streamingText);
+                                }
+
+                                // Heartbeat: server is alive, agent is working
+                                if (data.type === 'heartbeat') {
+                                    const secs = data.elapsed || 0;
+                                    StatusModule.update('thinking', `WORKING... ${secs}s`);
                                 }
 
                                 // Action: tool use or lifecycle event
@@ -3195,6 +3215,7 @@ inject();
                         setTimeout(() => FaceModule.setMood('neutral'), 2000);
                     }
                 } finally {
+                    if (_inactivityTimer) clearTimeout(_inactivityTimer);
                     this._sending = false;
                     // Safety net: if no audio was queued/played, STT never gets restarted
                     // via onListening callback. Ensure mic comes back after a short delay.

@@ -256,15 +256,12 @@ def load_canvas_manifest() -> dict:
 
 
 def save_canvas_manifest(manifest: dict) -> None:
-    """Save manifest atomically with backup."""
+    """Save manifest directly (Docker bind-mounted files don't support atomic rename)."""
     manifest['last_updated'] = datetime.now().isoformat()
     try:
-        temp_path = CANVAS_MANIFEST_PATH.with_suffix('.tmp')
-        with open(temp_path, 'w') as f:
-            json.dump(manifest, f, indent=2)
-        if CANVAS_MANIFEST_PATH.exists():
-            shutil.copy(CANVAS_MANIFEST_PATH, CANVAS_MANIFEST_PATH.with_suffix('.bak'))
-        shutil.move(temp_path, CANVAS_MANIFEST_PATH)
+        data = json.dumps(manifest, indent=2)
+        with open(CANVAS_MANIFEST_PATH, 'w') as f:
+            f.write(data)
         _manifest_cache['mtime'] = 0  # invalidate cache
     except Exception as exc:
         logging.getLogger(__name__).error(f'Failed to save canvas manifest: {exc}')
@@ -571,20 +568,35 @@ def canvas_pages_proxy(path):
             with open(resolved, 'rb') as f:
                 content = f.read()
             if path.endswith('.html'):
-                # Inject padding to clear UI chrome (side buttons: 44px, top tab: 24px)
-                _padding_css = (
-                    b'<style id="canvas-ui-clearance">'
+                # Strip external CDN scripts (Tailwind CDN etc break in sandboxed iframes)
+                import re as _re
+                content_str = content.decode('utf-8', errors='replace')
+                _stripped = _re.sub(
+                    r'<script\s+[^>]*src\s*=\s*["\']https?://[^"\']+["\'][^>]*>\s*</script>',
+                    '<!-- external script stripped for iframe compatibility -->',
+                    content_str,
+                    flags=_re.IGNORECASE,
+                )
+                content = _stripped.encode('utf-8')
+
+                # Inject base dark-theme fallback + padding for UI chrome clearance
+                _base_css = (
+                    b'<style id="canvas-base-styles">'
                     b'html,body{'
                     b'padding-top:15px!important;'
                     b'padding-left:15px!important;'
                     b'padding-right:15px!important;'
-                    b'box-sizing:border-box!important;}'
+                    b'box-sizing:border-box!important;'
+                    b'color:#e2e8f0;'
+                    b'background:#0a0a0a;}'
+                    b'h1,h2,h3,h4{color:#fff;}'
+                    b'a{color:#fb923c;}'
                     b'</style>'
                 )
                 if b'</head>' in content:
-                    content = content.replace(b'</head>', _padding_css + b'</head>', 1)
+                    content = content.replace(b'</head>', _base_css + b'</head>', 1)
                 else:
-                    content = _padding_css + content
+                    content = _base_css + content
                 content_type = 'text/html'
             elif path.endswith('.css'):
                 content_type = 'text/css'

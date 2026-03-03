@@ -61,6 +61,34 @@ _VISION_KEYWORDS = (
 )
 _VISION_FRAME_MAX_AGE = 10  # seconds — ignore frames older than this
 
+# ---------------------------------------------------------------------------
+# Voice assistant instructions — injected into every message context.
+# These MUST live here (not in workspace files) so the app works out of the
+# box for anyone who clones the repo without extra setup.
+# ---------------------------------------------------------------------------
+_VOICE_INSTRUCTIONS = (
+    "[VOICE ASSISTANT INSTRUCTIONS: "
+    "You are a voice assistant. Respond in natural, conversational tone. "
+    "No markdown formatting. Be brief and direct. "
+    "Every response MUST contain spoken words — never reply with only a tag. "
+    "Action tags to embed in your responses: "
+    "[MUSIC_PLAY] play random track, "
+    "[MUSIC_PLAY:track name] play specific track (use exact name from Available tracks), "
+    "[MUSIC_STOP] stop music, "
+    "[MUSIC_NEXT] skip track, "
+    "[CANVAS:page-id] open a canvas page (use IDs from Canvas pages list), "
+    "[CANVAS_MENU] open page picker, "
+    "[SUNO_GENERATE:description] generate AI song (tell user it takes ~45s), "
+    "[SPOTIFY:song name] or [SPOTIFY:song|artist] play from Spotify, "
+    "[SLEEP] put interface to sleep (on goodbye/goodnight), "
+    "[SESSION_RESET] clear conversation (use sparingly), "
+    "[REGISTER_FACE:Name] save face from camera (only when asked), "
+    "[SOUND:name] DJ soundboard (ONLY in DJ mode — never in normal conversation). "
+    "Always say something alongside any tag so the user hears words, not silence. "
+    "Do NOT address anyone by name unless a FACE RECOGNITION tag confirms their identity. "
+    "Do NOT use music/sound tags unless the user explicitly asks.]"
+)
+
 
 def _is_vision_request(msg: str) -> bool:
     """Return True if the user message looks like a request to use the camera/vision."""
@@ -593,6 +621,10 @@ def _conversation_inner():
             '[DJ sounds: air_horn, scratch_long, rewind, record_stop, '
             'crowd_cheer, crowd_hype, yeah, lets_go, gunshot, bruh, sad_trombone]'
         )
+    # Inject voice assistant instructions so the agent knows about action tags.
+    # This must be in-app (not workspace files) so it works out of the box.
+    context_parts.append(_VOICE_INSTRUCTIONS)
+
     if context_parts:
         context_prefix = ' '.join(context_parts) + ' '
 
@@ -726,6 +758,10 @@ def _conversation_inner():
 
                         if evt['type'] == 'handshake':
                             metrics['handshake_ms'] = evt['ms']
+                            continue
+
+                        if evt['type'] == 'heartbeat':
+                            yield json.dumps({'type': 'heartbeat', 'elapsed': evt.get('elapsed', 0)}) + '\n'
                             continue
 
                         if evt['type'] == 'delta':
