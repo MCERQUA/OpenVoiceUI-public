@@ -2746,6 +2746,13 @@ inject();
                 if (this._fetchAbortController) {
                     this._fetchAbortController.abort();
                     this._fetchAbortController = null;
+                    // Tell server to abort the openclaw run (fire-and-forget)
+                    console.warn('⛔ ABORT source: stopVoiceInput');
+                    fetch(`${this.config.serverUrl}/api/conversation/abort`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'stopVoiceInput' }),
+                    }).catch(() => {});
                 }
                 this.stopAudio();
                 if (this.stt) {
@@ -2797,6 +2804,13 @@ inject();
                 if (this._fetchAbortController) {
                     this._fetchAbortController.abort();
                     this._fetchAbortController = null;
+                    // Tell server to abort the openclaw run (fire-and-forget)
+                    console.warn(`⛔ ABORT source: ClawdbotMode.sendMessage (new msg: "${text.substring(0,30)}")`);
+                    fetch(`${this.config.serverUrl}/api/conversation/abort`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'clawdbot-sendMessage', text: text.substring(0, 50) }),
+                    }).catch(() => {});
                 }
                 this.stopAudio();
 
@@ -2830,6 +2844,7 @@ inject();
                 let messageToSend = text.trim();
 
                 // Send via HTTP POST - server connects to Gateway, generates TTS, returns response
+                let _inactivityTimer = null;  // declared here so finally block can clear it
                 try {
                     const provider = localStorage.getItem('voice_provider') || 'supertonic';
                     const voice = localStorage.getItem('voice_voice') || 'M1';
@@ -2865,7 +2880,7 @@ inject();
 
                     // Inactivity timeout: abort if no data received for 60s
                     // (heartbeats arrive every 10-15s during tool execution)
-                    let _inactivityTimer = null;
+                    // _inactivityTimer declared in outer scope so finally{} can clear it
                     const INACTIVITY_TIMEOUT_MS = 60000;
                     const _resetInactivity = () => {
                         if (_inactivityTimer) clearTimeout(_inactivityTimer);
@@ -3079,6 +3094,12 @@ inject();
                                     StatusModule.update('thinking', `WORKING... ${secs}s`);
                                 }
 
+                                // Queued: openclaw is busy, message will be processed after current run
+                                if (data.type === 'queued') {
+                                    StatusModule.update('thinking', 'QUEUED — agent busy');
+                                    ActionConsole.addEntry('system', 'Agent is busy — message queued for next turn');
+                                }
+
                                 // Action: tool use or lifecycle event
                                 if (data.type === 'action') {
                                     ActionConsole.processActions([data.action]);
@@ -3096,13 +3117,20 @@ inject();
                                     const cleanedResponse = this.stripReasoningTokens(fullResponse);
                                     const displayText = stripCanvasTags(cleanedResponse);
 
-                                    if (displayText === this._lastResponse) {
+                                    if (displayText && displayText === this._lastResponse) {
                                         console.log('Skipping duplicate response');
                                         TranscriptPanel.finalizeStreaming(null);
                                         reader.cancel();
                                         return;
                                     }
                                     this._lastResponse = displayText;
+
+                                    // Safety net: if user said goodbye but agent forgot [SLEEP], trigger it
+                                    const _goodbyeRe = /^(bye|goodbye|good night|goodnight|see you later|see ya|go to sleep|stop listening|later|peace out|night night|i'm out|gotta go|talk to you later|ttyl)\b/i;
+                                    if (_goodbyeRe.test(text.trim()) && !/\[SLEEP\]/i.test(fullResponse)) {
+                                        console.log('[Sleep] Safety net: user said goodbye but agent forgot [SLEEP] — injecting sleep');
+                                        window._sleepAfterResponse = true;
+                                    }
 
                                     // Final update of streaming message or create new if no deltas came
                                     if (streamingMsgEl) {
@@ -3202,6 +3230,15 @@ inject();
                 } catch (error) {
                     if (error.name === 'AbortError') {
                         console.log('Previous request aborted (interrupt)');
+                        // Clear thinking state so UI doesn't stay stuck if no
+                        // new sendMessage follows (e.g. echo-triggered abort
+                        // where the new message was too short/empty).
+                        FaceModule.setMood('neutral');
+                        StatusModule.update('idle', 'READY');
+                        TranscriptPanel.removeThinking();
+                        TranscriptPanel.finalizeStreaming(null);
+                        document.getElementById('thought-bubbles')?.classList.remove('active');
+                        window.HaloSmokeFace?.setThinking(false);
                     } else {
                         console.error('Conversation error:', error);
                         this.addSystemMessage(`Error: ${error.message}`);
@@ -3474,13 +3511,26 @@ inject();
                     this.isPlaying = false;
                     this.callbacks.onListening();
                     WaveformModule.setAmplitude(0);
-                    // Agent requested sleep — disconnect after farewell audio finishes
+                    // Agent requested sleep — disconnect call and activate wake word detection
                     if (window._sleepAfterResponse) {
                         window._sleepAfterResponse = false;
-                        console.log('[Sleep] Farewell audio done — returning to wake-word mode');
+                        console.log('[Sleep] Farewell audio done — activating wake word mode');
                         setTimeout(() => {
                             ModeManager.clawdbotMode?.stopVoiceInput();
                             UIModule.setCallButtonState('disconnected');
+                            // Ensure we're in normal mode (not listen/a2a)
+                            if (window.ModeSelector?.currentMode !== 'normal') {
+                                window.ModeSelector?.select('normal');
+                            }
+                            // Force-start wake word detector regardless of prior state
+                            if (window.wakeDetector && window.wakeDetector.isSupported()) {
+                                if (!window.wakeDetector.isListening) {
+                                    window.wakeDetector.start();
+                                }
+                                const wakeBtn = document.getElementById('wake-button');
+                                if (wakeBtn) wakeBtn.classList.add('listening');
+                                console.log('[Sleep] Wake word detector activated');
+                            }
                         }, 600);
                     }
                     return;
@@ -3823,6 +3873,13 @@ inject();
 
             stopAll() {
                 console.log('STOP ALL - killing audio and resetting');
+                // Tell server to abort any active openclaw run (fire-and-forget)
+                console.warn('⛔ ABORT source: stopAll');
+                fetch('/api/conversation/abort', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: 'stopAll' }),
+                }).catch(() => {});
                 // Stop voiceConversation TTS and abort its fetch
                 if (window._voiceConversation) {
                     window._voiceConversation.stopAudio?.();
@@ -4066,6 +4123,13 @@ inject();
                 if (this._fetchAbortController) {
                     this._fetchAbortController.abort();
                     this._fetchAbortController = null;
+                    // Tell server to abort the openclaw run (fire-and-forget)
+                    console.warn(`⛔ ABORT source: VoiceConversation.handleUserTranscript (transcript: "${transcript.substring(0,30)}")`);
+                    fetch(`${this.config.serverUrl}/api/conversation/abort`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'voice-handleUserTranscript', text: transcript.substring(0, 50) }),
+                    }).catch(() => {});
                 }
                 this.stopAudio();
 
@@ -7393,6 +7457,14 @@ inject();
                     if (cm._fetchAbortController) {
                         cm._fetchAbortController.abort();
                         cm._fetchAbortController = null;
+                        // Tell server to abort the openclaw run (fire-and-forget)
+                        console.warn('⛔ ABORT source: PTT interrupt');
+                        const serverUrl = cm.config?.serverUrl || '';
+                        fetch(`${serverUrl}/api/conversation/abort`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ source: 'ptt-interrupt' }),
+                        }).catch(() => {});
                     }
                     // Also stop VoiceConversation TTS (separate audio path)
                     if (window._voiceConversation) {
