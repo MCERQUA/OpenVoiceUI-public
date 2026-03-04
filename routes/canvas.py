@@ -13,11 +13,19 @@ import os
 import re
 import shutil
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
 import requests as http_requests
 from flask import Blueprint, Response, jsonify, redirect, request, send_file
+
+from services.canvas_versioning import (
+    list_versions,
+    restore_version,
+    get_version_content,
+    start_version_watcher,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -944,3 +952,57 @@ def canvas_mtime(filename):
         return jsonify({'error': 'not found'}), 404
     mtime = resolved.stat().st_mtime
     return jsonify({'mtime': mtime, 'filename': filename})
+
+
+# ---------------------------------------------------------------------------
+# Canvas Page Version History
+# ---------------------------------------------------------------------------
+
+@canvas_bp.route('/api/canvas/versions/<page_id>', methods=['GET'])
+def get_page_versions(page_id):
+    """List all saved versions of a canvas page.
+    GET /api/canvas/versions/my-dashboard
+    Returns: {"page_id": "my-dashboard", "versions": [...], "count": N}
+    """
+    versions = list_versions(page_id)
+    return jsonify({
+        'page_id': page_id,
+        'versions': versions,
+        'count': len(versions),
+    })
+
+
+@canvas_bp.route('/api/canvas/versions/<page_id>/<int:timestamp>', methods=['GET'])
+def preview_version(page_id, timestamp):
+    """Preview a specific version's HTML content.
+    GET /api/canvas/versions/my-dashboard/1709510400
+    Returns the HTML content directly.
+    """
+    content = get_version_content(page_id, timestamp)
+    if content is None:
+        return jsonify({'error': 'Version not found'}), 404
+    return Response(content, mimetype='text/html')
+
+
+@canvas_bp.route('/api/canvas/versions/<page_id>/<int:timestamp>/restore', methods=['POST'])
+def restore_page_version(page_id, timestamp):
+    """Restore a canvas page to a previous version.
+    POST /api/canvas/versions/my-dashboard/1709510400/restore
+    Saves the current version before restoring.
+    """
+    success = restore_version(page_id, timestamp)
+    if not success:
+        return jsonify({'error': 'Version not found or restore failed'}), 404
+
+    # Update manifest modified time
+    manifest = load_canvas_manifest()
+    if page_id in manifest.get('pages', {}):
+        manifest['pages'][page_id]['modified'] = datetime.now().isoformat()
+        save_canvas_manifest(manifest)
+
+    return jsonify({
+        'status': 'ok',
+        'page_id': page_id,
+        'restored_from': timestamp,
+        'message': f'Page restored to version from {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))}',
+    })
