@@ -136,6 +136,14 @@ try:
 except Exception as _e:
     logger.warning(f"Canvas manifest auto-sync failed (non-critical): {_e}")
 
+# Start canvas page version watcher (auto-saves versions when pages change)
+try:
+    from services.canvas_versioning import start_version_watcher
+    start_version_watcher()
+    logger.info("Canvas version watcher started.")
+except Exception as _e:
+    logger.warning(f"Canvas version watcher failed to start (non-critical): {_e}")
+
 
 # ---------------------------------------------------------------------------
 # Voice session management

@@ -13,11 +13,19 @@ import os
 import re
 import shutil
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
 import requests as http_requests
 from flask import Blueprint, Response, jsonify, redirect, request, send_file
+
+from services.canvas_versioning import (
+    list_versions,
+    restore_version,
+    get_version_content,
+    start_version_watcher,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -256,15 +264,12 @@ def load_canvas_manifest() -> dict:
 
 
 def save_canvas_manifest(manifest: dict) -> None:
-    """Save manifest atomically with backup."""
+    """Save manifest directly (Docker bind-mounted files don't support atomic rename)."""
     manifest['last_updated'] = datetime.now().isoformat()
     try:
-        temp_path = CANVAS_MANIFEST_PATH.with_suffix('.tmp')
-        with open(temp_path, 'w') as f:
-            json.dump(manifest, f, indent=2)
-        if CANVAS_MANIFEST_PATH.exists():
-            shutil.copy(CANVAS_MANIFEST_PATH, CANVAS_MANIFEST_PATH.with_suffix('.bak'))
-        shutil.move(temp_path, CANVAS_MANIFEST_PATH)
+        data = json.dumps(manifest, indent=2)
+        with open(CANVAS_MANIFEST_PATH, 'w') as f:
+            f.write(data)
         _manifest_cache['mtime'] = 0  # invalidate cache
     except Exception as exc:
         logging.getLogger(__name__).error(f'Failed to save canvas manifest: {exc}')
@@ -571,20 +576,35 @@ def canvas_pages_proxy(path):
             with open(resolved, 'rb') as f:
                 content = f.read()
             if path.endswith('.html'):
-                # Inject padding to clear UI chrome (side buttons: 44px, top tab: 24px)
-                _padding_css = (
-                    b'<style id="canvas-ui-clearance">'
+                # Strip external CDN scripts (Tailwind CDN etc break in sandboxed iframes)
+                import re as _re
+                content_str = content.decode('utf-8', errors='replace')
+                _stripped = _re.sub(
+                    r'<script\s+[^>]*src\s*=\s*["\']https?://[^"\']+["\'][^>]*>\s*</script>',
+                    '<!-- external script stripped for iframe compatibility -->',
+                    content_str,
+                    flags=_re.IGNORECASE,
+                )
+                content = _stripped.encode('utf-8')
+
+                # Inject base dark-theme fallback + padding for UI chrome clearance
+                _base_css = (
+                    b'<style id="canvas-base-styles">'
                     b'html,body{'
                     b'padding-top:15px!important;'
                     b'padding-left:15px!important;'
                     b'padding-right:15px!important;'
-                    b'box-sizing:border-box!important;}'
+                    b'box-sizing:border-box!important;'
+                    b'color:#e2e8f0;'
+                    b'background:#0a0a0a;}'
+                    b'h1,h2,h3,h4{color:#fff;}'
+                    b'a{color:#fb923c;}'
                     b'</style>'
                 )
                 if b'</head>' in content:
-                    content = content.replace(b'</head>', _padding_css + b'</head>', 1)
+                    content = content.replace(b'</head>', _base_css + b'</head>', 1)
                 else:
-                    content = _padding_css + content
+                    content = _base_css + content
                 content_type = 'text/html'
             elif path.endswith('.css'):
                 content_type = 'text/css'
@@ -932,3 +952,57 @@ def canvas_mtime(filename):
         return jsonify({'error': 'not found'}), 404
     mtime = resolved.stat().st_mtime
     return jsonify({'mtime': mtime, 'filename': filename})
+
+
+# ---------------------------------------------------------------------------
+# Canvas Page Version History
+# ---------------------------------------------------------------------------
+
+@canvas_bp.route('/api/canvas/versions/<page_id>', methods=['GET'])
+def get_page_versions(page_id):
+    """List all saved versions of a canvas page.
+    GET /api/canvas/versions/my-dashboard
+    Returns: {"page_id": "my-dashboard", "versions": [...], "count": N}
+    """
+    versions = list_versions(page_id)
+    return jsonify({
+        'page_id': page_id,
+        'versions': versions,
+        'count': len(versions),
+    })
+
+
+@canvas_bp.route('/api/canvas/versions/<page_id>/<int:timestamp>', methods=['GET'])
+def preview_version(page_id, timestamp):
+    """Preview a specific version's HTML content.
+    GET /api/canvas/versions/my-dashboard/1709510400
+    Returns the HTML content directly.
+    """
+    content = get_version_content(page_id, timestamp)
+    if content is None:
+        return jsonify({'error': 'Version not found'}), 404
+    return Response(content, mimetype='text/html')
+
+
+@canvas_bp.route('/api/canvas/versions/<page_id>/<int:timestamp>/restore', methods=['POST'])
+def restore_page_version(page_id, timestamp):
+    """Restore a canvas page to a previous version.
+    POST /api/canvas/versions/my-dashboard/1709510400/restore
+    Saves the current version before restoring.
+    """
+    success = restore_version(page_id, timestamp)
+    if not success:
+        return jsonify({'error': 'Version not found or restore failed'}), 404
+
+    # Update manifest modified time
+    manifest = load_canvas_manifest()
+    if page_id in manifest.get('pages', {}):
+        manifest['pages'][page_id]['modified'] = datetime.now().isoformat()
+        save_canvas_manifest(manifest)
+
+    return jsonify({
+        'status': 'ok',
+        'page_id': page_id,
+        'restored_from': timestamp,
+        'message': f'Page restored to version from {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))}',
+    })

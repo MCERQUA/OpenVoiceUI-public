@@ -136,6 +136,20 @@
           "default": null,
           "description": "Ms of silence after final result before dispatching to AI. Maps to WebSpeechSTT.silenceDelayMs. null = platform default (3000ms)."
         },
+        "vad_threshold": {
+          "type": ["integer", "null"],
+          "minimum": 10,
+          "maximum": 80,
+          "default": null,
+          "description": "FFT average amplitude threshold for voice detection. Lower = more sensitive. null = platform default (35). Range 10-80."
+        },
+        "max_recording_s": {
+          "type": ["integer", "null"],
+          "minimum": 10,
+          "maximum": 120,
+          "default": null,
+          "description": "Max recording duration in seconds before auto-chunking. Prevents FFmpeg timeout on long speech. null = platform default (45)."
+        },
         "continuous": {
           "type": ["boolean", "null"],
           "default": null,

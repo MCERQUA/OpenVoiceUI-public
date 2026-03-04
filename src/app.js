@@ -2262,7 +2262,10 @@ inject();
 
                 // VAD (Voice Activity Detection) settings
                 this.silenceTimer = null;
-                this.silenceDelayMs = 3000; // 3s silence = end of speech
+                this.silenceDelayMs = 3000; // 3s silence = end of speech (profile can override)
+                this.vadThreshold = 35;     // FFT average amplitude threshold (profile can override)
+                this.maxRecordingMs = 45000; // 45s max recording before auto-chunk (profile can override)
+                this.maxRecordingTimer = null;
                 this.isSpeaking = false;
                 this.stoppingRecorder = false;  // Flag to prevent duplicate stop attempts
                 this.hadSpeechInChunk = false;  // Track if real speech happened in this chunk
@@ -2296,10 +2299,14 @@ inject();
 
                         this.isProcessing = true;
 
-                        // Clear any pending silence timer to prevent duplicate processing
+                        // Clear any pending timers to prevent duplicate processing
                         if (this.silenceTimer) {
                             clearTimeout(this.silenceTimer);
                             this.silenceTimer = null;
+                        }
+                        if (this.maxRecordingTimer) {
+                            clearTimeout(this.maxRecordingTimer);
+                            this.maxRecordingTimer = null;
                         }
 
                         // Create audio blob
@@ -2369,8 +2376,8 @@ inject();
                         analyser.getByteFrequencyData(dataArray);
                         const average = dataArray.reduce((a, b) => a + b) / bufferLength;
 
-                        // Voice detection threshold
-                        const isSpeakingNow = average > 45;
+                        // Voice detection threshold (configurable via profile stt.vad_threshold)
+                        const isSpeakingNow = average > this.vadThreshold;
 
                         if (isSpeakingNow && !this.isSpeaking) {
                             // Started speaking
@@ -2382,6 +2389,20 @@ inject();
                             if (this.silenceTimer) {
                                 clearTimeout(this.silenceTimer);
                                 this.silenceTimer = null;
+                            }
+
+                            // Start max recording safety timer (prevents unbounded audio)
+                            if (!this.maxRecordingTimer && !this.isProcessing && !this.stoppingRecorder) {
+                                this.maxRecordingTimer = setTimeout(() => {
+                                    console.log('⏱️ Max recording duration reached, auto-chunking');
+                                    this.maxRecordingTimer = null;
+                                    this.isSpeaking = false;
+                                    this.stoppingRecorder = true;
+                                    if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
+                                    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                                        this.mediaRecorder.stop();
+                                    }
+                                }, this.maxRecordingMs);
                             }
                         } else if (!isSpeakingNow && this.isSpeaking && !this.isProcessing && !this.stoppingRecorder) {
                             // Stopped speaking - start silence timer (ONLY if not already processing or stopping)
@@ -2421,6 +2442,10 @@ inject();
                 if (this.silenceTimer) {
                     clearTimeout(this.silenceTimer);
                     this.silenceTimer = null;
+                }
+                if (this.maxRecordingTimer) {
+                    clearTimeout(this.maxRecordingTimer);
+                    this.maxRecordingTimer = null;
                 }
 
                 if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
@@ -2650,6 +2675,7 @@ inject();
                 FaceModule.setMood('thinking');
                 StatusModule.update('thinking', 'CONNECTING...');
                 document.getElementById('thought-bubbles')?.classList.add('active');
+                window.HaloSmokeFace?.setThinking(true);
 
                 // Guard mic from the start — greeting fetch + TTS play will set this properly
                 // via onSpeaking, but setting it here prevents any STT results that arrive
@@ -2745,6 +2771,13 @@ inject();
                 if (this._fetchAbortController) {
                     this._fetchAbortController.abort();
                     this._fetchAbortController = null;
+                    // Tell server to abort the openclaw run (fire-and-forget)
+                    console.warn('⛔ ABORT source: stopVoiceInput');
+                    fetch(`${this.config.serverUrl}/api/conversation/abort`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'stopVoiceInput' }),
+                    }).catch(() => {});
                 }
                 this.stopAudio();
                 if (this.stt) {
@@ -2788,7 +2821,7 @@ inject();
                 }
             }
 
-            async sendMessage(text) {
+            async sendMessage(text, opts = {}) {
                 if (!text || !text.trim()) return;
 
                 // Interrupt: abort any in-flight request and stop current audio FIRST
@@ -2796,6 +2829,13 @@ inject();
                 if (this._fetchAbortController) {
                     this._fetchAbortController.abort();
                     this._fetchAbortController = null;
+                    // Tell server to abort the openclaw run (fire-and-forget)
+                    console.warn(`⛔ ABORT source: ClawdbotMode.sendMessage (new msg: "${text.substring(0,30)}")`);
+                    fetch(`${this.config.serverUrl}/api/conversation/abort`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'clawdbot-sendMessage', text: text.substring(0, 50) }),
+                    }).catch(() => {});
                 }
                 this.stopAudio();
 
@@ -2814,7 +2854,7 @@ inject();
                 if (!isSystemTrigger) {
                     this.displayMessage('user', text);
                     this.callbacks.onMessage('user', text);
-                    TranscriptPanel.addMessage('user', text);
+                    TranscriptPanel.addMessage('user', text, { imageUrl: opts.imageUrl || null });
                 }
 
                 // Show thinking state while waiting for response
@@ -2822,12 +2862,14 @@ inject();
                 StatusModule.update('thinking', 'THINKING');
                 TranscriptPanel.showThinking();
                 document.getElementById('thought-bubbles')?.classList.add('active');
+                window.HaloSmokeFace?.setThinking(true);
 
                 ActionConsole.addEntry('chat', `Sent: "${text.substring(0, 80)}${text.length > 80 ? '...' : ''}"`);
 
                 let messageToSend = text.trim();
 
                 // Send via HTTP POST - server connects to Gateway, generates TTS, returns response
+                let _inactivityTimer = null;  // declared here so finally block can clear it
                 try {
                     const provider = localStorage.getItem('voice_provider') || 'supertonic';
                     const voice = localStorage.getItem('voice_voice') || 'M1';
@@ -2847,7 +2889,8 @@ inject();
                             ui_context: uiContext,
                             identified_person: window.cameraModule?.currentIdentity || null,
                             ...(gatewayAgentId ? { agent_id: gatewayAgentId } : {}),
-                            ...(window._maxResponseChars ? { max_response_chars: window._maxResponseChars } : {})
+                            ...(window._maxResponseChars ? { max_response_chars: window._maxResponseChars } : {}),
+                            ...(opts.image_path ? { image_path: opts.image_path } : {})
                         })
                     });
 
@@ -2860,6 +2903,19 @@ inject();
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
+
+                    // Inactivity timeout: abort if no data received for 60s
+                    // (heartbeats arrive every 10-15s during tool execution)
+                    // _inactivityTimer declared in outer scope so finally{} can clear it
+                    const INACTIVITY_TIMEOUT_MS = 60000;
+                    const _resetInactivity = () => {
+                        if (_inactivityTimer) clearTimeout(_inactivityTimer);
+                        _inactivityTimer = setTimeout(() => {
+                            console.warn('[Stream] No data for 60s — aborting');
+                            this._fetchAbortController?.abort();
+                        }, INACTIVITY_TIMEOUT_MS);
+                    };
+                    _resetInactivity();
                     let streamingText = '';  // Accumulate delta text
                     let firstDeltaReceived = false;
                     let streamingMsgEl = null;  // Reference to the streaming message element
@@ -3015,6 +3071,7 @@ inject();
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
+                        _resetInactivity();
                         buffer += decoder.decode(value, { stream: true });
 
                         // Process complete NDJSON lines
@@ -3038,6 +3095,7 @@ inject();
                                         TranscriptPanel.removeThinking();
                                         TranscriptPanel.startStreaming();
                                         document.getElementById('thought-bubbles')?.classList.remove('active');
+                                        window.HaloSmokeFace?.setThinking(false);
                                         // Create streaming message element
                                         streamingMsgEl = this.displayMessage('assistant', stripCanvasTags(streamingText), true);
                                     } else if (streamingMsgEl) {
@@ -3054,6 +3112,18 @@ inject();
 
                                     // Check for canvas commands as they stream in
                                     checkCanvasInStream(streamingText);
+                                }
+
+                                // Heartbeat: server is alive, agent is working
+                                if (data.type === 'heartbeat') {
+                                    const secs = data.elapsed || 0;
+                                    StatusModule.update('thinking', `WORKING... ${secs}s`);
+                                }
+
+                                // Queued: openclaw is busy, message will be processed after current run
+                                if (data.type === 'queued') {
+                                    StatusModule.update('thinking', 'QUEUED — agent busy');
+                                    ActionConsole.addEntry('system', 'Agent is busy — message queued for next turn');
                                 }
 
                                 // Action: tool use or lifecycle event
@@ -3073,13 +3143,20 @@ inject();
                                     const cleanedResponse = this.stripReasoningTokens(fullResponse);
                                     const displayText = stripCanvasTags(cleanedResponse);
 
-                                    if (displayText === this._lastResponse) {
+                                    if (displayText && displayText === this._lastResponse) {
                                         console.log('Skipping duplicate response');
                                         TranscriptPanel.finalizeStreaming(null);
                                         reader.cancel();
                                         return;
                                     }
                                     this._lastResponse = displayText;
+
+                                    // Safety net: if user said goodbye but agent forgot [SLEEP], trigger it
+                                    const _goodbyeRe = /^(bye|goodbye|good night|goodnight|see you later|see ya|go to sleep|stop listening|later|peace out|night night|i'm out|gotta go|talk to you later|ttyl)\b/i;
+                                    if (_goodbyeRe.test(text.trim()) && !/\[SLEEP\]/i.test(fullResponse)) {
+                                        console.log('[Sleep] Safety net: user said goodbye but agent forgot [SLEEP] — injecting sleep');
+                                        window._sleepAfterResponse = true;
+                                    }
 
                                     // Final update of streaming message or create new if no deltas came
                                     if (streamingMsgEl) {
@@ -3179,6 +3256,15 @@ inject();
                 } catch (error) {
                     if (error.name === 'AbortError') {
                         console.log('Previous request aborted (interrupt)');
+                        // Clear thinking state so UI doesn't stay stuck if no
+                        // new sendMessage follows (e.g. echo-triggered abort
+                        // where the new message was too short/empty).
+                        FaceModule.setMood('neutral');
+                        StatusModule.update('idle', 'READY');
+                        TranscriptPanel.removeThinking();
+                        TranscriptPanel.finalizeStreaming(null);
+                        document.getElementById('thought-bubbles')?.classList.remove('active');
+                        window.HaloSmokeFace?.setThinking(false);
                     } else {
                         console.error('Conversation error:', error);
                         this.addSystemMessage(`Error: ${error.message}`);
@@ -3188,9 +3274,11 @@ inject();
                         TranscriptPanel.removeThinking();
                         TranscriptPanel.finalizeStreaming(null);
                         document.getElementById('thought-bubbles')?.classList.remove('active');
+                        window.HaloSmokeFace?.setThinking(false);
                         setTimeout(() => FaceModule.setMood('neutral'), 2000);
                     }
                 } finally {
+                    if (_inactivityTimer) clearTimeout(_inactivityTimer);
                     this._sending = false;
                     // Safety net: if no audio was queued/played, STT never gets restarted
                     // via onListening callback. Ensure mic comes back after a short delay.
@@ -3449,13 +3537,26 @@ inject();
                     this.isPlaying = false;
                     this.callbacks.onListening();
                     WaveformModule.setAmplitude(0);
-                    // Agent requested sleep — disconnect after farewell audio finishes
+                    // Agent requested sleep — disconnect call and activate wake word detection
                     if (window._sleepAfterResponse) {
                         window._sleepAfterResponse = false;
-                        console.log('[Sleep] Farewell audio done — returning to wake-word mode');
+                        console.log('[Sleep] Farewell audio done — activating wake word mode');
                         setTimeout(() => {
                             ModeManager.clawdbotMode?.stopVoiceInput();
                             UIModule.setCallButtonState('disconnected');
+                            // Ensure we're in normal mode (not listen/a2a)
+                            if (window.ModeSelector?.currentMode !== 'normal') {
+                                window.ModeSelector?.select('normal');
+                            }
+                            // Force-start wake word detector regardless of prior state
+                            if (window.wakeDetector && window.wakeDetector.isSupported()) {
+                                if (!window.wakeDetector.isListening) {
+                                    window.wakeDetector.start();
+                                }
+                                const wakeBtn = document.getElementById('wake-button');
+                                if (wakeBtn) wakeBtn.classList.add('listening');
+                                console.log('[Sleep] Wake word detector activated');
+                            }
                         }, 600);
                     }
                     return;
@@ -3798,6 +3899,13 @@ inject();
 
             stopAll() {
                 console.log('STOP ALL - killing audio and resetting');
+                // Tell server to abort any active openclaw run (fire-and-forget)
+                console.warn('⛔ ABORT source: stopAll');
+                fetch('/api/conversation/abort', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: 'stopAll' }),
+                }).catch(() => {});
                 // Stop voiceConversation TTS and abort its fetch
                 if (window._voiceConversation) {
                     window._voiceConversation.stopAudio?.();
@@ -4041,6 +4149,13 @@ inject();
                 if (this._fetchAbortController) {
                     this._fetchAbortController.abort();
                     this._fetchAbortController = null;
+                    // Tell server to abort the openclaw run (fire-and-forget)
+                    console.warn(`⛔ ABORT source: VoiceConversation.handleUserTranscript (transcript: "${transcript.substring(0,30)}")`);
+                    fetch(`${this.config.serverUrl}/api/conversation/abort`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ source: 'voice-handleUserTranscript', text: transcript.substring(0, 50) }),
+                    }).catch(() => {});
                 }
                 this.stopAudio();
 
@@ -4053,6 +4168,7 @@ inject();
                 StatusModule.update('thinking', 'THINKING');
                 TranscriptPanel.showThinking();
                 document.getElementById('thought-bubbles')?.classList.add('active');
+                window.HaloSmokeFace?.setThinking(true);
 
                 // NOTE: STT stays running - isProcessing flag blocks new transcripts
 
@@ -4090,6 +4206,7 @@ inject();
                         FaceModule.setMood('neutral');
                         TranscriptPanel.removeThinking();
                         document.getElementById('thought-bubbles')?.classList.remove('active');
+                        window.HaloSmokeFace?.setThinking(false);
 
                         console.log('AI responded:', data.response);
                         const rawResponse = data.response;
@@ -4138,6 +4255,7 @@ inject();
                     // Reset processing flag to allow new transcripts
                     TranscriptPanel.removeThinking();
                     document.getElementById('thought-bubbles')?.classList.remove('active');
+                    window.HaloSmokeFace?.setThinking(false);
                     this.stt.resetProcessing();
                     this.callbacks.onListening();
                 }
@@ -5114,6 +5232,7 @@ inject();
                     FaceModule.setMood('thinking');
                     StatusModule.update('thinking', 'CONNECTING...');
                     document.getElementById('thought-bubbles')?.classList.add('active');
+                    window.HaloSmokeFace?.setThinking(true);
 
                     // Flash buttons and start conversation
                     callButton.classList.add('auto-triggered');
@@ -5165,6 +5284,7 @@ inject();
                     document.getElementById('stop-button').style.display = '';
                     // Clear thinking state when TTS starts — agent is now speaking, not thinking
                     document.getElementById('thought-bubbles')?.classList.remove('active');
+                    window.HaloSmokeFace?.setThinking(false);
                     TranscriptPanel.removeThinking?.();
                     if (voiceConversation.stt) {
                         console.log('🔇 Muting mic during TTS');
@@ -5252,6 +5372,7 @@ inject();
                         FaceModule.setMood('thinking');
                         StatusModule.update('thinking', 'CONNECTING...');
                         document.getElementById('thought-bubbles')?.classList.add('active');
+                        window.HaloSmokeFace?.setThinking(true);
                     }
                     ModeManager.toggleVoice();
                 });
@@ -6309,7 +6430,61 @@ inject();
                 this.messages = document.getElementById('transcript-messages');
                 this.button = document.getElementById('transcript-button');
                 this.unreadDot = document.getElementById('transcript-unread');
+
+                // Paste image support on text input
+                const textInput = document.getElementById('tp-text-input');
+                if (textInput) {
+                    textInput.addEventListener('paste', (e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        for (const item of items) {
+                            if (item.type.startsWith('image/')) {
+                                e.preventDefault();
+                                const file = item.getAsFile();
+                                if (file) this._stageFile(file);
+                                return;
+                            }
+                        }
+                    });
+                }
+
+                // Drag-and-drop image support on transcript panel
+                if (this.panel) {
+                    this.panel.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                        this.panel.classList.add('tp-dragover');
+                    });
+                    this.panel.addEventListener('dragleave', () => {
+                        this.panel.classList.remove('tp-dragover');
+                    });
+                    this.panel.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        this.panel.classList.remove('tp-dragover');
+                        const file = e.dataTransfer?.files?.[0];
+                        if (file && file.type.startsWith('image/')) {
+                            this._stageFile(file);
+                        }
+                    });
+                }
+
                 console.log('Transcript Panel initialized');
+            },
+
+            _stageFile(file) {
+                this._pendingFile = { file, name: file.name, type: file.type, size: file.size };
+                // Create blob URL for thumbnail preview in chat
+                if (file.type.startsWith('image/')) {
+                    this._pendingImageThumbUrl = URL.createObjectURL(file);
+                }
+                const preview = document.getElementById('tp-file-preview');
+                const nameEl = document.getElementById('tp-file-name');
+                if (preview && nameEl) {
+                    nameEl.textContent = file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name;
+                    preview.style.display = 'flex';
+                }
+                document.getElementById('tp-text-input')?.focus();
+                if (!this.isVisible) this.show();
             },
 
             show() {
@@ -6335,7 +6510,7 @@ inject();
                 if (this.isVisible) this.hide(); else this.show();
             },
 
-            addMessage(role, text) {
+            addMessage(role, text, opts = {}) {
                 if (!this.messages || !text) return;
 
                 const msg = document.createElement('div');
@@ -6352,7 +6527,13 @@ inject();
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
                     .replace(/\n/g, '<br>');
 
-                msg.innerHTML = `<div class="tp-meta">${name} · ${time}</div><div class="tp-text">${html}</div>`;
+                // Small image icon beside the message
+                let imgIcon = '';
+                if (opts.imageUrl) {
+                    imgIcon = `<img src="${opts.imageUrl}" class="tp-img-icon" alt="📷" title="Image attached">`;
+                }
+
+                msg.innerHTML = `<div class="tp-meta">${name} · ${time}</div><div class="tp-text">${imgIcon}${html}</div>`;
                 this.messages.appendChild(msg);
                 this.messages.scrollTop = this.messages.scrollHeight;
 
@@ -6446,14 +6627,21 @@ inject();
                 // Need either text or a file
                 if (!text && !this._pendingFile) return;
 
+                // Grab and clear input + file immediately so repeat sends have nothing to send
+                if (input) input.value = '';
+                const stagedFile = this._pendingFile;
+                this._pendingFile = null;
+
                 let messageToSend = text;
 
                 // Upload file first if one is staged
-                if (this._pendingFile) {
+                if (stagedFile) {
                     try {
-                        const result = await this.uploadFile(this._pendingFile.file);
+                        const result = await this.uploadFile(stagedFile.file);
                         if (result.type === 'image') {
-                            messageToSend = `[USER ATTACHED IMAGE: ${result.original_name}, saved at ${result.path} — use your file read tool to view it] ${text}`;
+                            // Pass image path so server can run vision analysis
+                            this._pendingImagePath = result.path;
+                            messageToSend = text || `What do you see in this image? (${result.original_name})`;
                         } else if (result.content_preview) {
                             messageToSend = `[USER ATTACHED FILE: ${result.original_name}, saved at ${result.path}]\n--- File contents ---\n${result.content_preview}\n--- End file ---\n${text}`;
                         } else {
@@ -6469,41 +6657,22 @@ inject();
 
                 if (!messageToSend.trim()) return;
 
-                // Clear input
-                if (input) input.value = '';
-
                 // Show panel if hidden
                 if (!this.isVisible) this.show();
 
                 // Send through the existing voice conversation path
+                const imagePath = this._pendingImagePath || null;
+                const imageThumbUrl = this._pendingImageThumbUrl || null;
+                this._pendingImagePath = null;
+                this._pendingImageThumbUrl = null;
                 if (window.ModeManager?.clawdbotMode) {
-                    window.ModeManager.clawdbotMode.sendMessage(messageToSend);
+                    window.ModeManager.clawdbotMode.sendMessage(messageToSend, { image_path: imagePath, imageUrl: imageThumbUrl });
                 }
             },
 
             handleUpload(inputEl) {
                 const file = inputEl?.files?.[0];
-                if (!file) return;
-
-                this._pendingFile = {
-                    file: file,
-                    name: file.name,
-                    type: file.type,
-                    size: file.size
-                };
-
-                // Show preview
-                const preview = document.getElementById('tp-file-preview');
-                const nameEl = document.getElementById('tp-file-name');
-                if (preview && nameEl) {
-                    nameEl.textContent = file.name.length > 20
-                        ? file.name.substring(0, 17) + '...'
-                        : file.name;
-                    preview.style.display = 'flex';
-                }
-
-                // Focus text input
-                document.getElementById('tp-text-input')?.focus();
+                if (file) this._stageFile(file);
             },
 
             clearFile() {
@@ -7362,6 +7531,14 @@ inject();
                     if (cm._fetchAbortController) {
                         cm._fetchAbortController.abort();
                         cm._fetchAbortController = null;
+                        // Tell server to abort the openclaw run (fire-and-forget)
+                        console.warn('⛔ ABORT source: PTT interrupt');
+                        const serverUrl = cm.config?.serverUrl || '';
+                        fetch(`${serverUrl}/api/conversation/abort`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ source: 'ptt-interrupt' }),
+                        }).catch(() => {});
                     }
                     // Also stop VoiceConversation TTS (separate audio path)
                     if (window._voiceConversation) {
@@ -7571,6 +7748,16 @@ inject();
                     stt.silenceDelayMs = ms;
                     console.log(`[Profile] stt.silenceDelayMs = ${ms}ms`);
                 }
+                const vt = profile?.stt?.vad_threshold;
+                if (vt != null) {
+                    stt.vadThreshold = vt;
+                    console.log(`[Profile] stt.vadThreshold = ${vt}`);
+                }
+                const maxRec = profile?.stt?.max_recording_s;
+                if (maxRec != null) {
+                    stt.maxRecordingMs = maxRec * 1000;
+                    console.log(`[Profile] stt.maxRecordingMs = ${maxRec * 1000}ms`);
+                }
                 // PTT default — auto-enable if profile says so
                 if (profile?.stt?.ptt_default === true && window.PTTButton && !window.PTTButton.pttMode) {
                     window.PTTButton._setPTT(true);
@@ -7679,6 +7866,16 @@ inject();
                     if (ms != null) {
                         stt.silenceDelayMs = ms;
                         console.log(`[Profile] deferred stt.silenceDelayMs = ${ms}ms`);
+                    }
+                    const vt = window._activeProfileData?.stt?.vad_threshold;
+                    if (vt != null) {
+                        stt.vadThreshold = vt;
+                        console.log(`[Profile] deferred stt.vadThreshold = ${vt}`);
+                    }
+                    const maxRec = window._activeProfileData?.stt?.max_recording_s;
+                    if (maxRec != null) {
+                        stt.maxRecordingMs = maxRec * 1000;
+                        console.log(`[Profile] deferred stt.maxRecordingMs = ${maxRec * 1000}ms`);
                     }
                     if (window._activeProfileData?.stt?.ptt_default === true && window.PTTButton && !window.PTTButton.pttMode) {
                         window.PTTButton._setPTT(true);

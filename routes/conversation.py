@@ -56,10 +56,44 @@ _VISION_KEYWORDS = (
     'describe what', 'tell me what you see', 'can you see',
     'what is that', "what's that", 'who is that', "who's that",
     'what am i holding', 'what am i wearing', 'what does it look like',
+    'what am i showing', 'what is this', "what's this",
     'show me what you see', 'use the camera', 'check the camera',
-    'look through the camera',
+    'look through the camera', 'do you see', 'you see this',
+    'take a look', 'what color', 'read this', 'read that',
 )
 _VISION_FRAME_MAX_AGE = 10  # seconds — ignore frames older than this
+
+# ---------------------------------------------------------------------------
+# Voice assistant instructions — injected into every message context.
+# These MUST live here (not in workspace files) so the app works out of the
+# box for anyone who clones the repo without extra setup.
+# ---------------------------------------------------------------------------
+_VOICE_INSTRUCTIONS = (
+    "[VOICE ASSISTANT INSTRUCTIONS: "
+    "You are a voice assistant. Always respond in English. "
+    "Respond in natural, conversational tone. "
+    "No markdown formatting. Be brief and direct. "
+    "CRITICAL RULE: Every response MUST contain spoken words. "
+    "NEVER output a bare tag with no words — the user hears silence. "
+    "BAD: [CANVAS:page-id] — GOOD: Here's that page. [CANVAS:page-id] "
+    "BAD: [MUSIC_PLAY] — GOOD: Playing some music for you. [MUSIC_PLAY] "
+    "Action tags to embed in your responses: "
+    "[MUSIC_PLAY] play random track, "
+    "[MUSIC_PLAY:track name] play specific track (use exact name from Available tracks), "
+    "[MUSIC_STOP] stop music, "
+    "[MUSIC_NEXT] skip track, "
+    "[CANVAS:page-id] open a canvas page (use IDs from Canvas pages list), "
+    "[CANVAS_MENU] open page picker, "
+    "[SUNO_GENERATE:description] generate AI song (tell user it takes ~45s), "
+    "[SPOTIFY:song name] or [SPOTIFY:song|artist] play from Spotify, "
+    "[SLEEP] put interface to sleep (on goodbye/goodnight), "
+    "[SESSION_RESET] clear conversation (use sparingly), "
+    "[REGISTER_FACE:Name] save face from camera (only when asked), "
+    "[SOUND:name] DJ soundboard (ONLY in DJ mode — never in normal conversation). "
+    "Always say something alongside any tag so the user hears words, not silence. "
+    "Do NOT address anyone by name unless a FACE RECOGNITION tag confirms their identity. "
+    "Do NOT use music/sound tags unless the user explicitly asks.]"
+)
 
 
 def _is_vision_request(msg: str) -> bool:
@@ -474,6 +508,7 @@ def _conversation_inner():
     agent_id = data.get('agent_id') or None  # e.g. 'default'; None = default 'main'
     gateway_id = data.get('gateway_id') or None  # plugin gateway id; None = 'openclaw'
     max_response_chars = data.get('max_response_chars') or None  # profile cap, truncates at sentence boundary
+    image_path = data.get('image_path') or None  # uploaded image for vision analysis
     metrics['session_id'] = session_id
     metrics['user_message_len'] = len(user_message)
     metrics['tts_provider'] = tts_provider
@@ -534,6 +569,29 @@ def _conversation_inner():
         else:
             context_parts.append('[CAMERA VISION: Camera frame is stale — camera may have been turned off.]')
 
+    # Vision: if user uploaded an image, analyze it with vision model
+    if image_path:
+        try:
+            _img_file = Path(image_path).resolve()
+            # Security: only allow files inside uploads/ directories
+            if 'uploads' not in _img_file.parts:
+                raise ValueError(f'Path traversal blocked: {image_path}')
+            if _img_file.is_file() and _img_file.stat().st_size < 20_000_000:  # 20MB safety cap
+                from routes.vision import _call_vision
+                _img_b64 = base64.b64encode(_img_file.read_bytes()).decode('ascii')
+                _upload_desc = _call_vision(
+                    _img_b64,
+                    'Describe what you see in this image in detail. Include colors, objects, text, people, layout, and any notable features.',
+                )
+                context_parts.append(f'[UPLOADED IMAGE ANALYSIS: {_upload_desc}]')
+                logger.info('Vision analysis of uploaded image succeeded (%d bytes)', _img_file.stat().st_size)
+            else:
+                logger.warning('Uploaded image not found or too large: %s', image_path)
+                context_parts.append('[UPLOADED IMAGE: File could not be analyzed — may be too large or missing.]')
+        except Exception as exc:
+            logger.warning('Vision analysis of uploaded image failed: %s', exc)
+            context_parts.append('[UPLOADED IMAGE: Vision analysis failed — the image was uploaded but could not be analyzed.]')
+
     if ui_context:
         # Canvas state
         if ui_context.get('canvasVisible') and ui_context.get('canvasDisplayed'):
@@ -593,6 +651,10 @@ def _conversation_inner():
             '[DJ sounds: air_horn, scratch_long, rewind, record_stop, '
             'crowd_cheer, crowd_hype, yeah, lets_go, gunshot, bruh, sad_trombone]'
         )
+    # Inject voice assistant instructions so the agent knows about action tags.
+    # This must be in-app (not workspace files) so it works out of the box.
+    context_parts.append(_VOICE_INSTRUCTIONS)
+
     if context_parts:
         context_prefix = ' '.join(context_parts) + ' '
 
@@ -717,23 +779,47 @@ def _conversation_inner():
                     _chunks_sent = 0    # audio chunks already yielded early
 
                     full_response = None
+                    _stream_start = time.time()
+                    _STREAM_HARD_TIMEOUT = 310  # seconds — total allowed time
+                    _QUEUE_POLL_INTERVAL = 10   # seconds — yield heartbeat if no events
                     while True:
                         try:
-                            evt = event_queue.get(timeout=310)
+                            evt = event_queue.get(timeout=_QUEUE_POLL_INTERVAL)
                         except queue.Empty:
-                            yield json.dumps({'type': 'error', 'error': 'Gateway timeout'}) + '\n'
-                            break
+                            # No events for _QUEUE_POLL_INTERVAL seconds.
+                            # Yield a heartbeat to keep the browser/Cloudflare
+                            # connection alive (they time out at 60-100s of silence).
+                            elapsed = int(time.time() - _stream_start)
+                            if elapsed > _STREAM_HARD_TIMEOUT:
+                                yield json.dumps({'type': 'error', 'error': 'Gateway timeout'}) + '\n'
+                                break
+                            yield json.dumps({'type': 'heartbeat', 'elapsed': elapsed}) + '\n'
+                            continue
 
                         if evt['type'] == 'handshake':
                             metrics['handshake_ms'] = evt['ms']
                             continue
 
+                        if evt['type'] == 'heartbeat':
+                            logger.info(f"### HEARTBEAT → browser ({evt.get('elapsed', 0)}s)")
+                            yield json.dumps({'type': 'heartbeat', 'elapsed': evt.get('elapsed', 0)}) + '\n'
+                            continue
+
                         if evt['type'] == 'delta':
                             _tts_buf += evt['text']
+                            # Don't fire TTS if buffer looks like a system response
+                            # that will be suppressed at text_done. Wait for final
+                            # confirmation before speaking.
+                            _buf_stripped = _tts_buf.strip().upper()
+                            _is_system_text = _buf_stripped in (
+                                'HEARTBEAT_OK', 'HEARTBEAT OK',
+                                'HEARTBEAT_O',  # partial match during streaming
+                            ) or _buf_stripped.startswith('HEARTBEAT')
                             # Fire TTS for complete sentences as they arrive
-                            if not _has_open_tag(_tts_buf):
+                            if not _is_system_text and not _has_open_tag(_tts_buf):
                                 sentence, _tts_buf = _extract_sentence(_tts_buf)
                                 if sentence:
+                                    logger.info(f"### TTS sentence (streaming): {sentence[:80]}")
                                     _tts_pending.append(_fire_tts(sentence))
                             yield json.dumps({'type': 'delta', 'text': evt['text']}) + '\n'
                             # Flush any TTS chunks that finished while text was streaming —
@@ -782,7 +868,13 @@ def _conversation_inner():
                             yield json.dumps({'type': 'action', 'action': evt['action']}) + '\n'
                             continue
 
+                        if evt['type'] == 'queued':
+                            StatusModule_hack = True  # just yield to browser
+                            yield json.dumps({'type': 'queued'}) + '\n'
+                            continue
+
                         if evt['type'] == 'text_done':
+                            logger.info(f"### TEXT_DONE received. response={len(evt.get('response', '') or '')} chars, _tts_pending={len(_tts_pending)}, _tts_buf={repr(_tts_buf[:80])}")
                             full_response = evt.get('response')
                             if full_response and max_response_chars:
                                 full_response = _truncate_at_sentence(full_response, max_response_chars)
@@ -796,6 +888,19 @@ def _conversation_inner():
                                 yield json.dumps({'type': 'no_audio'}) + '\n'
                                 log_metrics(metrics)
                                 break
+
+                            # Tag-only response fallback: if the agent responded
+                            # with ONLY action tags and no spoken words, prepend
+                            # a brief acknowledgment so TTS has something to say.
+                            if full_response and re.match(
+                                r'^\s*(\[[\w_:.-]+\]\s*)+$', full_response
+                            ):
+                                logger.info(
+                                    f"### Tag-only response detected, prepending "
+                                    f"spoken text: {full_response.strip()[:60]}"
+                                )
+                                full_response = "Here you go. " + full_response
+
                             metrics['llm_inference_ms'] = int((time.time() - t_llm_start) * 1000)
                             metrics['tool_count'] = sum(
                                 1 for a in captured_actions
@@ -881,6 +986,18 @@ def _conversation_inner():
 
                             # ── Flush TTS buffer + yield audio chunks in order ──
                             metrics['response_len'] = len(full_response) if full_response else 0
+
+                            # If response was suppressed (None), discard ALL
+                            # pending TTS — never speak suppressed text like
+                            # HEARTBEAT_OK that leaked through delta streaming.
+                            if not full_response:
+                                if _tts_pending:
+                                    logger.info(
+                                        f"### Discarding {len(_tts_pending)} TTS "
+                                        f"chunks for suppressed response"
+                                    )
+                                _tts_buf = ''
+                                _tts_pending = []
 
                             # Fire TTS for any remaining buffered text
                             _remaining = _tts_buf.strip()
@@ -969,6 +1086,17 @@ def _conversation_inner():
                                 'error': evt.get('error', 'Unknown error')
                             }) + '\n'
                             break
+
+                    # Drain any unprocessed events (debug: detect generator exit without text_done)
+                    _remaining_evts = []
+                    while not event_queue.empty():
+                        try:
+                            _remaining_evts.append(event_queue.get_nowait())
+                        except Exception:
+                            break
+                    if _remaining_evts:
+                        _types = [e.get('type', '?') for e in _remaining_evts]
+                        logger.warning(f"### STREAM EXIT with {len(_remaining_evts)} unprocessed events: {_types}")
 
                 return Response(
                     stream_response(),
@@ -1072,6 +1200,36 @@ def _conversation_inner():
     }
 
     return jsonify(response_data)
+
+# ---------------------------------------------------------------------------
+# POST /api/conversation/abort
+# ---------------------------------------------------------------------------
+
+
+@conversation_bp.route('/api/conversation/abort', methods=['POST'])
+def conversation_abort():
+    """Abort the active agent run for the current voice session.
+
+    Fire-and-forget from client — used by PTT interrupt and sendMessage
+    interrupt to tell openclaw to stop generating so it doesn't waste compute.
+    """
+    session_key = get_voice_session_key()
+    # Log abort source from client for debugging
+    source = 'unknown'
+    source_text = ''
+    try:
+        body = request.get_json(silent=True) or {}
+        source = body.get('source', 'unknown')
+        source_text = body.get('text', '')
+    except Exception:
+        pass
+    gw = gateway_manager.get('openclaw')
+    aborted = False
+    if gw and hasattr(gw, 'abort_active_run'):
+        aborted = gw.abort_active_run(session_key)
+    logger.info(f"### ABORT request session={session_key} aborted={aborted} source={source} text={source_text!r}")
+    return jsonify({'ok': True, 'aborted': aborted})
+
 
 # ---------------------------------------------------------------------------
 # POST /api/conversation/reset

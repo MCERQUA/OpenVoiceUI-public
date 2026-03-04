@@ -96,26 +96,28 @@ def _call_vision(image_b64: str, prompt: str, model: str | None = None) -> str:
     """
     Send an image + prompt to the configured vision model and return the text response.
 
+    Uses Groq's Llama 4 Scout vision model — fast, free, and accurate.
+    Z.AI/GLM vision through api.z.ai is broken (returns hallucinated descriptions).
+
     image_b64 may be a raw base64 string or a data-URI (data:image/jpeg;base64,...).
     """
-    if model is None:
-        model, _ = _get_vision_model()
-
     # Strip data-URI prefix if present
     if image_b64.startswith('data:'):
         image_b64 = image_b64.split(',', 1)[1]
 
-    api_key = os.environ.get('ZAI_API_KEY', '')
+    api_key = os.environ.get('GROQ_API_KEY', '')
     if not api_key:
-        raise ValueError('ZAI_API_KEY is not set — cannot call vision model')
+        raise ValueError('GROQ_API_KEY is not set — cannot call vision model')
+
+    vision_model = 'meta-llama/llama-4-scout-17b-16e-instruct'
 
     payload = {
-        'model': model,
+        'model': vision_model,
         'messages': [{
             'role': 'user',
             'content': [
                 {'type': 'image_url',
-                 'image_url': {'url': f'data:image/jpeg;base64,{image_b64}'}},
+                 'image_url': {'url': f'data:image/png;base64,{image_b64}'}},
                 {'type': 'text', 'text': prompt},
             ],
         }],
@@ -123,10 +125,10 @@ def _call_vision(image_b64: str, prompt: str, model: str | None = None) -> str:
     }
 
     resp = requests.post(
-        'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        'https://api.groq.com/openai/v1/chat/completions',
         headers={
             'Authorization': f'Bearer {api_key}',
-            'Content-Type':  'application/json',
+            'Content-Type': 'application/json',
         },
         json=payload,
         timeout=30,
