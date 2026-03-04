@@ -15,8 +15,8 @@ A plug-and-play browser-based voice agent platform. Connect any LLM, any TTS pro
 OpenVoiceUI is a modular voice UI shell. You bring the intelligence (LLM + TTS), it handles everything else:
 
 - **Voice I/O** — browser-based STT with push-to-talk, wake words, or continuous mode
-- **Animated Face** — responsive eye-face avatar with 7 mood states driven by emotion detection
-- **Web Canvas** — fullscreen iframe display system for AI-generated HTML pages, dashboards, and reports
+- **Animated Faces** — multiple face modes (eye-face avatar, halo smoke orb) with mood states, thinking animations, and audio-reactive waveform mouth
+- **Web Canvas** — fullscreen iframe display system for AI-generated HTML pages, dashboards, and reports with interactive links, page versioning, and external URL display
 - **Music Player** — background music with crossfade, AI ducking, and AI trigger commands
 - **Music Generation** — AI-generated track support via Suno or fal.ai integrations
 - **Soundboard** — configurable sound effects with text-trigger detection
@@ -66,6 +66,7 @@ Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are dro
 - **Continuous** — always listening, silence timeout triggers send
 - **Push-to-Talk** — hold button or configurable hotkey (keyboard/mouse)
 - **Listen** — passive monitoring mode
+- **Sleep** — goodbye detection pauses the agent, wake word reactivates
 - **Agent-to-Agent** — A2A communication panel
 
 ### Canvas System
@@ -73,6 +74,9 @@ Connect to any LLM via a gateway plugin — OpenClaw is built-in, others are dro
 - Manifest-based page discovery with search, categories, and starred pages
 - Triggered via `[CANVAS:page-id]` tags in AI responses
 - Real-time SSE updates from server
+- **Interactive links** — canvas pages communicate with the app via postMessage bridge (navigate, speak, open URLs)
+- **Page versioning** — automatic `.versions/` backup on every change with restore API
+- **External URL display** — load any URL in the canvas iframe via `[CANVAS_URL:https://...]`
 
 ### Music Player
 - Background playlist with crossfade (1.5s smooth transitions)
@@ -96,25 +100,39 @@ Define agents in JSON — each profile configures:
 ```
 ├── server.py                   Entry point
 ├── app.py                      Flask app factory
+├── docker-compose.yml          Multi-service Docker setup
 ├── routes/
-│   ├── conversation.py         Voice + parallel TTS streaming
-│   ├── canvas.py               Canvas display system
+│   ├── conversation.py         Voice + parallel TTS streaming (with abort + heartbeats)
+│   ├── canvas.py               Canvas display system + CDN stripping
 │   ├── instructions.py         Live system prompt editor
 │   ├── music.py                Music control
+│   ├── suno.py                 Suno AI music generation + webhooks
 │   ├── profiles.py             Agent profile management
 │   ├── admin.py                Admin + server stats
-│   └── ...
+│   ├── transcripts.py          Conversation transcript auto-save
+│   ├── vision.py               Screenshot / image analysis (Gemini)
+│   ├── greetings.py            Greeting management
+│   ├── theme.py                Theme management
+│   ├── elevenlabs_hybrid.py    ElevenLabs TTS adapter
+│   ├── pi.py                   Pi coding agent
+│   └── static_files.py         Static asset serving
 ├── services/
 │   ├── auth.py                 Clerk JWT authentication middleware
+│   ├── canvas_versioning.py    Automatic page version history + restore
 │   ├── db_pool.py              SQLite WAL connection pool
 │   ├── health.py               Liveness + readiness health probes
 │   ├── paths.py                Canonical path constants (all dirs)
+│   ├── speech_normalizer.py    Speech text normalization
 │   ├── gateway_manager.py      Gateway registry + plugin loader + router
 │   ├── gateways/
 │   │   ├── base.py             GatewayBase abstract class
 │   │   └── openclaw.py         OpenClaw gateway implementation
-│   └── tts.py                  TTS service wrapper
+│   └── tts.py                  TTS service wrapper (retry + provider fallback)
 ├── tts_providers/              TTS provider implementations
+│   ├── groq_provider.py        Groq Orpheus
+│   ├── supertonic_provider.py  Supertonic (local ONNX)
+│   ├── qwen3_provider.py       Qwen3-TTS via fal.ai
+│   └── hume_provider.py        Hume EVI
 ├── providers/                  LLM/STT provider implementations
 ├── plugins/                    Gateway plugins (gitignored, drop-in)
 │   ├── README.md               Plugin authoring guide
@@ -126,26 +144,46 @@ Define agents in JSON — each profile configures:
 ├── config/
 │   ├── default.yaml            Server configuration
 │   └── speech_normalization.yaml
+├── deploy/
+│   ├── openclaw/Dockerfile     OpenClaw container build
+│   ├── supertonic/             Supertonic TTS container (Dockerfile + server.py)
+│   ├── setup-sudo.sh           VPS setup (nginx, SSL, systemd)
+│   └── openvoiceui.service     Systemd unit file
 ├── src/
-│   ├── app.js                  Frontend core (~5900 lines)
+│   ├── app.js                  Frontend core
 │   ├── adapters/               Adapter implementations
 │   │   ├── ClawdBotAdapter.js
 │   │   ├── hume-evi.js
 │   │   ├── elevenlabs-classic.js
+│   │   ├── elevenlabs-hybrid.js
 │   │   └── _template.js        Build your own adapter
-│   ├── core/                   EventBus, VoiceSession, EmotionEngine
+│   ├── core/                   EventBus, VoiceSession, EmotionEngine, Config
+│   ├── face/                   Animated face implementations
+│   │   ├── EyeFace.js          Classic eye-face avatar
+│   │   ├── HaloSmokeFace.js    Halo smoke orb with thinking mode
+│   │   ├── BaseFace.js         Base class for face types
+│   │   └── manifest.json       Face registry + previews
 │   ├── features/               MusicPlayer, Soundboard
 │   ├── shell/                  Orchestrator, bridges, profile discovery
-│   ├── ui/                     AppShell, SettingsPanel, ThemeManager
-│   └── providers/              WebSpeechSTT, TTSPlayer
+│   ├── ui/
+│   │   ├── AppShell.js         Main app layout
+│   │   ├── face/               FacePicker, FaceRenderer
+│   │   ├── settings/           SettingsPanel, PlaylistEditor, TTSVoicePreview
+│   │   ├── themes/             ThemeManager
+│   │   └── visualizers/        PartyFXVisualizer, BaseVisualizer
+│   └── providers/
+│       ├── WebSpeechSTT.js     Browser speech recognition
+│       ├── TTSPlayer.js        TTS audio playback
+│       └── tts/                TTS provider JS modules
 ├── sounds/                     Soundboard audio files
 └── runtime/                    Runtime data (gitignored, docker-mounted)
     ├── uploads/                User-uploaded files
     ├── canvas-pages/           Canvas HTML pages
+    │   └── .versions/          Automatic page version backups
     ├── known_faces/            Face recognition photos
     ├── music/                  Music playlist folder
     ├── generated_music/        AI-generated tracks
-    ├── transcripts/            Listen-mode transcriptions
+    ├── transcripts/            Conversation transcripts (auto-saved)
     └── canvas-manifest.json    Canvas page registry
 ```
 
@@ -166,12 +204,12 @@ The recommended way to run OpenVoiceUI is on a dedicated VPS — microphone acce
 A setup script handles nginx, Let's Encrypt SSL, and systemd automatically:
 
 ```bash
-git clone https://github.com/MCERQUA/OpenVoiceUI-public
-cd OpenVoiceUI-public
+git clone https://github.com/MCERQUA/OpenVoiceUI
+cd OpenVoiceUI
 cp .env.example .env
 # Edit .env — set CLAWDBOT_AUTH_TOKEN and GROQ_API_KEY at minimum
-# Edit setup-sudo.sh — set DOMAIN, PORT, EMAIL, INSTALL_DIR at the top
-sudo bash setup-sudo.sh
+# Edit deploy/setup-sudo.sh — set DOMAIN, PORT, EMAIL, INSTALL_DIR at the top
+sudo bash deploy/setup-sudo.sh
 ```
 
 The script is idempotent — safe to re-run. Skips SSL if cert already exists.
@@ -188,8 +226,8 @@ sudo journalctl -u openvoiceui -f
 Docker is the easiest path — it runs OpenClaw, Supertonic TTS, and OpenVoiceUI together. Note that browser microphone access requires HTTPS — on localhost Chrome/Edge will still allow it, but other devices on your network won't work without a cert.
 
 ```bash
-git clone https://github.com/MCERQUA/OpenVoiceUI-public
-cd OpenVoiceUI-public
+git clone https://github.com/MCERQUA/OpenVoiceUI
+cd OpenVoiceUI
 cp .env.example .env
 ```
 
@@ -269,26 +307,32 @@ OpenVoiceUI connects to an [OpenClaw](https://openclaw.ai) gateway via persisten
 
 ### Environment Variables
 
-```bash
-# Gateway / LLM
-CLAWDBOT_GATEWAY_URL=ws://127.0.0.1:18791
-CLAWDBOT_AUTH_TOKEN=your-token
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | Yes | Server port (default: 5001) |
+| `DOMAIN` | Yes | Your domain (used for callbacks) |
+| `SECRET_KEY` | Recommended | Flask session secret — random per restart if unset |
+| `CLAWDBOT_GATEWAY_URL` | Yes | OpenClaw WebSocket URL (default: `ws://127.0.0.1:18791`) |
+| `CLAWDBOT_AUTH_TOKEN` | Yes | OpenClaw gateway auth token |
+| `GATEWAY_SESSION_KEY` | No | Session key prefix (default: `voice-main-1`) |
+| `GROQ_API_KEY` | No | Groq Orpheus TTS ([console.groq.com](https://console.groq.com)) |
+| `FAL_KEY` | No | Qwen3-TTS via fal.ai ([fal.ai](https://fal.ai/dashboard)) |
+| `SUPERTONIC_API_URL` | No | Override Supertonic TTS URL (Docker sets this automatically) |
+| `HUME_API_KEY` | No | Hume EVI — emotion-aware voice ([platform.hume.ai](https://platform.hume.ai)) |
+| `HUME_SECRET_KEY` | No | Hume EVI secret key |
+| `CLERK_PUBLISHABLE_KEY` | No | Clerk auth — enables login ([clerk.com](https://clerk.com)) |
+| `CANVAS_REQUIRE_AUTH` | No | Set `true` to require auth for canvas endpoints |
+| `ALLOWED_USER_IDS` | No | Comma-separated Clerk user IDs for access control |
+| `GEMINI_API_KEY` | No | Vision/image analysis ([aistudio.google.com](https://aistudio.google.com)) |
+| `SUNO_API_KEY` | No | Suno AI music generation |
+| `SUNO_CALLBACK_URL` | No | Auto-derived from `DOMAIN` if unset |
+| `SUNO_WEBHOOK_SECRET` | No | Optional HMAC verification for Suno webhooks |
+| `BRAVE_API_KEY` | No | Brave Search for agent web_search tool ([brave.com/search/api](https://brave.com/search/api)) |
+| `CANVAS_PAGES_DIR` | No | Override canvas pages path (VPS installs) |
+| `CODING_CLI` | No | Coding agent in openclaw: `codex`, `claude`, `opencode`, `pi`, or `none` |
+| `RATELIMIT_DEFAULT` | No | Custom rate limit (e.g. `"200 per day;50 per hour"`) |
 
-# TTS — choose one or more
-GROQ_API_KEY=your-groq-key          # Groq Orpheus TTS
-FAL_KEY=your-fal-key                # Qwen3-TTS via fal.ai
-SUPERTONIC_MODEL_PATH=/path/to/onnx # Local Supertonic TTS
-
-# Hume EVI (optional full-duplex voice mode)
-HUME_API_KEY=your-hume-key
-HUME_CONFIG_ID=your-config-id
-
-# Auth (optional — uses Clerk)
-CLERK_PUBLISHABLE_KEY=pk_live_...
-
-# Server
-PORT=5001
-```
+See `.env.example` for full documentation and comments.
 
 ### Personalizing Your Agent
 
@@ -315,9 +359,10 @@ Edit `prompts/voice-system-prompt.md` to change the system prompt — changes ar
 GET  /health/live
 GET  /health/ready
 
-# Voice (streaming NDJSON)
+# Voice (streaming NDJSON with heartbeats)
 POST /api/conversation?stream=1
      {"message": "Hello", "tts_provider": "groq", "voice": "tara"}
+POST /api/conversation/abort              # Cancel in-progress response
 
 # Profiles
 GET  /api/profiles
@@ -325,6 +370,15 @@ POST /api/profiles/activate  {"profile_id": "default"}
 
 # Canvas
 GET  /api/canvas/manifest
+GET  /api/canvas/versions/<page_id>       # List page version history
+POST /api/canvas/versions/<page_id>/restore  {"timestamp": "..."}
+
+# Transcripts
+GET  /api/transcripts                     # List saved transcripts
+GET  /api/transcripts/<session_id>        # Get transcript by session
+
+# Upload
+POST /api/upload                          # File upload (multipart)
 
 # Session
 POST /api/session/reset  {"type": "hard"}
@@ -332,13 +386,20 @@ POST /api/session/reset  {"type": "hard"}
 # TTS
 GET  /api/tts/providers
 POST /api/tts/generate  {"text": "Hello", "provider": "groq", "voice": "tara"}
+
+# Vision
+POST /api/vision/analyze                  # Image/screenshot analysis
+
+# Suno Music Generation
+POST /api/suno/generate                   # Generate AI music
+POST /api/suno/callback                   # Webhook callback endpoint
 ```
 
 ---
 
 ## Building an Adapter
 
-To connect a new LLM or voice framework, use `src/adapters/_template.js` as a starting point. Adapters implement a simple interface:
+To connect a new LLM or voice framework, use `src/adapters/_template.js` as a starting point. Built-in adapters include ClawdBot (OpenClaw), Hume EVI, ElevenLabs Classic, and ElevenLabs Hybrid. Adapters implement a simple interface:
 
 ```js
 export class MyAdapter {
@@ -402,8 +463,8 @@ OpenVoiceUI is designed so you can host a single VPS and serve multiple clients,
 2. **For each new client**, create a new Linux user on the same VPS:
    ```bash
    adduser clientname
-   cp -r /home/base/OpenVoiceUI-public /home/clientname/OpenVoiceUI-public
-   chown -R clientname:clientname /home/clientname/OpenVoiceUI-public
+   cp -r /home/base/OpenVoiceUI /home/clientname/OpenVoiceUI
+   chown -R clientname:clientname /home/clientname/OpenVoiceUI
    ```
 
 3. **Edit their `.env`** with their API keys and a unique port:

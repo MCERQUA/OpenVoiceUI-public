@@ -508,6 +508,7 @@ def _conversation_inner():
     agent_id = data.get('agent_id') or None  # e.g. 'default'; None = default 'main'
     gateway_id = data.get('gateway_id') or None  # plugin gateway id; None = 'openclaw'
     max_response_chars = data.get('max_response_chars') or None  # profile cap, truncates at sentence boundary
+    image_path = data.get('image_path') or None  # uploaded image for vision analysis
     metrics['session_id'] = session_id
     metrics['user_message_len'] = len(user_message)
     metrics['tts_provider'] = tts_provider
@@ -567,6 +568,29 @@ def _conversation_inner():
             context_parts.append('[CAMERA VISION: No camera frame available — camera may be off.]')
         else:
             context_parts.append('[CAMERA VISION: Camera frame is stale — camera may have been turned off.]')
+
+    # Vision: if user uploaded an image, analyze it with vision model
+    if image_path:
+        try:
+            _img_file = Path(image_path).resolve()
+            # Security: only allow files inside uploads/ directories
+            if 'uploads' not in _img_file.parts:
+                raise ValueError(f'Path traversal blocked: {image_path}')
+            if _img_file.is_file() and _img_file.stat().st_size < 20_000_000:  # 20MB safety cap
+                from routes.vision import _call_vision
+                _img_b64 = base64.b64encode(_img_file.read_bytes()).decode('ascii')
+                _upload_desc = _call_vision(
+                    _img_b64,
+                    'Describe what you see in this image in detail. Include colors, objects, text, people, layout, and any notable features.',
+                )
+                context_parts.append(f'[UPLOADED IMAGE ANALYSIS: {_upload_desc}]')
+                logger.info('Vision analysis of uploaded image succeeded (%d bytes)', _img_file.stat().st_size)
+            else:
+                logger.warning('Uploaded image not found or too large: %s', image_path)
+                context_parts.append('[UPLOADED IMAGE: File could not be analyzed — may be too large or missing.]')
+        except Exception as exc:
+            logger.warning('Vision analysis of uploaded image failed: %s', exc)
+            context_parts.append('[UPLOADED IMAGE: Vision analysis failed — the image was uploaded but could not be analyzed.]')
 
     if ui_context:
         # Canvas state

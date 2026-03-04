@@ -2262,7 +2262,10 @@ inject();
 
                 // VAD (Voice Activity Detection) settings
                 this.silenceTimer = null;
-                this.silenceDelayMs = 3000; // 3s silence = end of speech
+                this.silenceDelayMs = 3000; // 3s silence = end of speech (profile can override)
+                this.vadThreshold = 35;     // FFT average amplitude threshold (profile can override)
+                this.maxRecordingMs = 45000; // 45s max recording before auto-chunk (profile can override)
+                this.maxRecordingTimer = null;
                 this.isSpeaking = false;
                 this.stoppingRecorder = false;  // Flag to prevent duplicate stop attempts
                 this.hadSpeechInChunk = false;  // Track if real speech happened in this chunk
@@ -2296,10 +2299,14 @@ inject();
 
                         this.isProcessing = true;
 
-                        // Clear any pending silence timer to prevent duplicate processing
+                        // Clear any pending timers to prevent duplicate processing
                         if (this.silenceTimer) {
                             clearTimeout(this.silenceTimer);
                             this.silenceTimer = null;
+                        }
+                        if (this.maxRecordingTimer) {
+                            clearTimeout(this.maxRecordingTimer);
+                            this.maxRecordingTimer = null;
                         }
 
                         // Create audio blob
@@ -2369,8 +2376,8 @@ inject();
                         analyser.getByteFrequencyData(dataArray);
                         const average = dataArray.reduce((a, b) => a + b) / bufferLength;
 
-                        // Voice detection threshold
-                        const isSpeakingNow = average > 45;
+                        // Voice detection threshold (configurable via profile stt.vad_threshold)
+                        const isSpeakingNow = average > this.vadThreshold;
 
                         if (isSpeakingNow && !this.isSpeaking) {
                             // Started speaking
@@ -2382,6 +2389,20 @@ inject();
                             if (this.silenceTimer) {
                                 clearTimeout(this.silenceTimer);
                                 this.silenceTimer = null;
+                            }
+
+                            // Start max recording safety timer (prevents unbounded audio)
+                            if (!this.maxRecordingTimer && !this.isProcessing && !this.stoppingRecorder) {
+                                this.maxRecordingTimer = setTimeout(() => {
+                                    console.log('⏱️ Max recording duration reached, auto-chunking');
+                                    this.maxRecordingTimer = null;
+                                    this.isSpeaking = false;
+                                    this.stoppingRecorder = true;
+                                    if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
+                                    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                                        this.mediaRecorder.stop();
+                                    }
+                                }, this.maxRecordingMs);
                             }
                         } else if (!isSpeakingNow && this.isSpeaking && !this.isProcessing && !this.stoppingRecorder) {
                             // Stopped speaking - start silence timer (ONLY if not already processing or stopping)
@@ -2421,6 +2442,10 @@ inject();
                 if (this.silenceTimer) {
                     clearTimeout(this.silenceTimer);
                     this.silenceTimer = null;
+                }
+                if (this.maxRecordingTimer) {
+                    clearTimeout(this.maxRecordingTimer);
+                    this.maxRecordingTimer = null;
                 }
 
                 if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
@@ -2796,7 +2821,7 @@ inject();
                 }
             }
 
-            async sendMessage(text) {
+            async sendMessage(text, opts = {}) {
                 if (!text || !text.trim()) return;
 
                 // Interrupt: abort any in-flight request and stop current audio FIRST
@@ -2829,7 +2854,7 @@ inject();
                 if (!isSystemTrigger) {
                     this.displayMessage('user', text);
                     this.callbacks.onMessage('user', text);
-                    TranscriptPanel.addMessage('user', text);
+                    TranscriptPanel.addMessage('user', text, { imageUrl: opts.imageUrl || null });
                 }
 
                 // Show thinking state while waiting for response
@@ -2864,7 +2889,8 @@ inject();
                             ui_context: uiContext,
                             identified_person: window.cameraModule?.currentIdentity || null,
                             ...(gatewayAgentId ? { agent_id: gatewayAgentId } : {}),
-                            ...(window._maxResponseChars ? { max_response_chars: window._maxResponseChars } : {})
+                            ...(window._maxResponseChars ? { max_response_chars: window._maxResponseChars } : {}),
+                            ...(opts.image_path ? { image_path: opts.image_path } : {})
                         })
                     });
 
@@ -6404,7 +6430,61 @@ inject();
                 this.messages = document.getElementById('transcript-messages');
                 this.button = document.getElementById('transcript-button');
                 this.unreadDot = document.getElementById('transcript-unread');
+
+                // Paste image support on text input
+                const textInput = document.getElementById('tp-text-input');
+                if (textInput) {
+                    textInput.addEventListener('paste', (e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        for (const item of items) {
+                            if (item.type.startsWith('image/')) {
+                                e.preventDefault();
+                                const file = item.getAsFile();
+                                if (file) this._stageFile(file);
+                                return;
+                            }
+                        }
+                    });
+                }
+
+                // Drag-and-drop image support on transcript panel
+                if (this.panel) {
+                    this.panel.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                        this.panel.classList.add('tp-dragover');
+                    });
+                    this.panel.addEventListener('dragleave', () => {
+                        this.panel.classList.remove('tp-dragover');
+                    });
+                    this.panel.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        this.panel.classList.remove('tp-dragover');
+                        const file = e.dataTransfer?.files?.[0];
+                        if (file && file.type.startsWith('image/')) {
+                            this._stageFile(file);
+                        }
+                    });
+                }
+
                 console.log('Transcript Panel initialized');
+            },
+
+            _stageFile(file) {
+                this._pendingFile = { file, name: file.name, type: file.type, size: file.size };
+                // Create blob URL for thumbnail preview in chat
+                if (file.type.startsWith('image/')) {
+                    this._pendingImageThumbUrl = URL.createObjectURL(file);
+                }
+                const preview = document.getElementById('tp-file-preview');
+                const nameEl = document.getElementById('tp-file-name');
+                if (preview && nameEl) {
+                    nameEl.textContent = file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name;
+                    preview.style.display = 'flex';
+                }
+                document.getElementById('tp-text-input')?.focus();
+                if (!this.isVisible) this.show();
             },
 
             show() {
@@ -6430,7 +6510,7 @@ inject();
                 if (this.isVisible) this.hide(); else this.show();
             },
 
-            addMessage(role, text) {
+            addMessage(role, text, opts = {}) {
                 if (!this.messages || !text) return;
 
                 const msg = document.createElement('div');
@@ -6447,7 +6527,13 @@ inject();
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
                     .replace(/\n/g, '<br>');
 
-                msg.innerHTML = `<div class="tp-meta">${name} · ${time}</div><div class="tp-text">${html}</div>`;
+                // Small image icon beside the message
+                let imgIcon = '';
+                if (opts.imageUrl) {
+                    imgIcon = `<img src="${opts.imageUrl}" class="tp-img-icon" alt="📷" title="Image attached">`;
+                }
+
+                msg.innerHTML = `<div class="tp-meta">${name} · ${time}</div><div class="tp-text">${imgIcon}${html}</div>`;
                 this.messages.appendChild(msg);
                 this.messages.scrollTop = this.messages.scrollHeight;
 
@@ -6541,14 +6627,21 @@ inject();
                 // Need either text or a file
                 if (!text && !this._pendingFile) return;
 
+                // Grab and clear input + file immediately so repeat sends have nothing to send
+                if (input) input.value = '';
+                const stagedFile = this._pendingFile;
+                this._pendingFile = null;
+
                 let messageToSend = text;
 
                 // Upload file first if one is staged
-                if (this._pendingFile) {
+                if (stagedFile) {
                     try {
-                        const result = await this.uploadFile(this._pendingFile.file);
+                        const result = await this.uploadFile(stagedFile.file);
                         if (result.type === 'image') {
-                            messageToSend = `[USER ATTACHED IMAGE: ${result.original_name}, saved at ${result.path} — use your file read tool to view it] ${text}`;
+                            // Pass image path so server can run vision analysis
+                            this._pendingImagePath = result.path;
+                            messageToSend = text || `What do you see in this image? (${result.original_name})`;
                         } else if (result.content_preview) {
                             messageToSend = `[USER ATTACHED FILE: ${result.original_name}, saved at ${result.path}]\n--- File contents ---\n${result.content_preview}\n--- End file ---\n${text}`;
                         } else {
@@ -6564,41 +6657,22 @@ inject();
 
                 if (!messageToSend.trim()) return;
 
-                // Clear input
-                if (input) input.value = '';
-
                 // Show panel if hidden
                 if (!this.isVisible) this.show();
 
                 // Send through the existing voice conversation path
+                const imagePath = this._pendingImagePath || null;
+                const imageThumbUrl = this._pendingImageThumbUrl || null;
+                this._pendingImagePath = null;
+                this._pendingImageThumbUrl = null;
                 if (window.ModeManager?.clawdbotMode) {
-                    window.ModeManager.clawdbotMode.sendMessage(messageToSend);
+                    window.ModeManager.clawdbotMode.sendMessage(messageToSend, { image_path: imagePath, imageUrl: imageThumbUrl });
                 }
             },
 
             handleUpload(inputEl) {
                 const file = inputEl?.files?.[0];
-                if (!file) return;
-
-                this._pendingFile = {
-                    file: file,
-                    name: file.name,
-                    type: file.type,
-                    size: file.size
-                };
-
-                // Show preview
-                const preview = document.getElementById('tp-file-preview');
-                const nameEl = document.getElementById('tp-file-name');
-                if (preview && nameEl) {
-                    nameEl.textContent = file.name.length > 20
-                        ? file.name.substring(0, 17) + '...'
-                        : file.name;
-                    preview.style.display = 'flex';
-                }
-
-                // Focus text input
-                document.getElementById('tp-text-input')?.focus();
+                if (file) this._stageFile(file);
             },
 
             clearFile() {
@@ -7674,6 +7748,16 @@ inject();
                     stt.silenceDelayMs = ms;
                     console.log(`[Profile] stt.silenceDelayMs = ${ms}ms`);
                 }
+                const vt = profile?.stt?.vad_threshold;
+                if (vt != null) {
+                    stt.vadThreshold = vt;
+                    console.log(`[Profile] stt.vadThreshold = ${vt}`);
+                }
+                const maxRec = profile?.stt?.max_recording_s;
+                if (maxRec != null) {
+                    stt.maxRecordingMs = maxRec * 1000;
+                    console.log(`[Profile] stt.maxRecordingMs = ${maxRec * 1000}ms`);
+                }
                 // PTT default — auto-enable if profile says so
                 if (profile?.stt?.ptt_default === true && window.PTTButton && !window.PTTButton.pttMode) {
                     window.PTTButton._setPTT(true);
@@ -7782,6 +7866,16 @@ inject();
                     if (ms != null) {
                         stt.silenceDelayMs = ms;
                         console.log(`[Profile] deferred stt.silenceDelayMs = ${ms}ms`);
+                    }
+                    const vt = window._activeProfileData?.stt?.vad_threshold;
+                    if (vt != null) {
+                        stt.vadThreshold = vt;
+                        console.log(`[Profile] deferred stt.vadThreshold = ${vt}`);
+                    }
+                    const maxRec = window._activeProfileData?.stt?.max_recording_s;
+                    if (maxRec != null) {
+                        stt.maxRecordingMs = maxRec * 1000;
+                        console.log(`[Profile] deferred stt.maxRecordingMs = ${maxRec * 1000}ms`);
                     }
                     if (window._activeProfileData?.stt?.ptt_default === true && window.PTTButton && !window.PTTButton.pttMode) {
                         window.PTTButton._setPTT(true);

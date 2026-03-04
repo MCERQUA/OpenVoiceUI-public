@@ -735,6 +735,24 @@
             border-radius: 3px;
             font-size: 12px;
         }
+        #transcript-panel .tp-img-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            object-fit: cover;
+            vertical-align: middle;
+            margin-right: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+        }
+        #transcript-panel .tp-img-icon:hover {
+            border-color: rgba(0, 229, 255, 0.5);
+            box-shadow: 0 0 6px rgba(0, 229, 255, 0.3);
+        }
+        #transcript-panel .tp-dragover {
+            outline: 2px dashed rgba(0, 229, 255, 0.5);
+            outline-offset: -4px;
+        }
         @media (max-width: 500px) {
             #transcript-panel { width: calc(100vw - 40px); right: 20px; }
             .controls-left, .controls-right { gap: 2px; }
