@@ -915,6 +915,17 @@ def clawdbot_websocket(ws):
     then bridges messages bidirectionally — generating TTS audio for every
     assistant response before forwarding to the client.
     """
+    # --- Clerk auth check (uses same cookie/header as HTTP routes) ---
+    from services.auth import verify_clerk_token, get_token_from_request
+    token = get_token_from_request()
+    user_id = verify_clerk_token(token) if token else None
+    if not user_id:
+        logger.warning("WebSocket rejected — no valid Clerk token")
+        ws.send(json.dumps({"type": "error", "message": "Unauthorized"}))
+        ws.close()
+        return
+    logger.info(f"WebSocket authenticated: user_id={user_id}")
+
     gateway_url = os.getenv("CLAWDBOT_GATEWAY_URL", "ws://127.0.0.1:18791")
     auth_token = os.getenv("CLAWDBOT_AUTH_TOKEN")
 

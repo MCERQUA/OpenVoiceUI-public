@@ -15,6 +15,7 @@ import os
 import re
 import json
 from datetime import datetime
+from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 transcripts_bp = Blueprint('transcripts', __name__)
@@ -110,14 +111,17 @@ def list_transcripts():
 
 @transcripts_bp.route('/api/transcripts/<date_dir>/<filename>', methods=['GET'])
 def get_transcript(date_dir, filename):
-    # Sanitize path components
-    if '..' in date_dir or '..' in filename:
+    # Resolve and verify path stays within TRANSCRIPTS_DIR
+    base = Path(TRANSCRIPTS_DIR).resolve()
+    try:
+        resolved = (base / date_dir / filename).resolve()
+    except (ValueError, OSError):
         return jsonify({'error': 'Invalid path'}), 400
-    filepath = os.path.join(TRANSCRIPTS_DIR, date_dir, filename)
-    if not os.path.isfile(filepath):
+    if base not in resolved.parents and resolved != base:
+        return jsonify({'error': 'Invalid path'}), 400
+    if not resolved.is_file():
         return jsonify({'error': 'Not found'}), 404
-    with open(filepath, 'r', encoding='utf-8') as f:
-        return f.read(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+    return resolved.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
 import logging as _transcript_logger
