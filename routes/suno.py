@@ -133,6 +133,28 @@ def _add_song_to_metadata(filename: str, title: str, prompt: str, style: str,
     _save_generated_metadata(metadata)
 
 
+def _slugify_title(title: str) -> str:
+    """Convert a song title to a safe filename slug (no extension)."""
+    import re
+    import unicodedata
+    # Normalize unicode (e.g., smart quotes → ascii)
+    s = unicodedata.normalize('NFKD', title).encode('ascii', 'ignore').decode('ascii')
+    # Lowercase, replace non-alnum with hyphens, collapse multiples, strip edges
+    s = re.sub(r'[^a-z0-9]+', '-', s.lower()).strip('-')
+    return s[:80] or 'generated-track'
+
+
+def _unique_filename(directory: Path, base: str, ext: str = '.mp3') -> str:
+    """Return a unique filename in directory, appending -2, -3, etc. if needed."""
+    candidate = f'{base}{ext}'
+    if not (directory / candidate).exists():
+        return candidate
+    counter = 2
+    while (directory / f'{base}-{counter}{ext}').exists():
+        counter += 1
+    return f'{base}-{counter}{ext}'
+
+
 def _guess_genre(text: str) -> str:
     """Rough genre guess from prompt keywords."""
     if not text:
@@ -387,7 +409,8 @@ def _action_status(job_id: str):
                         song_id = song.get('id', task_id)
                         song_title = song.get('title') or job.get('title') or 'Generated Track'
                         duration = song.get('duration', 0)
-                        filename = f'{song_id}.mp3'
+                        slug = _slugify_title(song_title)
+                        filename = _unique_filename(GENERATED_MUSIC_DIR, slug)
                         save_path = GENERATED_MUSIC_DIR / filename
 
                         if not save_path.exists():
@@ -529,7 +552,8 @@ def suno_callback():
                     song_id = song.get('id', task_id)
                     song_title = song.get('title', 'Generated Track')
                     duration = song.get('duration', 0)
-                    filename = f'{song_id}.mp3'
+                    slug = _slugify_title(song_title)
+                    filename = _unique_filename(GENERATED_MUSIC_DIR, slug)
                     save_path = GENERATED_MUSIC_DIR / filename
 
                     if audio_url and not save_path.exists():

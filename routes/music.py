@@ -381,10 +381,16 @@ def handle_music():
             selected = None
             if track_param:
                 track_lower = track_param.lower()
+                # Normalize smart quotes to ASCII for matching
+                _quote_map = str.maketrans({'\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"'})
+                track_norm = track_lower.translate(_quote_map)
                 for t in music_files:
-                    if (track_lower in t["name"].lower()
-                            or track_lower in t["filename"].lower()
-                            or track_lower in t.get("title", "").lower()):
+                    t_name = t["name"].lower()
+                    t_file = t["filename"].lower()
+                    t_title = t.get("title", "").lower().translate(_quote_map)
+                    if (track_norm in t_name
+                            or track_norm in t_file
+                            or track_norm in t_title):
                         selected = t
                         break
                 if not selected:
@@ -392,6 +398,7 @@ def handle_music():
                         "action": "error",
                         "response": f"Can't find a track matching '{track_param}'. Try 'list music' to see what I have.",
                     })
+                print(f"🎵 PLAY matched: query='{track_param}' → file='{selected['filename']}' title='{selected.get('title', '')}'")
             else:
                 selected = random.choice(music_files)
 
