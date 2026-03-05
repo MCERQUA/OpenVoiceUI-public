@@ -179,12 +179,16 @@ def get_canvas_context() -> str:
             parts.append(f"  - {p['display_name']}{alias_str}")
 
     categories = manifest.get('categories', {})
+    all_pages = manifest.get('pages', {})
     if categories:
-        parts.append('\nPage categories:')
+        parts.append('\nAvailable pages (use [CANVAS:page-id] to open):')
         for cat_id, cat in categories.items():
-            count = len(cat.get('pages', []))
-            if count > 0:
-                parts.append(f"  {cat.get('icon', '📄')} {cat['name']}: {count} pages")
+            cat_pages = cat.get('pages', [])
+            if cat_pages:
+                parts.append(f"  {cat.get('icon', '📄')} {cat['name']}:")
+                for pid in cat_pages:
+                    display = all_pages.get(pid, {}).get('display_name', pid)
+                    parts.append(f"    - {display} → [CANVAS:{pid}]")
 
     recent = manifest.get('recently_viewed', [])[:5]
     if recent:
@@ -577,12 +581,13 @@ def canvas_pages_proxy(path):
             if path.endswith('.html'):
                 with open(resolved, 'rb') as f:
                     content = f.read()
-                # Strip external CDN scripts (Tailwind CDN etc break in sandboxed iframes)
+                # Strip Tailwind CDN — it's a JS runtime that breaks in sandboxed iframes.
+                # Other CDN scripts (Mermaid, etc.) are allowed through and controlled by CSP.
                 import re as _re
                 content_str = content.decode('utf-8', errors='replace')
                 _stripped = _re.sub(
-                    r'<script\s+[^>]*src\s*=\s*["\']https?://[^"\']+["\'][^>]*>\s*</script>',
-                    '<!-- external script stripped for iframe compatibility -->',
+                    r'<script\s+[^>]*src\s*=\s*["\']https?://cdn\.tailwindcss\.com[^"\']*["\'][^>]*>\s*</script>',
+                    '<!-- tailwind CDN stripped — use inline styles instead -->',
                     content_str,
                     flags=_re.IGNORECASE,
                 )
@@ -630,7 +635,7 @@ def canvas_pages_proxy(path):
                 # allowed (canvas-action bridge uses it).
                 resp.headers['Content-Security-Policy'] = (
                     "default-src 'none'; "
-                    "script-src 'unsafe-inline'; "
+                    "script-src 'unsafe-inline' https://cdn.jsdelivr.net; "
                     "style-src 'unsafe-inline'; "
                     "img-src 'self' data: blob:; "
                     "media-src 'self' blob:; "
