@@ -32,15 +32,23 @@ class WebSpeechSTT {
         // releasing and re-acquiring the stream can re-trigger permission prompts)
         this._micStream = null;
 
-        // Check browser support
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
+        // Check browser support — but DON'T create recognition yet.
+        // Creating it eagerly conflicts with WakeWordDetector (Chrome only
+        // supports one SpeechRecognition instance at a time).
+        this._SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!this._SpeechRecognition) {
             console.warn('Web Speech API not supported in this browser');
-            return;
         }
+    }
 
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = true; // Keep listening continuously
+    // Lazily create the recognition instance — only when start() is called.
+    // This prevents the idle STT recognition from conflicting with wake word.
+    _ensureRecognition() {
+        if (this.recognition) return;
+        if (!this._SpeechRecognition) return;
+
+        this.recognition = new this._SpeechRecognition();
+        this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
         this.recognition.maxAlternatives = 1;
@@ -116,14 +124,16 @@ class WebSpeechSTT {
     }
 
     isSupported() {
-        return this.recognition !== null;
+        return this._SpeechRecognition !== null && this._SpeechRecognition !== undefined;
     }
 
     async start() {
-        if (!this.recognition) {
+        if (!this._SpeechRecognition) {
             console.error('Speech recognition not supported');
             return false;
         }
+
+        this._ensureRecognition();
 
         // Request mic permission and keep the stream alive.
         // On iOS, releasing the stream immediately then calling recognition.start()
@@ -161,10 +171,12 @@ class WebSpeechSTT {
             clearTimeout(this.silenceTimer);
             this.silenceTimer = null;
         }
+        this.isListening = false;
+        this.isProcessing = false;
         if (this.recognition) {
-            this.isListening = false;
-            this.isProcessing = false;
-            this.recognition.stop();
+            try { this.recognition.stop(); } catch (e) { /* already stopped */ }
+            // Destroy the instance so it doesn't conflict with wake word
+            this.recognition = null;
             console.log('STT stopped');
         }
         // Release the mic stream when fully stopped
@@ -207,6 +219,7 @@ class WebSpeechSTT {
             this.silenceTimer = null;
         }
         if (this.isListening) {
+            this._ensureRecognition();
             try {
                 this.recognition.start();
             } catch (e) {
@@ -227,14 +240,22 @@ class WakeWordDetector {
         // Wake words to listen for (overridden per-profile via applyProfile)
         this.wakeWords = ['wake up'];
 
-        // Check browser support
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
+        // Check browser support — but DON'T create recognition yet.
+        // Chrome only supports one SpeechRecognition instance at a time.
+        // Creating it eagerly conflicts with WebSpeechSTT.
+        this._SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!this._SpeechRecognition) {
             console.warn('Web Speech API not supported in this browser - wake word detection unavailable');
-            return;
         }
+    }
 
-        this.recognition = new SpeechRecognition();
+    // Lazily create the recognition instance — only when start() is called.
+    // This prevents the idle wake word recognition from conflicting with STT.
+    _ensureRecognition() {
+        if (this.recognition) return;
+        if (!this._SpeechRecognition) return;
+
+        this.recognition = new this._SpeechRecognition();
         this.recognition.continuous = true;  // Keep listening
         this.recognition.interimResults = false;  // Only final results
         this.recognition.lang = 'en-US';
@@ -278,14 +299,16 @@ class WakeWordDetector {
     }
 
     isSupported() {
-        return this.recognition !== null;
+        return this._SpeechRecognition !== null && this._SpeechRecognition !== undefined;
     }
 
     start() {
-        if (!this.recognition) {
+        if (!this._SpeechRecognition) {
             console.error('Speech recognition not supported');
             return false;
         }
+
+        this._ensureRecognition();
 
         try {
             this.isListening = true;
@@ -300,9 +323,11 @@ class WakeWordDetector {
     }
 
     stop() {
+        this.isListening = false;
         if (this.recognition) {
-            this.isListening = false;
-            this.recognition.stop();
+            try { this.recognition.stop(); } catch (e) { /* already stopped */ }
+            // Destroy the instance so it doesn't conflict with STT
+            this.recognition = null;
             console.log('Wake word detector stopped');
         }
     }
