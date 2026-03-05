@@ -32,23 +32,31 @@ class WebSpeechSTT {
         // releasing and re-acquiring the stream can re-trigger permission prompts)
         this._micStream = null;
 
-        // Check browser support
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
+        // Store constructor ref — recognition instance is created on first start(),
+        // NOT in constructor. Having two SpeechRecognition instances (even if only
+        // one is started) causes Chrome to route audio incorrectly, breaking wake word.
+        this._SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!this._SpeechRecognition) {
             console.warn('Web Speech API not supported in this browser');
-            return;
         }
+    }
 
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = true; // Keep listening continuously
+    // Create the recognition instance on first use and wire up all handlers.
+    // Called once from start(), then the instance persists forever.
+    // Monkey-patches in app.js poll for stt.recognition and apply within 200ms.
+    _ensureRecognition() {
+        if (this.recognition) return true;
+        if (!this._SpeechRecognition) return false;
+
+        this.recognition = new this._SpeechRecognition();
+        this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
         this.recognition.maxAlternatives = 1;
 
         this.recognition.onresult = (event) => {
-            if (this.isProcessing) return; // Ignore during AI response
+            if (this.isProcessing) return;
 
-            // Only process FINAL results, ignore interim spam
             let finalTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
@@ -56,9 +64,7 @@ class WebSpeechSTT {
                 }
             }
 
-            // Only proceed if we have a final result
             if (finalTranscript.trim()) {
-                // Clear silence timer on any speech
                 if (this.silenceTimer) {
                     clearTimeout(this.silenceTimer);
                     this.silenceTimer = null;
@@ -67,7 +73,6 @@ class WebSpeechSTT {
                 this.accumulatedText = finalTranscript;
                 console.log('STT Final:', finalTranscript);
 
-                // Set timer to detect when user stops speaking
                 this.silenceTimer = setTimeout(() => {
                     if (this.accumulatedText.trim() && !this.isProcessing) {
                         console.log('Sending to AI:', this.accumulatedText);
@@ -80,12 +85,10 @@ class WebSpeechSTT {
         };
 
         this.recognition.onerror = (event) => {
-            // 'no-speech' and 'aborted' are normal during idle/transitions - don't propagate
             if (event.error === 'no-speech' || event.error === 'aborted') {
                 console.log('STT:', event.error, '(normal, will auto-restart)');
                 return;
             }
-            // 'audio-capture' = mic hardware unavailable (iOS: another app has it, or hardware error)
             if (event.error === 'audio-capture') {
                 console.error('STT: audio-capture — microphone hardware unavailable');
                 if (this.onError) this.onError('audio-capture');
@@ -96,11 +99,7 @@ class WebSpeechSTT {
         };
 
         this.recognition.onend = () => {
-            // Don't restart during TTS mute — avoids rapid abort loop when
-            // the browser's engine chokes on speaker audio. resume() will
-            // restart explicitly once TTS finishes.
             if (this.isListening && !this.isProcessing) {
-                // iOS needs more time between stop and restart — 300ms can cause silent failures
                 const restartDelay = _isIOS ? 500 : 300;
                 setTimeout(() => {
                     if (this.isListening && !this.isProcessing) {
@@ -113,29 +112,28 @@ class WebSpeechSTT {
                 }, restartDelay);
             }
         };
+
+        console.log('STT: SpeechRecognition instance created');
+        return true;
     }
 
     isSupported() {
-        return this.recognition !== null;
+        return !!this._SpeechRecognition;
     }
 
     async start() {
-        if (!this.recognition) {
+        if (!this._ensureRecognition()) {
             console.error('Speech recognition not supported');
             return false;
         }
 
         // Request mic permission and keep the stream alive.
-        // On iOS, releasing the stream immediately then calling recognition.start()
-        // can trigger a second permission prompt or silent failure because the OS
-        // sees them as separate microphone acquisition attempts.
         try {
             if (!this._micStream) {
                 this._micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             }
         } catch (e) {
             console.error('Mic access failed:', e.name, e.message);
-            // Distinguish between no device and permission denied for better error messages
             if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
                 if (this.onError) this.onError('no-device');
             } else {
@@ -179,6 +177,11 @@ class WebSpeechSTT {
         this.accumulatedText = '';
     }
 
+    /** Alias for mute() — VoiceConversation calls pause() during greeting. */
+    pause() {
+        this.mute();
+    }
+
     /**
      * Mute STT immediately — called when TTS starts speaking.
      * Sets isProcessing=true so onresult ignores all incoming audio,
@@ -217,12 +220,15 @@ class WebSpeechSTT {
 }
 
 // ===== WAKE WORD DETECTOR =====
-// Listens for wake words in passive mode
+// Listens for wake words in passive mode.
+// Uses getUserMedia() before recognition.start() — without an active mic stream,
+// Chrome's SpeechRecognition immediately aborts every cycle and never captures speech.
 class WakeWordDetector {
     constructor() {
         this.recognition = null;
         this.isListening = false;
         this.onWakeWordDetected = null;
+        this._micPermissionGranted = false;
 
         // Wake words to listen for (overridden per-profile via applyProfile)
         this.wakeWords = ['wake up'];
@@ -235,34 +241,36 @@ class WakeWordDetector {
         }
 
         this.recognition = new SpeechRecognition();
-        this.recognition.continuous = true;  // Keep listening
-        this.recognition.interimResults = false;  // Only final results
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;   // Must be true — Chrome produces nothing without it
         this.recognition.lang = 'en-US';
 
         this.recognition.onresult = (event) => {
-            const last = event.results.length - 1;
-            const transcript = event.results[last][0].transcript.toLowerCase();
-            console.log('Wake word detector heard:', transcript);
+            // Check ALL results (interim + final) for wake words
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript.toLowerCase();
+                console.log(`Wake word detector heard (${event.results[i].isFinal ? 'final' : 'interim'}):`, transcript);
 
-            // Check if any wake word is in the transcript
-            if (this.wakeWords.some(wakeWord => transcript.includes(wakeWord))) {
-                console.log('Wake word detected!');
-                if (this.onWakeWordDetected) {
-                    this.onWakeWordDetected();
+                if (this.wakeWords.some(wakeWord => transcript.includes(wakeWord))) {
+                    console.log('Wake word detected!');
+                    if (this.onWakeWordDetected) {
+                        this.onWakeWordDetected();
+                    }
+                    return; // Stop checking once detected
                 }
             }
         };
 
         this.recognition.onerror = (event) => {
-            console.warn('Wake word detector error:', event.error);
-            // Ignore 'no-speech' errors in passive mode
             if (event.error === 'no-speech' || event.error === 'aborted') {
-                return;
+                return; // Normal during passive listening
             }
+            console.warn('Wake word detector error:', event.error);
         };
 
         this.recognition.onend = () => {
-            // Auto-restart if we're supposed to be listening
+            // Auto-restart if we're supposed to be listening.
+            // 300ms delay gives Chrome time to release the speech service connection.
             if (this.isListening) {
                 setTimeout(() => {
                     if (this.isListening) {
@@ -272,7 +280,7 @@ class WakeWordDetector {
                             // Already started
                         }
                     }
-                }, 100);
+                }, 300);
             }
         };
     }
@@ -281,10 +289,26 @@ class WakeWordDetector {
         return this.recognition !== null;
     }
 
-    start() {
+    async start() {
         if (!this.recognition) {
             console.error('Speech recognition not supported');
             return false;
+        }
+
+        // Ensure mic permission is granted before recognition.start().
+        // Without this, Chrome aborts every cycle. We release the stream
+        // immediately — we just need the permission grant, not the raw audio.
+        // Holding the stream can starve SpeechRecognition of mic access.
+        if (!this._micPermissionGranted) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop()); // Release immediately
+                this._micPermissionGranted = true;
+                console.log('Wake word: mic permission granted');
+            } catch (e) {
+                console.error('Wake word: mic access failed:', e.name, e.message);
+                return false;
+            }
         }
 
         try {
@@ -307,12 +331,12 @@ class WakeWordDetector {
         }
     }
 
-    toggle() {
+    async toggle() {
         if (this.isListening) {
             this.stop();
             return false;
         } else {
-            return this.start();
+            return await this.start();
         }
     }
 }
