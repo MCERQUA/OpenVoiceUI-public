@@ -187,4 +187,22 @@ def create_app(config_override: dict = None):
         )
         return response
 
+    # ── CDN cache cleanup (MUST run after flask_cors) ──────────────────────
+    # flask_cors adds Vary:Origin + Access-Control-* to ALL responses, which
+    # causes Cloudflare to mark them cf-cache-status:DYNAMIC (uncacheable).
+    # Canvas media files don't need CORS — strip those headers so CDN caches them.
+    # Inserted at position 0 in after_request list so it runs LAST in LIFO order.
+    def _strip_cdn_blocking_headers(response):
+        _media_exts = ('.mp4', '.webm', '.mp3', '.wav', '.ogg', '.png', '.jpg',
+                       '.jpeg', '.gif', '.svg', '.webp', '.pdf')
+        if request.path.startswith('/pages/') and any(request.path.endswith(e) for e in _media_exts):
+            for h in ['Vary', 'Access-Control-Allow-Origin',
+                      'Access-Control-Allow-Credentials',
+                      'Content-Security-Policy', 'X-Frame-Options',
+                      'Permissions-Policy', 'X-XSS-Protection',
+                      'Referrer-Policy']:
+                response.headers.pop(h, None)
+        return response
+    app.after_request_funcs.setdefault(None, []).insert(0, _strip_cdn_blocking_headers)
+
     return app, sock

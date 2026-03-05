@@ -628,11 +628,15 @@ def canvas_pages_proxy(path):
             else:
                 # Non-HTML files: use send_file for proper range request support
                 # (required for video/audio streaming playback)
-                return send_file(
+                resp = send_file(
                     resolved,
                     conditional=True,
-                    max_age=300,
+                    max_age=3600,
                 )
+                # Tell Cloudflare CDN to cache media files explicitly
+                resp.headers['CDN-Cache-Control'] = 'public, max-age=86400'
+                resp.headers['Accept-Ranges'] = 'bytes'
+                return resp
         return 'Page not found', 404
     except Exception as exc:
         logger.error(f'Canvas pages proxy error: {exc}')
