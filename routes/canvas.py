@@ -597,9 +597,9 @@ def canvas_pages_proxy(path):
                 _base_css = (
                     b'<style id="canvas-base-styles">'
                     b'html,body{'
-                    b'padding-top:15px!important;'
-                    b'padding-left:15px!important;'
-                    b'padding-right:15px!important;'
+                    b'padding-top:20px!important;'
+                    b'padding-left:20px!important;'
+                    b'padding-right:20px!important;'
                     b'box-sizing:border-box!important;'
                     b'color:#e2e8f0;'
                     b'background:#0a0a0a;}'
