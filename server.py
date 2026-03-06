@@ -553,8 +553,24 @@ def groq_stt():
             response_format="json",
             language="en",
         )
-        logger.info(f"Groq STT: {transcription.text!r}")
-        return jsonify({"transcript": transcription.text, "success": True})
+        text = (transcription.text or "").strip()
+        logger.info(f"Groq STT: {text!r}")
+
+        # Filter known Whisper hallucinations (phantom text from silence/noise)
+        _WHISPER_HALLUCINATIONS = {
+            "thank you", "thanks for watching", "thanks for listening",
+            "i'm here with closed captioning", "closed captioning",
+            "subscribe", "please subscribe", "like and subscribe",
+            "you", "bye", "the end", "subtitles by", "translated by",
+        }
+        text_lower = text.lower().rstrip('.!?,;:')
+        import re as _re
+        _meaningful = _re.sub(r'[^a-zA-Z0-9]', '', text)
+        if text_lower in _WHISPER_HALLUCINATIONS or len(_meaningful) < 3:
+            logger.info(f"Groq STT: FILTERED hallucination/garbage: {text!r}")
+            return jsonify({"transcript": "", "success": True, "filtered": True})
+
+        return jsonify({"transcript": text, "success": True})
     except Exception as e:
         logger.error(f"Groq STT error: {e}")
         return jsonify({"error": "Speech-to-text failed"}), 500

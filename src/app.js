@@ -2302,7 +2302,7 @@ inject();
 
                 // VAD (Voice Activity Detection) settings
                 this.silenceTimer = null;
-                this.silenceDelayMs = 3000; // 3s silence = end of speech (profile can override)
+                this.silenceDelayMs = 3500; // 3.5s silence = end of speech (profile can override)
                 this.vadThreshold = 35;     // FFT average amplitude threshold (profile can override)
                 this.maxRecordingMs = 45000; // 45s max recording before auto-chunk (profile can override)
                 this.maxRecordingTimer = null;
@@ -3126,6 +3126,13 @@ inject();
                             try {
                                 const data = JSON.parse(line);
 
+                                // Filtered: server rejected garbage STT — silently resume
+                                if (data.type === 'filtered') {
+                                    console.log('[stream] Garbage STT filtered by server:', data.reason);
+                                    this._lastStreamFiltered = true;
+                                    continue;
+                                }
+
                                 // Delta: new text chunk from agent (arrives in real-time)
                                 if (data.type === 'delta') {
                                     streamingText += data.text;
@@ -3187,6 +3194,14 @@ inject();
 
                                     // Empty response fallback — show message and re-enable mic
                                     if (!displayText || !displayText.trim()) {
+                                        // If server filtered garbage STT, silently resume mic
+                                        if (this._lastStreamFiltered) {
+                                            console.log('[text_done] Filtered garbage STT — silent resume');
+                                            this._lastStreamFiltered = false;
+                                            TranscriptPanel.finalizeStreaming(null);
+                                            reader.cancel();
+                                            return;
+                                        }
                                         console.warn('[text_done] Empty response — showing fallback');
                                         const fallback = "Sorry, I couldn't process that. Could you try again?";
                                         TranscriptPanel.finalizeStreaming(fallback);

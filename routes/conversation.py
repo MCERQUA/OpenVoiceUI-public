@@ -519,6 +519,17 @@ def _conversation_inner():
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
 
+    # Filter garbage STT fragments — punctuation-only, single short words, noise
+    import re as _re
+    _meaningful_chars = _re.sub(r'[^a-zA-Z0-9]', '', user_message)
+    if len(_meaningful_chars) < 3:
+        logger.info(f'### FILTERED garbage STT: "{user_message}" ({len(_meaningful_chars)} meaningful chars)')
+        # Return a no-op stream that ends cleanly — no fallback message shown
+        def _noop_stream():
+            yield "data: " + json.dumps({"type": "filtered", "reason": "garbage_stt"}) + "\n\n"
+            yield "data: " + json.dumps({"type": "text_done", "response": " "}) + "\n\n"
+        return Response(_noop_stream(), mimetype='text/event-stream')
+
     # Input length guard (P7-T3 security audit)
     if len(user_message) > 4000:
         return jsonify({'error': 'Message too long (max 4000 characters)'}), 400

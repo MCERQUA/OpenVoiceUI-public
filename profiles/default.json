@@ -35,7 +35,7 @@
   "stt": {
     "provider": "webspeech",
     "language": "en-US",
-    "silence_timeout_ms": 2500,
+    "silence_timeout_ms": 3500,
     "continuous": true,
     "wake_words": ["wake up"],
     "wake_word_required": null,

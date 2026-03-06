@@ -35,7 +35,7 @@ class GroqSTT {
 
         // VAD (Voice Activity Detection) settings
         this.silenceTimer = null;
-        this.silenceDelayMs = 3000;     // 3s silence = end of speech (profile can override)
+        this.silenceDelayMs = 3500;     // 3.5s silence = end of speech (profile can override)
         this.vadThreshold = 35;         // FFT average amplitude threshold (profile can override)
         this.maxRecordingMs = 45000;    // 45s max before auto-chunk (profile can override)
         this.maxRecordingTimer = null;
