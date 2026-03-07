@@ -5717,7 +5717,7 @@ inject();
                                 console.warn('Failed to update canvas context:', e);
                             }
                         } else {
-                            this.iframe.src = this.iframe.dataset.canvasSrc || `${window.location.origin}/canvas-proxy`;
+                            this.iframe.src = `/pages/desktop.html`;
                         }
                     }
                     this.container.style.display = 'block';
@@ -5757,7 +5757,8 @@ inject();
             },
 
             showMenu() {
-                window.CanvasMenu?.show();
+                // Open the Desktop OS page as the canvas menu
+                this.openPage('desktop.html');
             },
 
             showPage(pageName) {
@@ -6035,9 +6036,9 @@ inject();
             },
 
             setupEvents() {
-                // Menu button click
+                // Menu button click — opens Desktop OS canvas page
                 document.getElementById('canvas-menu-button')?.addEventListener('click', () => {
-                    this.toggle();
+                    CanvasControl.openPage('desktop.html');
                 });
 
                 // Close button

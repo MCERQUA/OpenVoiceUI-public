@@ -13,8 +13,8 @@ export function inject() {
 }
 
 const SHELL_HTML = `
-    <!-- Canvas Menu Button - Top Left Corner -->
-    <button id="canvas-menu-button" title="Canvas Pages Menu">📋</button>
+    <!-- Canvas Menu Button - Top Left Corner (Desktop) -->
+    <button id="canvas-menu-button" title="Desktop"><svg viewBox="0 0 48 48" width="22" height="22" style="vertical-align:middle;filter:drop-shadow(0 0 2px rgba(0,200,255,0.4))"><circle cx="24" cy="24" r="20" fill="#1a8a4a"/><circle cx="24" cy="24" r="20" fill="url(#globe-g)" opacity="0.7"/><ellipse cx="24" cy="24" rx="10" ry="20" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/><line x1="4" y1="24" x2="44" y2="24" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/><ellipse cx="24" cy="15" rx="17" ry="5" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/><ellipse cx="24" cy="33" rx="17" ry="5" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/><circle cx="24" cy="24" r="20" fill="none" stroke="#2dd4bf" stroke-width="1" opacity="0.5"/><defs><radialGradient id="globe-g" cx="35%" cy="35%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#059669"/></radialGradient></defs></svg></button>
 
     <!-- Canvas Menu Modal -->
     <div id="canvas-menu-modal" class="canvas-menu-modal" style="display: none;">

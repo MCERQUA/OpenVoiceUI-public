@@ -570,28 +570,58 @@ def groq_stt():
             prompt="Voice command for AI assistant.",
         )
         # Filter segments with high no_speech_prob (Whisper hallucinations over silence)
+        import re as _re
         segments = getattr(transcription, 'segments', None)
         if segments:
             text = ' '.join(
                 (seg.get('text', '') if isinstance(seg, dict) else seg.text).strip()
                 for seg in segments
-                if (seg.get('no_speech_prob', 0) if isinstance(seg, dict) else seg.no_speech_prob) < 0.6
+                if (seg.get('no_speech_prob', 0) if isinstance(seg, dict) else seg.no_speech_prob) < 0.4
             ).strip()
         else:
             text = (transcription.text or "").strip()
         logger.info(f"Groq STT: {text!r}")
 
-        # Filter known Whisper hallucinations (phantom text from silence/noise)
+        # --- Whisper hallucination filtering ---
         _WHISPER_HALLUCINATIONS = {
             "thank you", "thanks for watching", "thanks for listening",
             "i'm here with closed captioning", "closed captioning",
             "subscribe", "please subscribe", "like and subscribe",
             "you", "bye", "the end", "subtitles by", "translated by",
+            "voice command for ai assistant",
         }
+        # Substrings that indicate prompt-echo or known garbage
+        _HALLUCINATION_SUBSTRINGS = [
+            "voice command for ai assistant",
+            "thanks for watching", "thanks for listening",
+            "like and subscribe", "please subscribe",
+            "subtitles by", "translated by", "closed captioning",
+        ]
         text_lower = text.lower().rstrip('.!?,;:')
-        import re as _re
         _meaningful = _re.sub(r'[^a-zA-Z0-9]', '', text)
-        if text_lower in _WHISPER_HALLUCINATIONS or len(_meaningful) < 3:
+
+        def _is_hallucination(t, t_lower):
+            # Exact match against known phrases
+            if t_lower in _WHISPER_HALLUCINATIONS:
+                return True
+            # Too short to be real speech
+            if len(_meaningful) < 3:
+                return True
+            # Prompt text or known garbage appears anywhere in transcription
+            for sub in _HALLUCINATION_SUBSTRINGS:
+                if sub in t_lower:
+                    return True
+            # Repetitive pattern: same word/phrase repeated many times
+            words = _re.findall(r'[a-zA-Z]+', t)
+            if len(words) >= 4:
+                from collections import Counter
+                counts = Counter(w.lower() for w in words)
+                most_common_count = counts.most_common(1)[0][1]
+                if most_common_count / len(words) >= 0.5:
+                    return True
+            return False
+
+        if _is_hallucination(text, text_lower):
             logger.info(f"Groq STT: FILTERED hallucination/garbage: {text!r}")
             return jsonify({"transcript": "", "success": True, "filtered": True})
 

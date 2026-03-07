@@ -1159,6 +1159,50 @@ def _conversation_inner():
                                 logger.info("### RETRY: re-sent message to gateway")
                                 continue  # back to event loop — text_done NOT sent yet
 
+                            # ── Z.AI direct fallback after double-empty ──
+                            if _is_empty and getattr(stream_response, '_retried', False):
+                                logger.warning('### DOUBLE EMPTY — trying Z.AI direct fallback')
+                                try:
+                                    import requests as _req
+                                    _zai_key = os.environ.get('ZAI_API_KEY', '')
+                                    if _zai_key:
+                                        _zai_resp = _req.post(
+                                            'https://api.z.ai/api/anthropic/v1/messages',
+                                            headers={
+                                                'x-api-key': _zai_key,
+                                                'anthropic-version': '2023-06-01',
+                                                'content-type': 'application/json',
+                                            },
+                                            json={
+                                                'model': 'glm-4.7',
+                                                'max_tokens': 400,
+                                                'messages': [{'role': 'user', 'content': user_message}],
+                                            },
+                                            timeout=20,
+                                        )
+                                        if _zai_resp.status_code == 200:
+                                            _zai_data = _zai_resp.json()
+                                            _zai_text = _zai_data.get('content', [{}])[0].get('text', '')
+                                            if _zai_text:
+                                                full_response = _zai_text
+                                                metrics['fallback_used'] = 1
+                                                metrics['profile'] = 'zai-direct'
+                                                logger.info(f'### Z.AI direct fallback succeeded: {len(_zai_text)} chars')
+                                except Exception as _zfe:
+                                    logger.error(f'### Z.AI direct fallback failed: {_zfe}')
+
+                                # Write restart flag so host cron restarts openclaw
+                                if not full_response or not full_response.strip():
+                                    try:
+                                        Path('/app/runtime/restart-openclaw.flag').write_text(
+                                            f'double-empty at {__import__("datetime").datetime.utcnow().isoformat()}Z'
+                                        )
+                                        logger.warning('### Wrote restart-openclaw.flag — host cron will restart openclaw')
+                                        full_response = "I lost my connection for a moment. I'm reconnecting now — please try again in a few seconds."
+                                    except Exception as _rfe:
+                                        logger.error(f'### Failed to write restart flag: {_rfe}')
+                                        full_response = "I lost my connection for a moment. Please try again."
+
                             yield json.dumps({
                                 'type': 'text_done',
                                 'response': full_response,
@@ -1357,55 +1401,29 @@ def _conversation_inner():
         except Exception as e:
             logger.error(f'Failed to call Clawdbot Gateway: {e}')
 
-    # ── FALLBACK: Z.AI direct (Anthropic-compatible endpoint) ──────────────
+    # ── FALLBACK: Z.AI direct (glm-4.5-flash, no tools) ──────────────────
     if not ai_response:
-        logger.warning('No text from Gateway — trying Z.AI direct fallback...')
-        metrics['fallback_used'] = 1
+        if metrics.get('profile') == 'gateway':
+            logger.warning('No text response from Gateway, falling back to Z.AI flash...')
+            metrics['fallback_used'] = 1
+        else:
+            logger.info('Using Z.AI flash direct (primary path)')
         t_flash_start = time.time()
+        # Lazy import to avoid circular dependency (server.py imports this blueprint)
         try:
-            import requests as _req
-            import os as _os
-            _zai_key = _os.getenv('ZAI_API_KEY', '')
-            if not _zai_key:
-                raise ValueError('ZAI_API_KEY not set')
-            _zai_resp = _req.post(
-                'https://api.z.ai/api/anthropic/v1/messages',
-                headers={
-                    'x-api-key': _zai_key,
-                    'anthropic-version': '2023-06-01',
-                    'content-type': 'application/json',
-                },
-                json={
-                    'model': 'glm-4.7',
-                    'max_tokens': 400,
-                    'messages': [{'role': 'user', 'content': user_message}],
-                },
-                timeout=20,
-            )
-            if _zai_resp.status_code == 200:
-                _zdata = _zai_resp.json()
-                _zcontent = _zdata.get('content', [])
-                if _zcontent and _zcontent[0].get('text'):
-                    ai_response = _zcontent[0]['text']
-                    metrics['profile'] = 'zai-direct'
-                    metrics['model'] = 'glm-4.7'
-                    logger.info(f'Z.AI direct fallback OK: {len(ai_response)} chars')
-            else:
-                logger.error(f'Z.AI direct fallback HTTP {_zai_resp.status_code}')
-        except Exception as _e:
-            logger.error(f'Z.AI direct fallback failed: {_e}')
+            import server as _server
+            ai_response = _server.get_zai_direct_response(message_with_context, session_id)
+        except Exception as e:
+            logger.error(f'Z.AI direct call failed: {e}')
+            ai_response = None
+        metrics['profile'] = 'flash-direct'
+        metrics['model'] = 'glm-4.5-flash'
         metrics['llm_inference_ms'] = int((time.time() - t_flash_start) * 1000)
 
-    # ── LAST RESORT: write restart flag + tell user ───────────────────────
+    # ── LAST RESORT ───────────────────────────────────────────────────────
     if not ai_response:
-        logger.warning('Both Gateway and Z.AI direct failed — writing restart flag')
-        try:
-            _flag = Path('/app/runtime/restart-openclaw.flag')
-            _flag.write_text(str(time.time()))
-            logger.info('restart-openclaw.flag written — host cron will restart container')
-        except Exception as _fe:
-            logger.warning(f'Could not write restart flag: {_fe}')
-        ai_response = "I lost my connection for a moment. I'm reconnecting now — please try again in a few seconds."
+        logger.warning('Both Gateway and Z.AI flash failed, using generic fallback')
+        ai_response = "Hmm, my brain glitched for a second there. Try that again?"
 
     # Clean text for TTS
     tts_text = clean_for_tts(ai_response)

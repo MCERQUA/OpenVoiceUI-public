@@ -600,6 +600,7 @@ def canvas_pages_proxy(path):
                     b'padding-top:20px!important;'
                     b'padding-left:20px!important;'
                     b'padding-right:20px!important;'
+                    b''
                     b'box-sizing:border-box!important;'
                     b'color:#e2e8f0;'
                     b'background:#0a0a0a;}'
@@ -620,11 +621,25 @@ def canvas_pages_proxy(path):
                     b"});"
                     b'</script>'
                 )
+                # Inject nav() and speak() helpers into every page
+                _nav_helpers = (
+                    b'<script id="canvas-nav-helpers">'
+                    b'if(!window.nav){window.nav=function(p){'
+                    b'window.parent.postMessage({type:"canvas-action",action:"navigate",page:p},"*");};}'
+                    b'if(!window.speak){window.speak=function(t){'
+                    b'window.parent.postMessage({type:"canvas-action",action:"speak",text:t},"*");};}'
+                    b'</script>'
+                )
                 _inject = _base_css + _error_bridge
                 if b'</head>' in content:
                     content = content.replace(b'</head>', _inject + b'</head>', 1)
                 else:
                     content = _inject + content
+                # Inject nav/speak helpers before </body>
+                if b'</body>' in content:
+                    content = content.replace(b'</body>', _nav_helpers + b'</body>', 1)
+                else:
+                    content += _nav_helpers
                 resp = Response(content, mimetype='text/html')
                 resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
                 resp.headers['Pragma'] = 'no-cache'
@@ -985,6 +1000,52 @@ def create_canvas_page():
     except Exception as exc:
         logger.error(f'Canvas page create error: {exc}')
         return jsonify({'error': 'Canvas page creation failed'}), 500
+
+
+# ---------------------------------------------------------------------------
+# System page data API — serves JSON from _data/ inside canvas-pages dir
+# Both openclaw and openvoiceui containers mount canvas-pages, so _data/
+# is the shared bridge for system page data (autopilot stats, inbox, etc.)
+# ---------------------------------------------------------------------------
+_CANVAS_DATA_DIR = CANVAS_PAGES_DIR / '_data'
+
+@canvas_bp.route('/api/canvas/data/<path:filename>', methods=['GET'])
+def canvas_data(filename):
+    """Serve JSON data files for system canvas pages.
+
+    Reads from canvas-pages/_data/ directory.
+    Returns empty {} if file doesn't exist yet (graceful empty state).
+    """
+    if not filename.endswith('.json'):
+        return jsonify({'error': 'only .json files'}), 400
+    resolved = _safe_canvas_path(str(_CANVAS_DATA_DIR), filename)
+    if resolved and resolved.exists() and resolved.is_file():
+        try:
+            return Response(resolved.read_bytes(), mimetype='application/json',
+                            headers={'Cache-Control': 'no-cache'})
+        except Exception as exc:
+            logger.error(f'canvas_data read error: {exc}')
+            return jsonify({}), 200
+    return jsonify({}), 200
+
+@canvas_bp.route('/api/canvas/data/<path:filename>', methods=['POST'])
+def canvas_data_write(filename):
+    """Write JSON data from canvas pages (e.g. approval actions)."""
+    if not filename.endswith('.json'):
+        return jsonify({'error': 'only .json files'}), 400
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({'error': 'invalid json'}), 400
+    resolved = _safe_canvas_path(str(_CANVAS_DATA_DIR), filename)
+    if resolved is None:
+        return jsonify({'error': 'invalid path'}), 400
+    try:
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        resolved.write_text(json.dumps(data, indent=2), encoding='utf-8')
+        return jsonify({'ok': True})
+    except Exception as exc:
+        logger.error(f'canvas_data write error: {exc}')
+        return jsonify({'error': str(exc)}), 500
 
 
 @canvas_bp.route('/api/canvas/mtime/<path:filename>', methods=['GET'])
