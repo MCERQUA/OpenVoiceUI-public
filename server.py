@@ -92,6 +92,17 @@ from routes.canvas import (
 )
 app.register_blueprint(canvas_bp)
 
+# Seed default pages into canvas-pages on startup (ships with the app image)
+from services.paths import DEFAULT_PAGES_DIR
+if DEFAULT_PAGES_DIR.is_dir():
+    CANVAS_PAGES_DIR.mkdir(parents=True, exist_ok=True)
+    import shutil
+    for src in DEFAULT_PAGES_DIR.iterdir():
+        dest = CANVAS_PAGES_DIR / src.name
+        if not dest.exists():
+            shutil.copy2(src, dest)
+            logger.info("Seeded default page: %s", src.name)
+
 from routes.static_files import static_files_bp, DJ_SOUNDS, SOUNDS_DIR
 app.register_blueprint(static_files_bp)
 
