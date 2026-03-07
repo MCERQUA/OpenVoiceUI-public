@@ -32,10 +32,12 @@ class GroqSTT {
         // PTT support (built-in, no monkey-patching needed)
         this._micMuted = false;
         this._pttHolding = false;
+        this._muteActive = false;   // Set by mute(), cleared by resume() — survives API call finally blocks
 
         // VAD (Voice Activity Detection) settings
         this.silenceTimer = null;
         this.silenceDelayMs = 3500;     // 3.5s silence = end of speech (profile can override)
+        this.accumulationDelayMs = 300; // Short window to merge consecutive chunks before sending
         this.vadThreshold = 50;         // FFT average amplitude threshold (profile can override)
         this.minSpeechMs = 300;         // Must sustain above threshold for this long before counting as speech
         this.maxRecordingMs = 45000;    // 45s max before auto-chunk (profile can override)
@@ -101,7 +103,7 @@ class GroqSTT {
             if (this.audioChunks.length === 0) return;
 
             // If muted (TTS playing), discard audio and don't restart
-            if (this.isProcessing && !this._pttHolding) {
+            if ((this.isProcessing || this._muteActive) && !this._pttHolding) {
                 this.audioChunks = [];
                 this.stoppingRecorder = false;
                 this.hadSpeechInChunk = false;
@@ -169,7 +171,7 @@ class GroqSTT {
                             clearTimeout(this._accumulationTimer);
                             this._accumulationTimer = null;
                         }
-                        // Send accumulated text after silence (no new chunks)
+                        // Short window to merge consecutive chunks, then send
                         this._accumulationTimer = setTimeout(() => {
                             this._accumulationTimer = null;
                             const fullText = this.accumulatedText.trim();
@@ -178,7 +180,7 @@ class GroqSTT {
                                 this.onResult(fullText);
                             }
                             this.accumulatedText = '';
-                        }, this.silenceDelayMs);
+                        }, this.accumulationDelayMs);
                     }
                 }
             } catch (error) {
@@ -189,7 +191,8 @@ class GroqSTT {
                 this.stoppingRecorder = false;
 
                 // Restart recording if still listening and not muted
-                if (this.isListening && !this._micMuted) {
+                // Check _muteActive: if mute() was called while this API call ran, don't restart
+                if (this.isListening && !this._micMuted && !this._muteActive) {
                     this.audioChunks = [];
                     this.mediaRecorder.start();
                 }
@@ -291,6 +294,7 @@ class GroqSTT {
         this.isListening = false;
         this.stoppingRecorder = false;
         this._micMuted = false;
+        this._muteActive = false;
 
         if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
         if (this.maxRecordingTimer) { clearTimeout(this.maxRecordingTimer); this.maxRecordingTimer = null; }
@@ -333,6 +337,7 @@ class GroqSTT {
      * Does NOT release the mic stream or change isListening state.
      */
     mute() {
+        this._muteActive = true;
         this.isProcessing = true;
         this.hadSpeechInChunk = false;
         this.accumulatedText = '';
@@ -359,6 +364,7 @@ class GroqSTT {
      * Restarts recording from clean state.
      */
     resume() {
+        this._muteActive = false;
         this.isProcessing = false;
         this.stoppingRecorder = false;
         this.hadSpeechInChunk = false;

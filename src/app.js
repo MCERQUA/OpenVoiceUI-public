@@ -31,6 +31,23 @@ inject();
             }
         };
 
+        // ===== CANVAS URL RESOLVER =====
+        // Rewrites external dev-domain URLs to same-domain /devsite-*/ proxies,
+        // bypassing Cloudflare's cross-subdomain iframe blocking.
+        // Map is injected by Flask from DEVSITE_MAP env var (set per user in compose/.env).
+        // Example: {"dev-nick.jam-bot.com": "https://nick.jam-bot.com/devsite-printguys-web-2/"}
+        function resolveCanvasUrl(url) {
+            const map = window.AGENT_CONFIG?.devsiteMap || {};
+            for (const [from, to] of Object.entries(map)) {
+                const fromUrl = from.includes('://') ? from : 'https://' + from;
+                if (url.toLowerCase().startsWith(fromUrl.toLowerCase())) {
+                    const remainder = url.slice(fromUrl.length).replace(/^\//, '');
+                    return remainder ? to + remainder : to;
+                }
+            }
+            return url;
+        }
+
         // ===== PROVIDER MANAGER =====
         // Manages TTS provider selection (Supertonic, Hume, etc.)
         const ProviderManager = {
@@ -2053,6 +2070,11 @@ inject();
                         this._hideAuthGate();
                         this.renderUserMenu();
                         document.getElementById('sign-in-button').style.display = 'none';
+                        // If redirected here from a canvas page (or other protected route), go back there
+                        const redirectTo = new URLSearchParams(window.location.search).get('redirect');
+                        if (redirectTo && redirectTo.startsWith('/')) {
+                            window.location.href = redirectTo;
+                        }
                     };
 
                     if (Clerk.user) {
@@ -3117,10 +3139,11 @@ inject();
                         if (canvasUrlMatch && !canvasCommandsProcessed.has('CANVAS_URL')) {
                             canvasCommandsProcessed.add('CANVAS_URL');
                             const externalUrl = canvasUrlMatch[1].trim();
-                            console.log('[Canvas] External URL trigger:', externalUrl);
-                            ActionConsole.addEntry('system', `Canvas: loading ${externalUrl}`);
+                            const resolvedUrl = resolveCanvasUrl(externalUrl);
+                            console.log('[Canvas] External URL trigger:', externalUrl, resolvedUrl !== externalUrl ? `→ ${resolvedUrl}` : '');
+                            ActionConsole.addEntry('system', `Canvas: loading ${resolvedUrl}`);
                             const iframe = document.getElementById('canvas-iframe');
-                            if (iframe) { iframe.src = externalUrl; CanvasControl.show(); }
+                            if (iframe) { iframe.src = resolvedUrl; CanvasControl.show(); }
                         }
                         // Check for [SLEEP] — agent-initiated return to wake-word mode
                         if (/\[SLEEP\]/i.test(text) && !canvasCommandsProcessed.has('SLEEP')) {
@@ -3218,6 +3241,12 @@ inject();
                                     }
                                 }
 
+                                // Server retrying empty response — keep stream alive, no fallback
+                                if (data.type === 'retrying') {
+                                    console.log('[Conversation] Server retrying empty response — waiting for result...');
+                                    continue;
+                                }
+
                                 // Text done: full response finalized
                                 if (data.type === 'text_done') {
                                     const fullResponse = data.response || streamingText;
@@ -3231,6 +3260,15 @@ inject();
                                             console.log('[text_done] Filtered garbage STT — silent resume');
                                             this._lastStreamFiltered = false;
                                             TranscriptPanel.finalizeStreaming(null);
+                                            reader.cancel();
+                                            return;
+                                        }
+                                        // Session start empty response — agent just wasn't ready yet.
+                                        // Don't show "Sorry" — user hasn't said anything. Just resume silently.
+                                        if (isSystemTrigger) {
+                                            console.warn('[text_done] Empty response on session_start — silent resume');
+                                            TranscriptPanel.finalizeStreaming(null);
+                                            ActionConsole.addEntry('error', 'Empty response from agent');
                                             reader.cancel();
                                             return;
                                         }
@@ -4402,10 +4440,11 @@ inject();
                 const canvasUrlMatch = text.match(/\[CANVAS_URL:([^\]]+)\]/i);
                 if (canvasUrlMatch) {
                     const externalUrl = canvasUrlMatch[1].trim();
-                    console.log('[Canvas] External URL trigger:', externalUrl);
-                    ActionConsole.addEntry('system', `Canvas: loading ${externalUrl}`);
+                    const resolvedUrl = resolveCanvasUrl(externalUrl);
+                    console.log('[Canvas] External URL trigger:', externalUrl, resolvedUrl !== externalUrl ? `→ ${resolvedUrl}` : '');
+                    ActionConsole.addEntry('system', `Canvas: loading ${resolvedUrl}`);
                     const iframe = document.getElementById('canvas-iframe');
-                    if (iframe) { iframe.src = externalUrl; CanvasControl.show(); }
+                    if (iframe) { iframe.src = resolvedUrl; CanvasControl.show(); }
                 }
                 // [MUSIC_PLAY] or [MUSIC_PLAY:track]
                 const musicPlay = text.match(/\[MUSIC_PLAY(?::([^\]]+))?\]/i);
@@ -5702,6 +5741,7 @@ inject();
                     localStorage.setItem('canvas_last_page', page);
                     this._lastMtime = null;  // reset mtime tracking on manual navigation
                 }
+                console.log('Canvas opening:', page);
                 this.show();
             },
 
@@ -6940,7 +6980,18 @@ inject();
                 for (const action of actions) {
                     if (action.type === 'tool') {
                         const phase = action.phase === 'result' ? '✓' : '→';
-                        this.addEntry('tool', `${phase} Tool: ${action.name}`, action.result || '', action.ts);
+                        // Build a readable detail line from the input parameters
+                        let detail = '';
+                        if (action.phase === 'result') {
+                            detail = action.result || '';
+                        } else if (action.input && Object.keys(action.input).length) {
+                            const inp = action.input;
+                            detail = inp.command || inp.path || inp.file_path ||
+                                     inp.query || inp.url || inp.pattern ||
+                                     inp.content?.slice?.(0, 60) ||
+                                     Object.values(inp)[0]?.toString?.()?.slice(0, 80) || '';
+                        }
+                        this.addEntry('tool', `${phase} Tool: ${action.name}`, detail, action.ts);
                     } else if (action.type === 'lifecycle') {
                         const label = action.phase === 'start' ? 'Agent started processing' :
                                       action.phase === 'end' ? 'Agent finished' : `Lifecycle: ${action.phase}`;

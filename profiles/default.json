@@ -86,7 +86,7 @@
     "greeting": null,
     "auto_hangup_silence_ms": null,
     "interruption_enabled": true,
-    "max_response_chars": 300
+    "max_response_chars": 1500
   },
 
   "modes": {

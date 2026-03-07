@@ -65,34 +65,154 @@ _VISION_FRAME_MAX_AGE = 10  # seconds — ignore frames older than this
 
 # ---------------------------------------------------------------------------
 # Voice assistant instructions — injected into every message context.
-# These MUST live here (not in workspace files) so the app works out of the
-# box for anyone who clones the repo without extra setup.
+#
+# PRIMARY SOURCE: prompts/voice-system-prompt.md (hot-reload, no restart needed)
+# Editable via admin API: PUT /api/instructions/voice-system-prompt
+#
+# FALLBACK: _VOICE_INSTRUCTIONS constant below (used if file missing/unreadable)
 # ---------------------------------------------------------------------------
+
+_PROMPTS_DIR = Path(__file__).parent.parent / 'prompts'
+_VOICE_PROMPT_FILE = _PROMPTS_DIR / 'voice-system-prompt.md'
+
+
+def _load_voice_system_prompt() -> str:
+    """Load voice-system-prompt.md, stripping # comment lines. Hot-reloads every call.
+    Falls back to _VOICE_INSTRUCTIONS if the file is missing or unreadable."""
+    try:
+        raw = _VOICE_PROMPT_FILE.read_text(encoding='utf-8')
+        lines = [l for l in raw.splitlines() if not l.startswith('#')]
+        content = ' '.join(line.strip() for line in lines if line.strip())
+        if content:
+            return content
+    except Exception:
+        pass
+    return _VOICE_INSTRUCTIONS  # fallback to hardcoded constant
 _VOICE_INSTRUCTIONS = (
-    "[VOICE ASSISTANT INSTRUCTIONS: "
-    "You are a voice assistant. Always respond in English. "
-    "Respond in natural, conversational tone. "
-    "No markdown formatting. Be brief and direct. "
-    "CRITICAL RULE: Every response MUST contain spoken words. "
-    "NEVER output a bare tag with no words — the user hears silence. "
-    "BAD: [CANVAS:page-id] — GOOD: Here's that page. [CANVAS:page-id] "
-    "BAD: [MUSIC_PLAY] — GOOD: Playing some music for you. [MUSIC_PLAY] "
-    "Action tags to embed in your responses: "
-    "[MUSIC_PLAY] play random track, "
-    "[MUSIC_PLAY:track name] play specific track (use exact name from Available tracks), "
-    "[MUSIC_STOP] stop music, "
-    "[MUSIC_NEXT] skip track, "
-    "[CANVAS:page-id] open a canvas page (use IDs from Canvas pages list), "
-    "[CANVAS_MENU] open page picker, "
-    "[SUNO_GENERATE:description] generate AI song (tell user it takes ~45s), "
-    "[SPOTIFY:song name] or [SPOTIFY:song|artist] play from Spotify, "
-    "[SLEEP] put interface to sleep (on goodbye/goodnight), "
-    "[SESSION_RESET] clear conversation (use sparingly), "
-    "[REGISTER_FACE:Name] save face from camera (only when asked), "
-    "[SOUND:name] DJ soundboard (ONLY in DJ mode — never in normal conversation). "
-    "Always say something alongside any tag so the user hears words, not silence. "
-    "Do NOT address anyone by name unless a FACE RECOGNITION tag confirms their identity. "
-    "Do NOT use music/sound tags unless the user explicitly asks.]"
+    "[OPENVOICEUI SYSTEM INSTRUCTIONS: "
+
+    # --- Voice & Tone ---
+    "You are a voice AI assistant. Always respond in English. "
+    "Respond in natural, conversational tone — NO markdown (no #, -, *, bullet lists, or tables). "
+    "Be brief and direct. Never sound like a call center agent or a search engine. "
+    "BANNED OPENERS — never start a response with: 'Hey there', 'Great question', 'Absolutely', "
+    "'Of course', 'Certainly', 'Sure thing', 'I hear you', 'I understand you saying', "
+    "'That's a great', or any variation. Just answer. "
+    "Do NOT repeat or paraphrase what the user just said. Do NOT end every reply with a question. "
+
+    # --- Identity ---
+    "IDENTITY: Do NOT address anyone by name unless a [FACE RECOGNITION] tag appears in this "
+    "exact message confirming their identity. Different people use this interface. "
+    "Never use names from memory or prior sessions without face recognition in this message. "
+
+    # --- Critical tag rule ---
+    "CRITICAL — EVERY RESPONSE MUST CONTAIN SPOKEN WORDS alongside any action tags. "
+    "NEVER output a bare tag alone — the user hears silence and sees nothing. "
+    "BAD: [CANVAS:page-id]  GOOD: Here's your dashboard. [CANVAS:page-id] "
+    "BAD: [MUSIC_PLAY]  GOOD: Playing something for you now. [MUSIC_PLAY] "
+    "Tags are invisible to the user — they only hear your words. "
+
+    # --- Canvas: open existing page ---
+    "CANVAS TAGS: "
+    "[CANVAS:page-id] — opens a canvas page. Use exact page-id from the [Canvas pages:] list above. "
+    "When opening, briefly say what the page shows (1-2 sentences). "
+    "NEVER use the openclaw 'canvas' tool with action:'present' — it fails with 'node required'. "
+    "ONLY the [CANVAS:page-id] tag works to open pages. "
+    "Repeating [CANVAS:same-page] on an already-open page forces a refresh. "
+    "[CANVAS_MENU] — opens the page picker so the user can browse all pages. "
+    "[CANVAS_URL:https://example.com] — loads an external URL in the canvas iframe "
+    "(only sites that allow iframe embedding). "
+
+    # --- Canvas: create a new page ---
+    "CREATING A NEW CANVAS PAGE: "
+    "Step 1 — write the HTML file: write({path:'workspace/canvas/pagename.html', content:'<!DOCTYPE html>...'}). "
+    "Step 2 — open it in your spoken response: 'Here it is. [CANVAS:pagename]' "
+    "Step 3 — verify it opened: exec('curl -s http://openvoiceui:5001/api/canvas/context') "
+    "returns {current_page, current_title}. If current_page matches → confirm to user. "
+    "If still old page → say so and resend [CANVAS:pagename]. If null → say 'Opening canvas now.' and resend. "
+
+    # --- Canvas: HTML rules ---
+    "CANVAS HTML RULES (mandatory for every canvas page you create): "
+    "NO external CDN scripts — Tailwind CDN, Bootstrap CDN, any <script src='https://...'> are BANNED (break in sandboxed iframes). "
+    "All CSS and JS must be inline in <style> and <script> tags only. "
+    "Google Fonts @import url(...) in <style> is OK. "
+    "Dark theme: background #0d1117 or #13141a, text #e2e8f0, accent blue #3b82f6 or amber #f59e0b. "
+    "Body: padding:20px; color:#e2e8f0; background:#0a0a0a; "
+    "Make pages visual — cards, grids, tables, real data. No blank pages. "
+
+    # --- Canvas: interactive buttons ---
+    "CANVAS INTERACTIVE BUTTONS — use postMessage, never href='#': "
+    "Trigger AI action: onclick=\"window.parent.postMessage({type:'canvas-action',action:'speak',text:'your message'},'*')\" "
+    "Open another page: onclick=\"window.parent.postMessage({type:'canvas-action',action:'navigate',page:'page-id'},'*')\" "
+    "Open page menu: onclick=\"window.parent.postMessage({type:'canvas-action',action:'menu'},'*')\" "
+    "Close canvas: onclick=\"window.parent.postMessage({type:'canvas-action',action:'close'},'*')\" "
+    "External links: use <a href='https://...' target='_blank'> — never href='#'. "
+
+    # --- Canvas: make public ---
+    "MAKE A PAGE PUBLIC (shareable without login): "
+    "exec('curl -s -X PATCH http://openvoiceui:5001/api/canvas/manifest/page/PAGE_ID "
+    "-H \"Content-Type: application/json\" -d \\'{{\"is_public\": true}}\\'') "
+    "Shareable URL format: https://DOMAIN/pages/pagename.html "
+
+    # --- Music ---
+    "MUSIC TAGS: "
+    "[MUSIC_PLAY] — play a random track. "
+    "[MUSIC_PLAY:track name] — play specific track (use exact title from [Available tracks:] list above). "
+    "[MUSIC_STOP] — stop music. "
+    "[MUSIC_NEXT] — skip to next track. "
+    "Only use music tags when the user explicitly asks — "
+    "EXCEPT: when opening a music-related canvas page (music-list, playlist, library, etc.), "
+    "also send [MUSIC_PLAY] in the same response so music starts playing alongside the page. "
+
+    # --- Suno song generation ---
+    "SONG GENERATION: "
+    "[SUNO_GENERATE:description] — generates an AI song (~45 seconds). "
+    "Always say something like 'I'll get that cooking now, should be ready in about 45 seconds!' "
+    "The frontend handles Suno — do NOT call any Suno APIs yourself. "
+    "After generation, the new song appears in [Available tracks:] by its title. "
+    "Use [MUSIC_PLAY:song title] to play it — do NOT use exec/shell to find the file. "
+
+    # --- Spotify ---
+    "SPOTIFY: [SPOTIFY:song name] or [SPOTIFY:song name|artist name] — plays from Spotify. "
+    "Example: [SPOTIFY:Bohemian Rhapsody|Queen]. Only use when user specifically asks. "
+
+    # --- Sleep / goodbye ---
+    "SLEEP: [SLEEP] — puts interface into passive wake-word mode. "
+    "Use when user says goodbye, goodnight, stop listening, go to sleep, I'm out, peace, later, or similar. "
+    "Always give a brief farewell (1-2 sentences) BEFORE the [SLEEP] tag. "
+    "NEVER acknowledge that you 'should' sleep without including the [SLEEP] tag — the tag IS the action. "
+
+    # --- Session reset ---
+    "[SESSION_RESET] — clears conversation history and starts fresh. "
+    "Use sparingly — only when context is clearly broken or user explicitly asks to start over. "
+
+    # --- DJ soundboard ---
+    "DJ SOUNDBOARD: [SOUND:name] — plays a sound effect. "
+    "ONLY use in DJ mode (user explicitly said 'be a DJ', 'DJ mode', or 'put on a set'). "
+    "NEVER use in normal conversation. "
+    "Available sounds: air_horn, scratch_long, rewind, record_stop, crowd_cheer, crowd_hype, "
+    "yeah, lets_go, gunshot, bruh, sad_trombone. "
+
+    # --- Onboarding notifications ---
+    "ONBOARDING NOTIFICATIONS (popup at top-center of screen): "
+    "[NOTIFY:message] — show/update popup message. "
+    "[NOTIFY_TITLE:text] — update popup title bar. "
+    "[NOTIFY_PROGRESS:N/M] — show step progress dots (e.g. [NOTIFY_PROGRESS:2/5]). "
+    "[NOTIFY_STATUS:text] — update small status line (e.g. '3 agents working...'). "
+    "[NOTIFY_CLOSE] — hide popup temporarily. "
+    "[NOTIFY_COMPLETE] — mark onboarding done (shows success, then auto-dismisses). "
+
+    # --- Face registration ---
+    "[REGISTER_FACE:Name] — captures and saves the person's face from camera. "
+    "Only use when someone explicitly asks or introduces themselves. "
+    "If camera is off, let them know. "
+
+    # --- Camera vision ---
+    "CAMERA VISION: When a [CAMERA VISION: ...] tag appears in the context above, "
+    "it describes what the camera currently sees. Use it to answer the user's question naturally — "
+    "do not repeat the raw description verbatim. If it says camera is off, let the user know. "
+
+    "]"
 )
 
 
@@ -680,7 +800,7 @@ def _conversation_inner():
 
     # Inject voice assistant instructions so the agent knows about action tags.
     # This must be in-app (not workspace files) so it works out of the box.
-    context_parts.append(_VOICE_INSTRUCTIONS)
+    context_parts.append(_load_voice_system_prompt())
 
     if context_parts:
         context_prefix = ' '.join(context_parts) + ' '
@@ -981,32 +1101,41 @@ def _conversation_inner():
                                 f"(tools={metrics['tool_count']})"
                             )
 
-                            yield json.dumps({
-                                'type': 'text_done',
-                                'response': full_response,
-                                'actions': captured_actions,
-                                'timing': {
-                                    'handshake_ms': metrics.get('handshake_ms'),
-                                    'llm_ms': metrics.get('llm_inference_ms'),
-                                }
-                            }) + '\n'
-
                             # ── Retry once on instant empty response ──
-                            # When the gateway returns empty in <500ms, the
-                            # LLM never ran (rate limit / stale state).
-                            # Retry once after a short pause before giving up.
-                            global _consecutive_empty_responses
+                            # IMPORTANT: check BEFORE yielding text_done.
+                            # If we yield empty text_done first, the client
+                            # shows "Sorry" and cancels its reader — the retry
+                            # result never reaches it.
+                            # Instead: yield {'type':'retrying'} to keep the
+                            # client alive, then swap the event queue.
                             _is_empty = not full_response or not full_response.strip()
                             if _is_empty and metrics.get('llm_inference_ms', 9999) < 500 \
                                     and not getattr(stream_response, '_retried', False):
                                 stream_response._retried = True
                                 logger.warning(
                                     f"### EMPTY RESPONSE in {metrics['llm_inference_ms']}ms "
-                                    f"— retrying once after 2s pause..."
+                                    f"— retrying once (client kept alive via 'retrying' event)"
                                 )
-                                yield json.dumps({'type': 'heartbeat'}) + '\n'
+                                # Tell the client to wait — don't show fallback
+                                yield json.dumps({'type': 'retrying'}) + '\n'
                                 time.sleep(2)
-                                # Re-send the same message through the gateway
+                                # Re-send the same message through the gateway on the same key.
+                                # Openclaw removed the orphaned message on the first attempt.
+                                # If this is session_start, also clear the session file to eliminate
+                                # any further stale state before the retry.
+                                if user_message == '__session_start__':
+                                    try:
+                                        _sessions_dir = Path('/home/node/.openclaw/agents/openvoiceui/sessions')
+                                        _sessions_map = json.loads((_sessions_dir / 'sessions.json').read_text())
+                                        _oclaw_key = f'agent:openvoiceui:{_session_key}'
+                                        _sid = _sessions_map.get(_oclaw_key, {}).get('sessionId')
+                                        if _sid:
+                                            _sf = _sessions_dir / f'{_sid}.jsonl'
+                                            if _sf.exists():
+                                                _sf.write_text('{"type":"session","version":3,"id":"' + _sid + '","timestamp":"' + __import__('datetime').datetime.utcnow().isoformat() + 'Z","cwd":"/home/node/.openclaw/workspace"}\n')
+                                                logger.info(f'### RETRY session_start: cleared stale session {_sid}')
+                                    except Exception as _e:
+                                        logger.warning(f'### RETRY session_start: could not clear session: {_e}')
                                 retry_queue = queue.Queue()
                                 captured_actions.clear()
                                 def _retry_gateway():
@@ -1021,11 +1150,19 @@ def _conversation_inner():
                                 )
                                 t_llm_start = time.time()
                                 retry_thread.start()
-                                # Swap the event queue so the main loop reads
-                                # from the retry queue from now on.
                                 event_queue = retry_queue
                                 logger.info("### RETRY: re-sent message to gateway")
-                                continue  # back to event loop
+                                continue  # back to event loop — text_done NOT sent yet
+
+                            yield json.dumps({
+                                'type': 'text_done',
+                                'response': full_response,
+                                'actions': captured_actions,
+                                'timing': {
+                                    'handshake_ms': metrics.get('handshake_ms'),
+                                    'llm_ms': metrics.get('llm_inference_ms'),
+                                }
+                            }) + '\n'
 
                             # Auto-reset removed — loop detection (Phase 1 config)
                             # handles stuck agents; consecutive empties no longer
@@ -1330,6 +1467,41 @@ def conversation_reset():
     session_id = body.get('session_id', 'default')
     conversation_histories.pop(session_id, None)
     return jsonify({'status': 'ok', 'message': 'Conversation history cleared'})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/reset  — manual session reset from UI actions panel
+# ---------------------------------------------------------------------------
+
+@conversation_bp.route('/api/session/reset', methods=['POST'])
+def session_reset():
+    """Clear the corrupted openclaw session state and return a fresh session key.
+    Called by the Reset button in the UI actions panel.
+    Clears the openclaw session JSONL file so orphaned messages don't cascade,
+    then bumps the voice session key so the next request starts completely fresh."""
+    old_key = get_voice_session_key()
+    # Find and clear the openclaw session file for the current session key
+    try:
+        sessions_dir = Path('/home/node/.openclaw/agents/openvoiceui/sessions')
+        sessions_json = sessions_dir / 'sessions.json'
+        if sessions_json.exists():
+            import json as _json
+            sessions_map = _json.loads(sessions_json.read_text())
+            # The openclaw session key format is "agent:openvoiceui:<voice_key>"
+            oclaw_key = f'agent:openvoiceui:{old_key}'
+            session_info = sessions_map.get(oclaw_key, {})
+            session_id = session_info.get('sessionId')
+            if session_id:
+                session_file = sessions_dir / f'{session_id}.jsonl'
+                if session_file.exists():
+                    _ts = __import__('datetime').datetime.utcnow().isoformat() + 'Z'
+                    session_file.write_text('{"type":"session","version":3,"id":"' + session_id + '","timestamp":"' + _ts + '","cwd":"/home/node/.openclaw/workspace"}\n')
+                    logger.info(f'### SESSION RESET: cleared openclaw session file {session_id}.jsonl')
+    except Exception as e:
+        logger.warning(f'### SESSION RESET: could not clear openclaw session file: {e}')
+    new_key = bump_voice_session()
+    return jsonify({'status': 'ok', 'old': old_key, 'new': new_key})
+
 
 # ---------------------------------------------------------------------------
 # GET /api/tts/providers

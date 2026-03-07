@@ -107,6 +107,7 @@ def create_app(config_override: dict = None):
             '/sounds/',
             '/music/',
             '/images/',    # canvas images (individual pages check their own flag)
+            '/uploads/',   # uploaded/generated files — served from VPS filesystem (no secrets)
             '/static/',    # PWA icons, app icons
             '/pages/',     # canvas pages — served without auth (CANVAS_REQUIRE_AUTH opt-in)
             '/api/canvas/',  # canvas API — creation, manifest, context (no per-user auth needed)
@@ -129,6 +130,10 @@ def create_app(config_override: dict = None):
         # Auth is opt-in: when no key is set, all routes are accessible (README § Authentication).
         _clerk_key = (os.getenv('CLERK_PUBLISHABLE_KEY') or os.getenv('VITE_CLERK_PUBLISHABLE_KEY', '')).strip()
 
+        # Internal agent API key — allows openclaw agents to call Flask APIs
+        # without a Clerk JWT. Set AGENT_API_KEY in the container .env.
+        _agent_api_key = os.getenv('AGENT_API_KEY', '').strip()
+
         @app.before_request
         def require_auth():
             """Block unauthenticated requests to all non-exempt routes.
@@ -149,6 +154,10 @@ def create_app(config_override: dict = None):
             # Canvas pages and images have their own auth logic (public flag)
             # handled inside canvas_bp — let them through here
             if path.startswith('/pages/') or path.startswith('/canvas-proxy') or path.startswith('/website-dev'):
+                return
+
+            # Internal agent API key — openclaw agents calling Flask APIs from inside Docker network
+            if _agent_api_key and request.headers.get('X-Agent-Key') == _agent_api_key:
                 return
 
             from services.auth import get_token_from_request, verify_clerk_token

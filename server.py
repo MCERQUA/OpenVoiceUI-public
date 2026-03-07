@@ -128,6 +128,12 @@ app.register_blueprint(transcripts_bp)
 from routes.pi import pi_bp
 app.register_blueprint(pi_bp)
 
+from routes.onboarding import onboarding_bp
+app.register_blueprint(onboarding_bp)
+
+from routes.image_gen import image_gen_bp
+app.register_blueprint(image_gen_bp)
+
 # Auto-sync canvas manifest on startup so any pages written outside the API
 # are picked up immediately without a restart.
 try:
@@ -315,10 +321,18 @@ def serve_index():
     html = pathlib.Path("index.html").read_text()
     server_url = os.environ.get("AGENT_SERVER_URL", "").strip().rstrip("/")
     clerk_key = (os.environ.get("CLERK_PUBLISHABLE_KEY") or os.environ.get("VITE_CLERK_PUBLISHABLE_KEY", "")).strip()
+    import json as _json
+    devsite_map_raw = os.environ.get("DEVSITE_MAP", "{}").strip()
+    try:
+        devsite_map = _json.loads(devsite_map_raw)
+    except Exception:
+        devsite_map = {}
     config_parts = []
     config_parts.append(f'serverUrl:"{server_url}"' if server_url else 'serverUrl:window.location.origin')
     if clerk_key:
         config_parts.append(f'clerkPublishableKey:"{clerk_key}"')
+    if devsite_map:
+        config_parts.append(f'devsiteMap:{_json.dumps(devsite_map)}')
     config_block = f'<script>window.AGENT_CONFIG={{{",".join(config_parts)}}};</script>'
     html = html.replace("<head>", f"<head>\n  {config_block}", 1)
     resp = Response(html, mimetype="text/html")
@@ -550,10 +564,21 @@ def groq_stt():
         transcription = groq.audio.transcriptions.create(
             file=audio_tuple,
             model="whisper-large-v3-turbo",
-            response_format="json",
+            response_format="verbose_json",
             language="en",
+            temperature=0,
+            prompt="Voice command for AI assistant.",
         )
-        text = (transcription.text or "").strip()
+        # Filter segments with high no_speech_prob (Whisper hallucinations over silence)
+        segments = getattr(transcription, 'segments', None)
+        if segments:
+            text = ' '.join(
+                (seg.get('text', '') if isinstance(seg, dict) else seg.text).strip()
+                for seg in segments
+                if (seg.get('no_speech_prob', 0) if isinstance(seg, dict) else seg.no_speech_prob) < 0.6
+            ).strip()
+        else:
+            text = (transcription.text or "").strip()
         logger.info(f"Groq STT: {text!r}")
 
         # Filter known Whisper hallucinations (phantom text from silence/noise)

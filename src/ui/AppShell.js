@@ -59,7 +59,7 @@ const SHELL_HTML = `
             id="canvas-iframe"
             src="about:blank"
             data-canvas-src=""
-            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation allow-downloads"
             style="width: 100vw; height: 100vh; border: none; display: block; touch-action: manipulation;"
             allow="autoplay; fullscreen">
         </iframe>
@@ -98,7 +98,7 @@ const SHELL_HTML = `
             <label class="tp-upload-btn" title="Attach file">
                 📎
                 <input type="file" id="tp-file-input" style="display:none"
-                       accept="image/*,.pdf,.txt,.md,.json,.csv,.html,.js,.py,.ts,.css"
+                       accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.json,.csv,.html,.js,.py,.ts,.css"
                        onchange="TranscriptPanel.handleUpload(this)">
             </label>
             <div class="tp-file-preview" id="tp-file-preview" style="display:none">
