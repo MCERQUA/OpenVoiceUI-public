@@ -568,20 +568,17 @@ def canvas_pages_proxy(path):
         # Auth check — only when explicitly enabled (opt-in for self-hosted deployments)
         if CANVAS_REQUIRE_AUTH:
             page_id = Path(path).stem
-            # Skip auth for default pages (app infrastructure — desktop menu, etc.)
-            from services.paths import DEFAULT_PAGES_DIR
-            if not (DEFAULT_PAGES_DIR / path).exists():
-                manifest = load_canvas_manifest()
-                page_meta = manifest.get('pages', {}).get(page_id, {})
-                is_public = page_meta.get('is_public', False)
-                if not is_public:
-                    from services.auth import get_token_from_request, verify_clerk_token
-                    token = get_token_from_request()
-                    user_id = verify_clerk_token(token) if token else None
-                    if not user_id:
-                        if request.headers.get('Accept', '').startswith('text/html'):
-                            return redirect('/?redirect=/pages/' + path)
-                        return 'Unauthorized', 401
+            manifest = load_canvas_manifest()
+            page_meta = manifest.get('pages', {}).get(page_id, {})
+            is_public = page_meta.get('is_public', False)
+            if not is_public:
+                from services.auth import get_token_from_request, verify_clerk_token
+                token = get_token_from_request()
+                user_id = verify_clerk_token(token) if token else None
+                if not user_id:
+                    if request.headers.get('Accept', '').startswith('text/html'):
+                        return redirect('/?redirect=/pages/' + path)
+                    return 'Unauthorized', 401
 
         # P7-T3 security: prevent path traversal
         resolved = _safe_canvas_path(str(CANVAS_PAGES_DIR), path)

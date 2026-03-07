@@ -2070,6 +2070,10 @@ inject();
                         this._hideAuthGate();
                         this.renderUserMenu();
                         document.getElementById('sign-in-button').style.display = 'none';
+                        // Sync Clerk token to __session cookie so iframe navigations
+                        // and direct page URLs are authenticated (browser only sends
+                        // cookies with navigation requests, not Authorization headers).
+                        this._syncSessionCookie();
                         // If redirected here from a canvas page (or other protected route), go back there
                         const redirectTo = new URLSearchParams(window.location.search).get('redirect');
                         if (redirectTo && redirectTo.startsWith('/')) {
@@ -2195,6 +2199,22 @@ inject();
 
             async getToken() {
                 return Clerk.session?.getToken() ?? null;
+            },
+
+            async _syncSessionCookie() {
+                // Clerk tokens expire every ~60s. Sync to __session cookie so
+                // iframe navigations and direct /pages/ URLs carry auth.
+                const _sync = async () => {
+                    try {
+                        const token = await Clerk.session?.getToken();
+                        if (token) {
+                            document.cookie = `__session=${token}; path=/; SameSite=Lax; Secure`;
+                        }
+                    } catch (e) { /* session may be gone */ }
+                };
+                await _sync();
+                // Refresh cookie every 50s (Clerk tokens last ~60s)
+                this._sessionCookieInterval = setInterval(_sync, 50000);
             },
 
             renderUserMenu() {
@@ -6995,13 +7015,17 @@ inject();
                         // Build a readable detail line from the input parameters
                         let detail = '';
                         if (action.phase === 'result') {
-                            detail = action.result || '';
-                        } else if (action.input && Object.keys(action.input).length) {
+                            // For results, show first meaningful line of output
+                            const raw = action.result || '';
+                            detail = raw.split('\n').filter(l => l.trim())[0]?.slice(0, 120) || raw.slice(0, 120);
+                        } else if (action.input && typeof action.input === 'object' && Object.keys(action.input).length) {
                             const inp = action.input;
-                            detail = inp.command || inp.path || inp.file_path ||
+                            // Extract the most useful field for display
+                            detail = inp.command || inp.path || inp.file_path || inp.filePath ||
                                      inp.query || inp.url || inp.pattern ||
+                                     inp.oldText?.slice?.(0, 60) ||
                                      inp.content?.slice?.(0, 60) ||
-                                     Object.values(inp)[0]?.toString?.()?.slice(0, 80) || '';
+                                     Object.values(inp)[0]?.toString?.()?.slice(0, 120) || '';
                         }
                         this.addEntry('tool', `${phase} Tool: ${action.name}`, detail, action.ts);
                     } else if (action.type === 'lifecycle') {
