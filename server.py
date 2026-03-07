@@ -93,11 +93,14 @@ from routes.canvas import (
 app.register_blueprint(canvas_bp)
 
 # Seed default pages into canvas-pages on startup (ships with the app image)
+# Default pages are app infrastructure (e.g. desktop menu) — auth is skipped in canvas.py.
 from services.paths import DEFAULT_PAGES_DIR
 if DEFAULT_PAGES_DIR.is_dir():
     CANVAS_PAGES_DIR.mkdir(parents=True, exist_ok=True)
     import shutil
     for src in DEFAULT_PAGES_DIR.iterdir():
+        if not src.is_file():
+            continue
         dest = CANVAS_PAGES_DIR / src.name
         if not dest.exists():
             shutil.copy2(src, dest)

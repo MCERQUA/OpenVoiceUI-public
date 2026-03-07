@@ -47,6 +47,7 @@ CATEGORY_KEYWORDS = {
     'tasks': ['todo', 'task', 'project', 'plan', 'roadmap', 'checklist'],
     'reference': ['guide', 'reference', 'documentation', 'help', 'how to', 'tutorial'],
     'entertainment': ['music', 'radio', 'playlist', 'dj', 'audio', 'song'],
+    'video': ['video', 'remotion', 'render', 'animation', 'movie', 'clip', 'recording'],
 }
 
 CATEGORY_ICONS = {
@@ -58,6 +59,7 @@ CATEGORY_ICONS = {
     'tasks': '✅',
     'reference': '📖',
     'entertainment': '🎵',
+    'video': '🎬',
     'uncategorized': '📁',
 }
 
@@ -70,6 +72,7 @@ CATEGORY_COLORS = {
     'tasks': '#e74c3c',
     'reference': '#95a5a6',
     'entertainment': '#e91e63',
+    'video': '#ff6b35',
     'uncategorized': '#6e7681',
 }
 
@@ -92,6 +95,8 @@ canvas_context = {
 # ---------------------------------------------------------------------------
 
 _manifest_cache: dict = {'data': None, 'mtime': 0}
+_last_sync_time: float = 0
+_SYNC_THROTTLE_SECONDS: int = 60  # auto-sync at most once per minute
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -305,6 +310,8 @@ def generate_voice_aliases(title: str) -> list[str]:
 
 def sync_canvas_manifest() -> dict:
     """Full sync with pages directory."""
+    global _last_sync_time
+    _last_sync_time = time.time()
     manifest = load_canvas_manifest()
     logger = logging.getLogger(__name__)
 
@@ -393,6 +400,7 @@ def add_page_to_manifest(filename: str, title: str, description: str = '', conte
         'modified': datetime.now().isoformat(),
         'starred': False,
         'is_public': False,
+        'is_locked': False,
         'voice_aliases': generate_voice_aliases(title),
         'access_count': 0,
     }
@@ -560,17 +568,20 @@ def canvas_pages_proxy(path):
         # Auth check — only when explicitly enabled (opt-in for self-hosted deployments)
         if CANVAS_REQUIRE_AUTH:
             page_id = Path(path).stem
-            manifest = load_canvas_manifest()
-            page_meta = manifest.get('pages', {}).get(page_id, {})
-            is_public = page_meta.get('is_public', False)
-            if not is_public:
-                from services.auth import get_token_from_request, verify_clerk_token
-                token = get_token_from_request()
-                user_id = verify_clerk_token(token) if token else None
-                if not user_id:
-                    if request.headers.get('Accept', '').startswith('text/html'):
-                        return redirect('/?redirect=/pages/' + path)
-                    return 'Unauthorized', 401
+            # Skip auth for default pages (app infrastructure — desktop menu, etc.)
+            from services.paths import DEFAULT_PAGES_DIR
+            if not (DEFAULT_PAGES_DIR / path).exists():
+                manifest = load_canvas_manifest()
+                page_meta = manifest.get('pages', {}).get(page_id, {})
+                is_public = page_meta.get('is_public', False)
+                if not is_public:
+                    from services.auth import get_token_from_request, verify_clerk_token
+                    token = get_token_from_request()
+                    user_id = verify_clerk_token(token) if token else None
+                    if not user_id:
+                        if request.headers.get('Accept', '').startswith('text/html'):
+                            return redirect('/?redirect=/pages/' + path)
+                        return 'Unauthorized', 401
 
         # P7-T3 security: prevent path traversal
         resolved = _safe_canvas_path(str(CANVAS_PAGES_DIR), path)
@@ -785,8 +796,18 @@ def get_canvas_route():
 
 @canvas_bp.route('/api/canvas/manifest', methods=['GET'])
 def get_canvas_manifest():
-    """Get full canvas manifest with all pages and categories."""
-    manifest = load_canvas_manifest()
+    """Get full canvas manifest with all pages and categories.
+
+    Auto-syncs with the filesystem (throttled to once per 60s) so that
+    pages written directly by agents appear without a manual sync call.
+    """
+    global _last_sync_time
+    now = time.time()
+    if now - _last_sync_time >= _SYNC_THROTTLE_SECONDS:
+        _last_sync_time = now
+        manifest = sync_canvas_manifest()
+    else:
+        manifest = load_canvas_manifest()
     response = jsonify(manifest)
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
@@ -886,7 +907,42 @@ def handle_page_metadata(page_id):
     data = request.get_json() or {}
     page = manifest['pages'][page_id]
 
-    for field in ['display_name', 'description', 'category', 'tags', 'starred', 'is_public']:
+    # Detect agent requests (X-Agent-Key header) vs admin requests (Clerk JWT)
+    _agent_api_key = os.getenv('AGENT_API_KEY', '').strip()
+    is_agent_request = bool(_agent_api_key and request.headers.get('X-Agent-Key') == _agent_api_key)
+
+    # Guard: locked pages — agent cannot change is_public on locked pages.
+    # Admin (Clerk-authenticated) can still change anything, including unlocking.
+    if 'is_public' in data and page.get('is_locked', False) and is_agent_request:
+        return jsonify({
+            'error': 'This page is locked. Visibility can only be changed from the admin dashboard.',
+            'is_locked': True,
+        }), 403
+
+    # Guard: agent cannot lock/unlock pages — only admin can.
+    if 'is_locked' in data and is_agent_request:
+        return jsonify({
+            'error': 'Page lock status can only be changed from the admin dashboard.',
+        }), 403
+
+    # Guard: reject is_public=True if page was created less than 30 seconds ago.
+    # Prevents agents from making pages public immediately on creation.
+    if data.get('is_public') is True:
+        created_str = page.get('created', '')
+        if created_str:
+            try:
+                created_dt = datetime.fromisoformat(created_str)
+                age_seconds = (datetime.now() - created_dt).total_seconds()
+                if age_seconds < 30:
+                    return jsonify({
+                        'error': 'Cannot make a page public within 30 seconds of creation. '
+                                 'Wait a moment and try again.',
+                        'age_seconds': round(age_seconds, 1),
+                    }), 429
+            except (ValueError, TypeError):
+                pass  # malformed date — allow through
+
+    for field in ['display_name', 'description', 'category', 'tags', 'starred', 'is_public', 'is_locked']:
         if field in data:
             old_category = page.get('category')
             page[field] = data[field]
