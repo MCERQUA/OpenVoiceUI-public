@@ -1155,7 +1155,12 @@ function onIconTouchStart(e, item) {
     if (moved) {
       const target = findDropTarget(el, item);
       if (target) {
-        dropIntoFolder(item, target.dataset.id);
+        const targetItem = DESKTOP_ITEMS.find(i => i.id === target.dataset.id);
+        if (targetItem && targetItem.action === 'recycle') {
+          sendToRecycle(item);
+        } else {
+          dropIntoFolder(item, target.dataset.id);
+        }
         el.style.left = origLeft + 'px';
         el.style.top = origTop + 'px';
       } else {
@@ -1207,8 +1212,13 @@ function onIconMouseDown(e, item) {
     if (moved) {
       const target = findDropTarget(el, item);
       if (target) {
-        dropIntoFolder(item, target.dataset.id);
-        // Reset position since it's going into a folder
+        const targetItem = DESKTOP_ITEMS.find(i => i.id === target.dataset.id);
+        if (targetItem && targetItem.action === 'recycle') {
+          sendToRecycle(item);
+        } else {
+          dropIntoFolder(item, target.dataset.id);
+        }
+        // Reset position since it's going into a folder/trash
         el.style.left = origLeft + 'px';
         el.style.top = origTop + 'px';
       } else {
@@ -1229,10 +1239,12 @@ function findDropTarget(draggedEl, draggedItem) {
   for (const icon of icons) {
     if (icon === draggedEl) continue;
     const id = icon.dataset.id;
-    // Only folders are valid drop targets
     const targetItem = DESKTOP_ITEMS.find(i => i.id === id);
     if (!targetItem) continue;
-    if (targetItem.action !== 'folder' && targetItem.action !== 'customFolder') continue;
+    // Folders, custom folders, and recycle bin are valid drop targets
+    if (targetItem.action !== 'folder' && targetItem.action !== 'customFolder' && targetItem.action !== 'recycle') continue;
+    // Don't allow dropping the recycle bin into itself
+    if (targetItem.action === 'recycle' && draggedItem.action === 'recycle') continue;
     const r = icon.getBoundingClientRect();
     if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
       return icon;
@@ -1705,6 +1717,7 @@ function getIconContextItems(item) {
   // Loose page icons
   if (item.action === 'openPage' && item.pageId) {
     const moveToSub = buildMoveToSubmenu(item);
+    const doDelete = () => showConfirmModal('Move "'+item.name+'" to the Recycle Bin?', (ok)=>{ if(ok) sendToRecycle(item); });
     if (isMac || isUbuntu) {
       return [
         {label:'Open', action:()=>onIconDblClick(item)},
@@ -1713,7 +1726,7 @@ function getIconContextItems(item) {
         {label:isMac?'Get Info':'Properties', action:()=>showPageProperties(item.pageId)},
         '---',
         {label:'Move to...', sub: moveToSub},
-        {label:isMac?'Move to Trash':'Move to Trash', action:()=>{desktopPages=desktopPages.filter(id=>id!==item.pageId);deleteItem(item.pageId);rebuildDesktopItems();buildDesktopIcons();}},
+        {label:isMac?'Move to Trash':'Move to Trash', action:doDelete},
       ];
     }
     return [
@@ -1722,7 +1735,7 @@ function getIconContextItems(item) {
       '---',
       {label:'Move to...', sub: moveToSub},
       '---',
-      {label:'Delete', action:()=>{desktopPages=desktopPages.filter(id=>id!==item.pageId);deleteItem(item.pageId);rebuildDesktopItems();buildDesktopIcons();}},
+      {label:'Delete', action:doDelete},
       '---',
       {label:'Properties', action:()=>showPageProperties(item.pageId)},
     ];
@@ -2063,11 +2076,11 @@ function openExplorer(activeCat) {
   const explorerTitle = currentTheme === 'mac' ? 'Finder' : (currentTheme === 'ubuntu' ? 'Files' : (currentTheme === '31' ? 'File Manager' : 'My Computer'));
 
   let sidebarHtml = '<div class="explorer-sidebar">';
-  sidebarHtml += `<div class="cat-item${!activeCat ? ' active' : ''}" onclick="switchExplorerCat(this, '__all__')">All Pages</div>`;
+  sidebarHtml += `<div class="cat-item${!activeCat ? ' active' : ''}" data-cat-id="__all__" onclick="switchExplorerCat(this, '__all__')">All Pages</div>`;
   Object.keys(CATEGORIES).forEach(catId => {
     const c = CATEGORIES[catId];
     const cnt = Object.values(PAGES).filter(p => p.cat === catId && !recycleBin.includes(catId)).length;
-    sidebarHtml += `<div class="cat-item${catId===activeCat?' active':''}" onclick="switchExplorerCat(this, '${catId}')">${c.name} (${cnt})</div>`;
+    sidebarHtml += `<div class="cat-item${catId===activeCat?' active':''}" data-cat-id="${catId}" onclick="switchExplorerCat(this, '${catId}')">${c.name} (${cnt})</div>`;
   });
   sidebarHtml += '</div>';
 
@@ -2192,7 +2205,7 @@ function showExplorerItemMenu(e, pageId) {
       '---',
       {label:'Copy', action:()=>{clipboard={action:'copy',id:pageId}}},
       '---',
-      {label:'Move to Trash', action:()=>{deleteItem(pageId); refreshExplorers();}},
+      {label:'Move to Trash', action:()=>{showConfirmModal('Move "'+pageName+'" to the Trash?',(ok)=>{if(ok){deleteItem(pageId);refreshExplorers();refreshRecycleBin();}});}},
     ]);
   } else {
     showContextMenu(e.clientX, e.clientY, [
@@ -2202,7 +2215,7 @@ function showExplorerItemMenu(e, pageId) {
       {label:'Cut', action:()=>{clipboard={action:'cut',id:pageId}}},
       {label:'Copy', action:()=>{clipboard={action:'copy',id:pageId}}},
       '---',
-      {label:'Delete', action:()=>{deleteItem(pageId); refreshExplorers();}},
+      {label:'Delete', action:()=>{showConfirmModal('Move "'+pageName+'" to the Recycle Bin?',(ok)=>{if(ok){deleteItem(pageId);refreshExplorers();refreshRecycleBin();}});}},
       {label:'Rename', action:()=>{
         showPromptModal('Rename "'+pageName+'" to:', pageName, (n)=>{
           if(n && n.trim() && PAGES[pageId]) { PAGES[pageId].name = n.trim(); refreshExplorers(); }
@@ -2248,8 +2261,21 @@ function showPageProperties(pageId) {
 }
 
 function refreshExplorers() {
-  // Re-render any open explorer windows
+  rebuildDesktopItems();
   buildDesktopIcons();
+  // Re-render any open explorer/folder windows
+  document.querySelectorAll('.window').forEach(w => {
+    const titleEl = w.querySelector('.titlebar-title');
+    if (!titleEl) return;
+    const gridArea = w.querySelector('#explorer-grid-area') || w.querySelector('.explorer-content');
+    if (!gridArea) return;
+    // Find active category from sidebar
+    const activeCat = w.querySelector('.cat-item.active');
+    if (activeCat) {
+      const catId = activeCat.dataset.catId || '__all__';
+      gridArea.innerHTML = buildExplorerGrid(catId);
+    }
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2293,7 +2319,7 @@ function buildRecycleContent() {
   recycleBin.forEach(id => {
     const page = PAGES[id];
     const name = page ? page.name : CATEGORIES[id.replace('cat-','')]?.name || id;
-    html += `<div class="explorer-item" ondblclick="restoreItem('${id}')">
+    html += `<div class="explorer-item" ondblclick="restoreItem('${id}')" oncontextmenu="event.preventDefault();event.stopPropagation();showRecycleItemMenu(event,'${id}')">
       <div class="ei-icon">${getIcon('document')}</div>
       <div class="ei-name">${name}</div>
     </div>`;
@@ -2302,19 +2328,86 @@ function buildRecycleContent() {
   return html;
 }
 
+// Central function — moves any desktop item to recycle bin
+function sendToRecycle(item) {
+  if (!item || item.action === 'recycle') return;
+  if (item.action === 'openPage' && item.pageId) {
+    // Loose page icon
+    desktopPages = desktopPages.filter(id => id !== item.pageId);
+    deleteItem(item.pageId);
+  } else {
+    deleteItem(item.id);
+  }
+  delete iconPositions[item.id];
+  rebuildDesktopItems();
+  buildDesktopIcons();
+}
+
+function showRecycleItemMenu(e, id) {
+  const isMac = currentTheme === 'mac';
+  const page = PAGES[id];
+  const name = page ? page.name : CATEGORIES[id.replace('cat-','')]?.name || id;
+  showContextMenu(e.clientX, e.clientY, [
+    {label:'Restore', action:()=>restoreItem(id)},
+    '---',
+    {label:isMac?'Delete Immediately\u2026':'Delete Permanently\u2026', action:()=>{
+      showConfirmModal('Permanently delete "'+name+'"? This cannot be undone.', (ok)=>{
+        if (!ok) return;
+        recycleBin = recycleBin.filter(i => i !== id);
+        if (PAGES[id]) delete PAGES[id];
+        knownPages = knownPages.filter(k => k !== id);
+        desktopPages = desktopPages.filter(k => k !== id);
+        saveState();
+        rebuildDesktopItems();
+        buildDesktopIcons();
+        refreshRecycleBin();
+      });
+    }},
+  ]);
+}
+
 function deleteItem(id) {
   if (!recycleBin.includes(id)) {
     recycleBin.push(id);
     saveState();
-    buildDesktopIcons();
   }
 }
 
 function restoreItem(id) {
   recycleBin = recycleBin.filter(i => i !== id);
+  // If it was a page, add back to desktop
+  if (PAGES[id] && !desktopPages.includes(id)) desktopPages.push(id);
+  saveState();
+  rebuildDesktopItems();
+  buildDesktopIcons();
+  refreshRecycleBin();
+}
+
+function restoreAll() {
+  recycleBin.forEach(id => {
+    if (PAGES[id] && !desktopPages.includes(id)) desktopPages.push(id);
+  });
+  recycleBin = [];
+  saveState();
+  rebuildDesktopItems();
+  buildDesktopIcons();
+  refreshRecycleBin();
+}
+
+function emptyRecycleBin() {
+  if (recycleBin.length === 0) return;
+  // Remove permanently from known pages so they don't resurface
+  recycleBin.forEach(id => {
+    if (PAGES[id]) delete PAGES[id];
+    knownPages = knownPages.filter(k => k !== id);
+  });
+  recycleBin = [];
   saveState();
   buildDesktopIcons();
-  // Refresh recycle bin windows
+  refreshRecycleBin();
+}
+
+function refreshRecycleBin() {
   document.querySelectorAll('.window').forEach(w => {
     const title = w.querySelector('.titlebar-title');
     if (title && (title.textContent === 'Recycle Bin' || title.textContent === 'Trash')) {
@@ -2322,19 +2415,6 @@ function restoreItem(id) {
       if (content) content.innerHTML = buildRecycleContent();
     }
   });
-}
-
-function restoreAll() {
-  recycleBin = [];
-  saveState();
-  buildDesktopIcons();
-}
-
-function emptyRecycleBin() {
-  if (recycleBin.length === 0) return;
-  recycleBin = [];
-  saveState();
-  buildDesktopIcons();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2495,9 +2575,25 @@ function submitModal() {
 
 document.addEventListener('keydown', (e) => {
   const overlay = document.getElementById('modal-overlay');
-  if (!overlay || !overlay.classList.contains('show')) return;
-  if (e.key === 'Enter') { e.preventDefault(); submitModal(); }
-  if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+  if (overlay && overlay.classList.contains('show')) {
+    if (e.key === 'Enter') { e.preventDefault(); submitModal(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+    return;
+  }
+  // Delete key — send selected desktop icons to recycle bin
+  if (e.key === 'Delete' && selectedIcons.size > 0) {
+    e.preventDefault();
+    const toDelete = [...selectedIcons].map(id => DESKTOP_ITEMS.find(i => i.id === id)).filter(i => i && i.action !== 'recycle' && i.action !== 'explorer');
+    if (!toDelete.length) return;
+    const label = toDelete.length === 1 ? '"' + toDelete[0].name + '"' : toDelete.length + ' items';
+    showConfirmModal('Move ' + label + ' to the Recycle Bin?', (ok) => {
+      if (!ok) return;
+      toDelete.forEach(item => sendToRecycle(item));
+      selectedIcons.clear();
+      updateIconSelection();
+    });
+  }
+  if (e.key === 'Escape') closeAllMenus();
 });
 
 /* ══════════════════════════════════════════════════════════════
