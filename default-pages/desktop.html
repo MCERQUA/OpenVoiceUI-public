@@ -264,6 +264,65 @@ html,body{width:100%!important;height:100%!important;overflow:hidden!important;b
 @keyframes windowOpen{from{transform:scale(0.8);opacity:0}to{transform:scale(1);opacity:1}}
 .window{animation:windowOpen 0.15s ease-out}
 
+/* ── Modal Dialog (replaces prompt/confirm — works inside iframes) ── */
+#modal-overlay{
+  position:fixed;inset:0;z-index:99999;
+  background:rgba(0,0,0,0.45);
+  display:none;align-items:center;justify-content:center;
+}
+#modal-overlay.show{display:flex}
+#modal-box{
+  background:#fff;border-radius:6px;padding:20px;
+  min-width:280px;max-width:380px;width:90%;
+  box-shadow:0 8px 30px rgba(0,0,0,0.5);
+  font-size:13px;color:#222;
+}
+.theme-95 #modal-box,.theme-31 #modal-box{
+  background:#c0c0c0;border:2px outset #c0c0c0;border-radius:0;
+}
+.theme-mac #modal-box,.theme-ubuntu #modal-box{
+  background:#f0f0f0;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.5);
+}
+#modal-message{margin:0 0 10px;line-height:1.4;font-size:13px}
+#modal-input{
+  width:100%;padding:5px 8px;border:1px solid #aaa;border-radius:3px;
+  font-size:13px;box-sizing:border-box;margin-bottom:2px;
+}
+.modal-btns{margin-top:14px;display:flex;justify-content:flex-end;gap:8px}
+.modal-btn{
+  padding:4px 16px;border:1px solid #aaa;border-radius:3px;
+  cursor:pointer;font-size:12px;background:#f0f0f0;
+}
+.modal-btn:hover{background:#e0e0e0}
+.modal-btn.primary{background:#316ac5;color:#fff;border-color:#316ac5}
+.modal-btn.primary:hover{background:#2558b0}
+.theme-95 .modal-btn,.theme-31 .modal-btn{border:2px outset #c0c0c0;background:#c0c0c0;border-radius:0}
+.theme-95 .modal-btn:active,.theme-31 .modal-btn:active{border-style:inset}
+.theme-95 .modal-btn.primary,.theme-31 .modal-btn.primary{background:#c0c0c0;color:#000;border:2px outset #c0c0c0}
+
+/* ── Wallpaper preview ── */
+.wallpaper-section{padding:12px 16px;border-top:1px solid #ddd;font-size:12px}
+.theme-95 .wallpaper-section,.theme-31 .wallpaper-section{border-top:1px solid #808080}
+.wallpaper-section label{font-weight:bold;display:block;margin-bottom:8px}
+.wallpaper-row{display:flex;align-items:center;gap:10px}
+.wallpaper-thumb{
+  width:80px;height:50px;border:1px solid #ccc;border-radius:3px;
+  object-fit:cover;flex-shrink:0;
+}
+.wallpaper-empty{
+  width:80px;height:50px;border:1px dashed #aaa;border-radius:3px;
+  display:flex;align-items:center;justify-content:center;
+  color:#999;font-size:10px;flex-shrink:0;text-align:center;
+}
+.wallpaper-btns{display:flex;flex-direction:column;gap:6px}
+.wallpaper-btn{
+  padding:4px 10px;cursor:pointer;font-size:11px;
+  border:1px solid #aaa;border-radius:3px;background:#f0f0f0;
+  white-space:nowrap;
+}
+.wallpaper-btn:hover{background:#e0e0e0}
+.theme-95 .wallpaper-btn,.theme-31 .wallpaper-btn{border:2px outset #c0c0c0;background:#c0c0c0;border-radius:0}
+
 /* ── Drop target highlight ── */
 .desktop-icon.drop-target{
   background:rgba(51,153,255,0.35)!important;
@@ -738,6 +797,20 @@ html,body{width:100%!important;height:100%!important;overflow:hidden!important;b
 </div>
 </div>
 
+<!-- Modal dialog (works inside iframes, replaces prompt/confirm) -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-message"></div>
+    <input type="text" id="modal-input" autocomplete="off">
+    <div class="modal-btns">
+      <button class="modal-btn" id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn primary" id="modal-ok" onclick="submitModal()">OK</button>
+    </div>
+  </div>
+</div>
+<!-- Hidden wallpaper file picker -->
+<input type="file" id="wallpaper-file-input" accept="image/*" style="display:none" onchange="handleWallpaperFile(this)">
+
 <script>
 /* ══════════════════════════════════════════════════════════════
    DATA
@@ -784,6 +857,7 @@ let customFolders = {};    // { 'custom-xyz': { name:'Folder', pages:['p1','p2']
 let desktopPages = [];     // page IDs shown as loose desktop icons
 let knownPages = [];       // all page IDs we've ever seen
 let _manifestTimer = null;
+let wallpaperUrl = null;   // server URL of custom desktop wallpaper
 
 // Save state to server (debounced)
 function saveState() {
@@ -793,7 +867,7 @@ function saveState() {
 function _doSaveState() {
   const state = JSON.stringify({
     theme: currentTheme, iconPositions, recycleBin,
-    customFolders, desktopPages, knownPages,
+    customFolders, desktopPages, knownPages, wallpaperUrl,
   });
   fetch('/api/canvas/manifest/page/desktop', {
     method: 'PATCH',
@@ -817,6 +891,7 @@ async function loadState() {
         if (state.customFolders) customFolders = state.customFolders;
         if (state.desktopPages) desktopPages = state.desktopPages;
         if (state.knownPages) knownPages = state.knownPages;
+        if (state.wallpaperUrl) { wallpaperUrl = state.wallpaperUrl; applyWallpaper(wallpaperUrl); }
       } catch(e) {}
     }
   } catch(e) {}
@@ -855,14 +930,17 @@ async function fetchManifest() {
     }
     CATEGORIES = newCats;
 
-    // Rebuild PAGES from manifest (skip system/hidden pages)
+    // Rebuild PAGES from manifest (skip system/hidden pages, but keep uncategorized)
     const HIDDEN_PAGES = ['desktop','home','inbox','create','office'];
+    // Only hide system-internal categories from the page list — uncategorized pages
+    // should still appear as loose desktop icons so newly created pages are visible
+    const PAGE_HIDDEN_CATS = ['system','test-dev'];
     const newPages = {};
     if (data.pages) {
       Object.keys(data.pages).forEach(pageId => {
         if (HIDDEN_PAGES.includes(pageId)) return;
         const mp = data.pages[pageId];
-        if (HIDDEN_CATS.includes(mp.category)) return;
+        if (PAGE_HIDDEN_CATS.includes(mp.category)) return;
         newPages[pageId] = {
           name: mp.display_name || pageId,
           cat: mp.category || 'uncategorized',
@@ -905,6 +983,7 @@ function setTheme(theme) {
   buildDock();
   updateTaskbar();
   closeAllMenus();
+  if (wallpaperUrl) applyWallpaper(wallpaperUrl); // re-apply after class change
   // Update maximized windows height
   windows.forEach((w) => {
     if (w.el.classList.contains('maximized')) {
@@ -1583,7 +1662,7 @@ function getIconContextItems(item) {
       return [
         {label:'Open', action:()=>onIconDblClick(item)},
         '---',
-        {label:'Empty Trash', action:()=>{if(confirm('Permanently delete all items in the Trash?'))emptyRecycleBin()}},
+        {label:'Empty Trash', action:()=>{showConfirmModal('Permanently delete all items in the Trash?',(ok)=>{if(ok)emptyRecycleBin()})}},
         '---',
         {label:isMac?'Get Info':'Properties', action:()=>showProperties(item)},
       ];
@@ -1592,7 +1671,7 @@ function getIconContextItems(item) {
       {label:'Open', action:()=>onIconDblClick(item)},
       {label:'Explore', action:()=>onIconDblClick(item)},
       '---',
-      {label:'Empty Recycle Bin', action:()=>{if(confirm('Are you sure you want to delete all items in the Recycle Bin?'))emptyRecycleBin()}},
+      {label:'Empty Recycle Bin', action:()=>{showConfirmModal('Are you sure you want to delete all items in the Recycle Bin?',(ok)=>{if(ok)emptyRecycleBin()})}},
       '---',
       {label:'Create Shortcut', action:()=>{}},
       '---',
@@ -1734,12 +1813,13 @@ function buildMoveToSubmenu(item) {
 function renameCustomFolder(item) {
   const folder = customFolders[item.folderId];
   if (!folder) return;
-  const newName = prompt('Rename "' + folder.name + '" to:', folder.name);
-  if (!newName || !newName.trim() || newName.trim() === folder.name) return;
-  folder.name = newName.trim();
-  saveState();
-  rebuildDesktopItems();
-  buildDesktopIcons();
+  showPromptModal('Rename "' + folder.name + '" to:', folder.name, (newName) => {
+    if (!newName || !newName.trim() || newName.trim() === folder.name) return;
+    folder.name = newName.trim();
+    saveState();
+    rebuildDesktopItems();
+    buildDesktopIcons();
+  });
 }
 
 /* ── Context menu helper actions ── */
@@ -1774,14 +1854,14 @@ function sortIcons(by) {
 }
 
 function createNewFolder() {
-  const name = prompt('New folder name:');
-  if (!name || !name.trim()) return;
-  const id = 'custom-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-');
-  if (customFolders[id]) return;
-  customFolders[id] = { name: name.trim(), pages: [] };
-  saveState();
-  rebuildDesktopItems();
-  buildDesktopIcons();
+  showPromptModal('New folder name:', 'New Folder', (name) => {
+    if (!name || !name.trim()) return;
+    const id = 'custom-' + Date.now() + '-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-');
+    customFolders[id] = { name: name.trim(), pages: [] };
+    saveState();
+    rebuildDesktopItems();
+    buildDesktopIcons();
+  });
 }
 
 function pasteItem() {
@@ -1791,13 +1871,14 @@ function pasteItem() {
 }
 
 function renameIcon(item) {
-  const newName = prompt('Rename "' + getIconName(item) + '" to:', getIconName(item));
-  if (!newName || !newName.trim() || newName.trim() === getIconName(item)) return;
-  item.name = newName.trim();
-  if (item.macName) item.macName = newName.trim();
-  if (item.ubuntuName) item.ubuntuName = newName.trim();
-  if (item.w31Name) item.w31Name = newName.trim();
-  buildDesktopIcons();
+  showPromptModal('Rename "' + getIconName(item) + '" to:', getIconName(item), (newName) => {
+    if (!newName || !newName.trim() || newName.trim() === getIconName(item)) return;
+    item.name = newName.trim();
+    if (item.macName) item.macName = newName.trim();
+    if (item.ubuntuName) item.ubuntuName = newName.trim();
+    if (item.w31Name) item.w31Name = newName.trim();
+    buildDesktopIcons();
+  });
 }
 
 function showProperties(item) {
@@ -2114,8 +2195,9 @@ function showExplorerItemMenu(e, pageId) {
       '---',
       {label:'Delete', action:()=>{deleteItem(pageId); refreshExplorers();}},
       {label:'Rename', action:()=>{
-        const n = prompt('Rename "'+pageName+'" to:', pageName);
-        if(n && n.trim() && PAGES[pageId]) { PAGES[pageId].name = n.trim(); refreshExplorers(); }
+        showPromptModal('Rename "'+pageName+'" to:', pageName, (n)=>{
+          if(n && n.trim() && PAGES[pageId]) { PAGES[pageId].name = n.trim(); refreshExplorers(); }
+        });
       }},
       '---',
       {label:'Properties', action:()=>showPageProperties(pageId)},
@@ -2267,9 +2349,24 @@ function openThemeSettings() {
   });
   html += '</div>';
 
+  // Wallpaper section
+  const thumbHtml = wallpaperUrl
+    ? `<img class="wallpaper-thumb" src="${wallpaperUrl}" onerror="this.style.display='none'">`
+    : `<div class="wallpaper-empty">No<br>wallpaper</div>`;
+  html += `<div class="wallpaper-section">
+    <label>Desktop Wallpaper</label>
+    <div class="wallpaper-row">
+      ${thumbHtml}
+      <div class="wallpaper-btns">
+        <button class="wallpaper-btn" onclick="document.getElementById('wallpaper-file-input').click()">Choose Image&hellip;</button>
+        ${wallpaperUrl ? `<button class="wallpaper-btn" onclick="removeWallpaper();this.closest('.win-body').querySelector('.wallpaper-section').innerHTML=buildWallpaperSection()">Remove Wallpaper</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+
   createWindow({
     title: currentTheme === 'mac' ? 'System Preferences' : 'Display Properties',
-    content: html, width: 500, height: 300,
+    content: html, width: 520, height: 420,
   });
 }
 
@@ -2340,6 +2437,121 @@ window.addEventListener('resize', () => {
     });
   }, 100);
 });
+
+/* ══════════════════════════════════════════════════════════════
+   MODAL DIALOG — replaces prompt/confirm (blocked in iframes)
+   ══════════════════════════════════════════════════════════════ */
+let _modalCb = null;
+let _modalType = 'prompt';
+
+function showPromptModal(message, defaultVal, callback) {
+  _modalCb = callback;
+  _modalType = 'prompt';
+  document.getElementById('modal-message').textContent = message;
+  const inp = document.getElementById('modal-input');
+  inp.style.display = 'block';
+  inp.value = defaultVal || '';
+  document.getElementById('modal-cancel').style.display = '';
+  document.getElementById('modal-ok').textContent = 'OK';
+  document.getElementById('modal-overlay').classList.add('show');
+  setTimeout(() => { inp.focus(); inp.select(); }, 50);
+}
+
+function showConfirmModal(message, callback) {
+  _modalCb = callback;
+  _modalType = 'confirm';
+  document.getElementById('modal-message').textContent = message;
+  document.getElementById('modal-input').style.display = 'none';
+  document.getElementById('modal-cancel').style.display = '';
+  document.getElementById('modal-ok').textContent = 'OK';
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+  const cb = _modalCb; _modalCb = null;
+  if (cb) cb(null);
+}
+
+function submitModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+  const cb = _modalCb; _modalCb = null;
+  if (!cb) return;
+  if (_modalType === 'prompt') {
+    cb(document.getElementById('modal-input').value);
+  } else {
+    cb(true);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('modal-overlay');
+  if (!overlay || !overlay.classList.contains('show')) return;
+  if (e.key === 'Enter') { e.preventDefault(); submitModal(); }
+  if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   WALLPAPER
+   ══════════════════════════════════════════════════════════════ */
+function applyWallpaper(url) {
+  wallpaperUrl = url || null;
+  const desktop = document.getElementById('desktop');
+  if (url) {
+    desktop.style.background = 'url(' + url + ') center/cover no-repeat';
+  } else {
+    desktop.style.background = '';
+  }
+}
+
+async function uploadWallpaper(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const resp = await fetch('/api/upload', { method: 'POST', body: fd });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const url = data.url || data.path;
+    if (!url) throw new Error('No URL in response');
+    applyWallpaper(url);
+    saveState();
+    // Refresh wallpaper section in any open Display Properties window
+    document.querySelectorAll('.win-body .wallpaper-section').forEach(el => {
+      el.outerHTML = buildWallpaperSection();
+    });
+  } catch (err) {
+    showConfirmModal('Wallpaper upload failed: ' + err.message, () => {});
+  }
+}
+
+function removeWallpaper() {
+  applyWallpaper(null);
+  saveState();
+}
+
+function handleWallpaperFile(input) {
+  if (input.files && input.files[0]) {
+    uploadWallpaper(input.files[0]);
+    input.value = ''; // reset so same file can be re-selected
+  }
+}
+
+function buildWallpaperSection() {
+  const thumbHtml = wallpaperUrl
+    ? `<img class="wallpaper-thumb" src="${wallpaperUrl}" onerror="this.style.display='none'">`
+    : `<div class="wallpaper-empty">No<br>wallpaper</div>`;
+  return `<div class="wallpaper-section">
+    <label>Desktop Wallpaper</label>
+    <div class="wallpaper-row">
+      ${thumbHtml}
+      <div class="wallpaper-btns">
+        <button class="wallpaper-btn" onclick="document.getElementById('wallpaper-file-input').click()">Choose Image&hellip;</button>
+        ${wallpaperUrl ? `<button class="wallpaper-btn" onclick="removeWallpaper();this.closest('.wallpaper-section').outerHTML=buildWallpaperSection()">Remove Wallpaper</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
 
 /* ══════════════════════════════════════════════════════════════
    INIT
