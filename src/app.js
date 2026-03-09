@@ -3881,33 +3881,49 @@ inject();
 
             async playNextAudio() {
                 if (this.audioQueue.length === 0) {
-                    this.currentAudio = null;
-                    this.isPlaying = false;
-                    this.callbacks.onListening();
-                    WaveformModule.setAmplitude(0);
-                    // Agent requested sleep — disconnect call and activate wake word detection
-                    if (window._sleepAfterResponse) {
-                        window._sleepAfterResponse = false;
-                        console.log('[Sleep] Farewell audio done — activating wake word mode');
-                        setTimeout(() => {
-                            ModeManager.clawdbotMode?.stopVoiceInput();
-                            UIModule.setCallButtonState('disconnected');
-                            // Ensure we're in normal mode (not listen/a2a)
-                            if (window.ModeSelector?.currentMode !== 'normal') {
-                                window.ModeSelector?.select('normal');
-                            }
-                            // Force-start wake word detector regardless of prior state
-                            if (window.wakeDetector && window.wakeDetector.isSupported()) {
-                                if (!window.wakeDetector.isListening) {
-                                    window.wakeDetector.start();
+                    // Don't immediately transition to listening — more TTS chunks
+                    // may be in-flight from streamed sentences. Wait briefly and
+                    // check again so the stop button doesn't flash between sentences.
+                    if (!this._drainTimer) {
+                        this._drainTimer = setTimeout(() => {
+                            this._drainTimer = null;
+                            if (this.audioQueue.length > 0) {
+                                // New chunk arrived during wait — keep playing
+                                this.playNextAudio();
+                            } else {
+                                // Truly done — transition to listening
+                                this.currentAudio = null;
+                                this.isPlaying = false;
+                                this.callbacks.onListening();
+                                WaveformModule.setAmplitude(0);
+                                if (window._sleepAfterResponse) {
+                                    window._sleepAfterResponse = false;
+                                    console.log('[Sleep] Farewell audio done — activating wake word mode');
+                                    setTimeout(() => {
+                                        ModeManager.clawdbotMode?.stopVoiceInput();
+                                        UIModule.setCallButtonState('disconnected');
+                                        if (window.ModeSelector?.currentMode !== 'normal') {
+                                            window.ModeSelector?.select('normal');
+                                        }
+                                        if (window.wakeDetector && window.wakeDetector.isSupported()) {
+                                            if (!window.wakeDetector.isListening) {
+                                                window.wakeDetector.start();
+                                            }
+                                            const wakeBtn = document.getElementById('wake-button');
+                                            if (wakeBtn) wakeBtn.classList.add('listening');
+                                            console.log('[Sleep] Wake word detector activated');
+                                        }
+                                    }, 600);
                                 }
-                                const wakeBtn = document.getElementById('wake-button');
-                                if (wakeBtn) wakeBtn.classList.add('listening');
-                                console.log('[Sleep] Wake word detector activated');
                             }
-                        }, 600);
+                        }, 800);  // 800ms grace period for next TTS chunk to arrive
                     }
                     return;
+                }
+                // New chunk available — cancel any pending drain timer
+                if (this._drainTimer) {
+                    clearTimeout(this._drainTimer);
+                    this._drainTimer = null;
                 }
 
                 const { base64, format } = this.audioQueue.shift();
