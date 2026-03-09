@@ -1621,44 +1621,32 @@ function getDesktopContextItems() {
       {label:'New Folder', action:()=>createNewFolder()},
       {label:'New Shortcut\u2026', action:()=>createShortcut()},
       '---',
-      {label:isMac?'Get Info':'Properties', action:()=>showDesktopProperties()},
-      {label:isMac?'Change Desktop Background\u2026':'Change Background\u2026', action:()=>openThemeSettings()},
-      '---',
+      {label:'Sort By Name', action:()=>sortIcons('name')},
+      {label:'Sort By Kind', action:()=>sortIcons('type')},
       {label:'Clean Up', action:()=>arrangeIcons()},
-      {label:'Sort By', sub:[
-        {label:'Name', action:()=>sortIcons('name')},
-        {label:'Kind', action:()=>sortIcons('type')},
-      ]},
       '---',
       ...(clipboard ? [{label:'Paste Shortcut', action:()=>pasteItem()},'---'] : []),
       {label:(iconsLocked?'\u2713 ':'')+'Lock Icon Positions', action:()=>toggleLockIcons()},
+      '---',
+      {label:isMac?'Change Desktop Background\u2026':'Change Background\u2026', action:()=>openThemeSettings()},
+      {label:isMac?'Get Info':'Properties', action:()=>showDesktopProperties()},
     ];
   }
 
   // Windows XP / 95 / 3.1
   return [
-    {label:'View', sub:[
-      {label:'Large Icons', action:()=>setIconSize('large')},
-      {label:'Small Icons', action:()=>setIconSize('small')},
-      '---',
-      {label:(showDesktopIcons?'\u2713 ':'')+'Show Desktop Icons', action:()=>toggleDesktopIcons()},
-      {label:(iconsLocked?'\u2713 ':'')+'Lock Icon Positions', action:()=>toggleLockIcons()},
-    ]},
-    {label:(is95||is31)?'Arrange Icons':'Arrange Icons By', sub:[
-      {label:'Name', action:()=>sortIcons('name')},
-      {label:'Type', action:()=>sortIcons('type')},
-      '---',
-      {label:'Auto Arrange', action:()=>arrangeIcons()},
-      {label:'Align to Grid', action:()=>arrangeIcons()},
-    ]},
+    {label:'New Folder\u2026', action:()=>createNewFolder()},
+    {label:'New Shortcut\u2026', action:()=>createShortcut()},
+    '---',
+    {label:(showDesktopIcons?'\u2713 ':'')+'Show Desktop Icons', action:()=>toggleDesktopIcons()},
+    {label:(iconsLocked?'\u2713 ':'')+'Lock Icon Positions', action:()=>toggleLockIcons()},
+    '---',
+    {label:'Sort By Name', action:()=>sortIcons('name')},
+    {label:'Sort By Type', action:()=>sortIcons('type')},
+    {label:'Auto Arrange', action:()=>arrangeIcons()},
     '---',
     ...(clipboard ? [{label:'Paste Shortcut', action:()=>pasteItem()},'---'] : []),
     {label:'Refresh', action:()=>{rebuildDesktopItems();buildDesktopIcons();}},
-    '---',
-    {label:'New', sub:[
-      {label:'Folder\u2026', action:()=>createNewFolder()},
-      {label:'Shortcut\u2026', action:()=>createShortcut()},
-    ]},
     '---',
     {label:is95||is31?'Properties':(currentTheme==='xp'?'Properties':'Display Properties'), action:()=>openThemeSettings()},
   ];
