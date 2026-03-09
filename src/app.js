@@ -2094,16 +2094,14 @@ inject();
                 const { type, phase, name, input } = action || {};
 
                 if (type === 'lifecycle') {
-                    if (phase === 'start') this.show('🔄', 'Agent thinking...');
-                    else if (phase === 'end') { this.show('✅', 'Done'); this.hide(2000); }
-                    else if (phase === 'error') { this.show('❌', 'Agent error'); this.hide(3000); }
+                    if (phase === 'start') this.show('🔄', 'Thinking...');
+                    else if (phase === 'end' || phase === 'error') this.hide(0);
                     return;
                 }
 
                 if (type === 'subagent') {
-                    if (phase === 'spawning') this.show('🚀', 'Launching subagent...');
-                    else if (phase === 'start') this.show('🤖', 'Subagent running...');
-                    else if (phase === 'end') { this.show('✅', 'Subagent done'); this.hide(2000); }
+                    if (phase === 'spawning' || phase === 'start') this.show('🤖', 'Working...');
+                    else if (phase === 'end') this.hide(0);
                     return;
                 }
 
@@ -2124,11 +2122,11 @@ inject();
                         exec:            ['⚡', () => `Run: ${cap40(inp.command)}`],
                         webfetch:        ['🌐', () => `Fetch: ${shortUrl(inp.url)}`],
                         websearch:       ['🌐', () => `Search: "${cap40(inp.query)}"`],
-                        agent:           ['🤖', () => 'Spawning subagent...'],
+                        agent:           ['🤖', () => 'Working...'],
                         task:            ['🤖', () => `Task: ${cap40(inp.description)}`],
-                        todowrite:       ['📋', () => 'Updating task list...'],
+                        todowrite:       ['📋', () => 'Updating...'],
                         notebookedit:    ['📓', () => `Notebook: ${shortPath(inp.notebook_path)}`],
-                        askuserquestion: ['❓', () => 'Waiting for your input...'],
+                        askuserquestion: ['❓', () => 'Waiting for input...'],
                     };
 
                     const lookup = Object.keys(toolMap).find(k => n.includes(k));
@@ -2157,6 +2155,12 @@ inject();
                 };
                 const entry = tagMap[tag];
                 if (entry) this.show(entry[0], entry[1]);
+            },
+
+            // Called by onSpeaking/onListening — show "Speaking" during TTS, hide when done
+            setSpeaking(speaking) {
+                if (speaking) this.show('🔊', 'Speaking...');
+                else this.hide(0);
             },
         };
         AgentActivityChip.init();
@@ -2759,7 +2763,7 @@ inject();
 
                 // Use shared STT instance instead of creating a new one
                 // This prevents conflicts with VoiceConversation's STT
-                this.stt = sharedSTT || new GroqSTT();
+                this.stt = sharedSTT || new WebSpeechSTT();
 
                 // Wake detector state
                 this.restartWakeAfter = false;
@@ -4073,6 +4077,7 @@ inject();
                         WaveformModule.setSpeaking(true);  // Start mouth animation
                         MusicModule.duck(true);
                         document.getElementById('stop-button').style.display = '';
+                        AgentActivityChip.setSpeaking(true);
                         // Mute mic while agent speaks to prevent echo feedback
                         if (this.clawdbotMode.stt) {
                             console.log('🔇 Muting mic during TTS');
@@ -4102,6 +4107,7 @@ inject();
                         WaveformModule.setAmplitude(0);
                         MusicModule.duck(false);
                         document.getElementById('stop-button').style.display = 'none';
+                        AgentActivityChip.setSpeaking(false);
                         // Cancel guard timer — TTS finished normally
                         if (this.clawdbotMode._ttsGuardTimer) { clearTimeout(this.clawdbotMode._ttsGuardTimer); this.clawdbotMode._ttsGuardTimer = null; }
                         // _ttsPlaying stays true through the delay window to block echo
@@ -4321,7 +4327,7 @@ inject();
                 this.config = config;
                 this.isConnected = false;
                 this.isProcessing = false;
-                this.stt = new GroqSTT();
+                this.stt = new WebSpeechSTT();
                 this.ttsProvider = 'supertonic';
                 this.ttsVoice = 'F3';
                 this.audioContext = null;
@@ -5559,9 +5565,9 @@ inject();
             // localStorage — do NOT override it here. voiceConversation.setTTSProvider()
             // below will apply it correctly.
 
-            // Initialize Wake Word Detector (Groq-based — no Chrome Speech API dependency)
-            console.log('Initializing GroqWakeWordDetector...');
-            const wakeDetector = new GroqWakeWordDetector();
+            // Initialize Wake Word Detector (Chrome Web Speech API — free, no hallucinations)
+            console.log('Initializing WakeWordDetector...');
+            const wakeDetector = new WakeWordDetector();
             window.wakeDetector = wakeDetector;
 
             // Set up wake word callback to auto-trigger call button
@@ -8209,7 +8215,7 @@ inject();
         };
 
         // Expose STT instance — lives at ModeManager.clawdbotMode.stt
-        // GroqSTT has mute/PTT support built in — no monkey-patching needed.
+        // WebSpeechSTT has mute/PTT support built in — no monkey-patching needed.
         const _sttExposePoll = setInterval(() => {
             const stt = ModeManager?.clawdbotMode?.stt;
             if (stt && !stt._exposed) {
@@ -8217,7 +8223,7 @@ inject();
                 clearInterval(_sttExposePoll);
                 stt._exposed = true;
 
-                console.log('STT exposed (GroqSTT — no patches needed)');
+                console.log('STT exposed (WebSpeechSTT — Chrome native)');
                 // Apply any profile settings that were deferred (profile loaded before STT existed)
                 if (window._activeProfileData) {
                     const ms = window._activeProfileData?.stt?.silence_timeout_ms;

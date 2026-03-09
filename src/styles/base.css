@@ -958,34 +958,34 @@
 
         .face-notification.visible { opacity: 1; }
 
-        /* Agent Activity Chip — live replacing agent state indicator */
+        /* Agent Activity Chip — live agent state indicator (top-center, below settings) */
         .agent-activity-chip {
             position: fixed;
-            bottom: 80px;
-            right: 20px;
+            top: 34px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-4px) scale(0.96);
             background: rgba(50, 55, 65, 0.95);
             border: 1px solid rgba(180, 190, 210, 0.3);
             color: #e8eaed;
-            padding: 7px 14px 7px 10px;
-            border-radius: 20px;
+            padding: 5px 14px 5px 10px;
+            border-radius: 0 0 12px 12px;
             display: none;
             align-items: center;
             gap: 7px;
-            font-size: 12px;
+            font-size: 11px;
             font-family: var(--font-mono, monospace);
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.07);
             overflow: hidden;
             opacity: 0;
-            transform: translateY(8px) scale(0.96);
             transition: opacity 0.2s ease, transform 0.2s ease;
             pointer-events: none;
-            z-index: 900;
+            z-index: 1400;
             max-width: 280px;
         }
 
         .agent-activity-chip.visible {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translateX(-50%) translateY(0) scale(1);
         }
 
         .agent-activity-chip .chip-icon {
@@ -1000,9 +1000,9 @@
         }
 
         @keyframes chip-update {
-            0%   { opacity: 1;   transform: translateY(0) scale(1); }
-            35%  { opacity: 0.2; transform: translateY(4px) scale(0.95); }
-            100% { opacity: 1;   transform: translateY(0) scale(1); }
+            0%   { opacity: 1;   transform: translateX(-50%) translateY(0) scale(1); }
+            35%  { opacity: 0.2; transform: translateX(-50%) translateY(-2px) scale(0.95); }
+            100% { opacity: 1;   transform: translateX(-50%) translateY(0) scale(1); }
         }
 
         .agent-activity-chip.updating {

@@ -1157,19 +1157,8 @@ def _conversation_inner():
                                 # Openclaw removed the orphaned message on the first attempt.
                                 # If this is session_start, also clear the session file to eliminate
                                 # any further stale state before the retry.
-                                if user_message == '__session_start__':
-                                    try:
-                                        _sessions_dir = Path('/home/node/.openclaw/agents/openvoiceui/sessions')
-                                        _sessions_map = json.loads((_sessions_dir / 'sessions.json').read_text())
-                                        _oclaw_key = f'agent:openvoiceui:{_session_key}'
-                                        _sid = _sessions_map.get(_oclaw_key, {}).get('sessionId')
-                                        if _sid:
-                                            _sf = _sessions_dir / f'{_sid}.jsonl'
-                                            if _sf.exists():
-                                                _sf.write_text('{"type":"session","version":3,"id":"' + _sid + '","timestamp":"' + __import__('datetime').datetime.utcnow().isoformat() + 'Z","cwd":"/home/node/.openclaw/workspace"}\n')
-                                                logger.info(f'### RETRY session_start: cleared stale session {_sid}')
-                                    except Exception as _e:
-                                        logger.warning(f'### RETRY session_start: could not clear session: {_e}')
+                                # Note: session file clearing moved to host watchdog
+                                # (session files are inside openclaw container, not accessible from here)
                                 retry_queue = queue.Queue()
                                 captured_actions.clear()
                                 def _retry_gateway():
@@ -1220,17 +1209,27 @@ def _conversation_inner():
                                 except Exception as _zfe:
                                     logger.error(f'### Z.AI direct fallback failed: {_zfe}')
 
-                                # Write restart flag so host cron restarts openclaw
+                                # Write restart flag to mounted uploads dir so host watchdog sees it
                                 if not full_response or not full_response.strip():
                                     try:
-                                        Path('/app/runtime/restart-openclaw.flag').write_text(
+                                        _flag_path = Path('/app/runtime/uploads/.restart-openclaw.flag')
+                                        _flag_path.write_text(
                                             f'double-empty at {__import__("datetime").datetime.utcnow().isoformat()}Z'
                                         )
-                                        logger.warning('### Wrote restart-openclaw.flag — host cron will restart openclaw')
-                                        full_response = "I lost my connection for a moment. I'm reconnecting now — please try again in a few seconds."
+                                        logger.warning('### Wrote .restart-openclaw.flag to uploads — host watchdog will restart openclaw')
                                     except Exception as _rfe:
                                         logger.error(f'### Failed to write restart flag: {_rfe}')
-                                        full_response = "I lost my connection for a moment. Please try again."
+
+                                    # Force-disconnect gateway WS so next request gets a fresh connection
+                                    try:
+                                        _gw = gateway_manager.get(gateway_id)
+                                        if _gw and hasattr(_gw, 'force_disconnect'):
+                                            _gw.force_disconnect()
+                                            logger.warning('### Force-disconnected gateway WS after double-empty')
+                                    except Exception as _dfe:
+                                        logger.error(f'### Failed to disconnect gateway: {_dfe}')
+
+                                    full_response = "I lost my connection for a moment. I'm reconnecting now — please try again in a few seconds."
 
                             yield json.dumps({
                                 'type': 'text_done',
