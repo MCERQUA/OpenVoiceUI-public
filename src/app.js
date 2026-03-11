@@ -2233,13 +2233,16 @@ inject();
                     return;
                 }
 
-                // Wait for Clerk SDK to load (retry up to 5s)
-                for (let i = 0; i < 10; i++) {
+                // Wait for Clerk SDK to load (retry up to 10s)
+                for (let i = 0; i < 20; i++) {
                     if (typeof Clerk !== 'undefined') break;
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
                 if (typeof Clerk === 'undefined') {
-                    console.error('Clerk SDK failed to load');
+                    console.error('Clerk SDK failed to load — showing auth error gate');
+                    this._showAuthErrorGate('Authentication service failed to load. Please refresh the page or check your connection.');
+                    // Block forever — do not let app continue without auth
+                    await new Promise(() => {});
                     return;
                 }
 
@@ -2301,6 +2304,9 @@ inject();
                     });
                 } catch (error) {
                     console.error('Auth init error:', error);
+                    this._showAuthErrorGate('Authentication failed to initialize. Please refresh the page.\n\nError: ' + error.message);
+                    // Block forever — do not let app continue without auth
+                    await new Promise(() => {});
                 }
             },
 
@@ -2344,6 +2350,32 @@ inject();
                     console.warn('Allowlist check failed:', e);
                     return false;
                 }
+            },
+
+            _showAuthErrorGate(message) {
+                let gate = document.getElementById('auth-error-gate');
+                if (!gate) {
+                    gate = document.createElement('div');
+                    gate.id = 'auth-error-gate';
+                    gate.style.cssText = [
+                        'position:fixed;inset:0;z-index:99999',
+                        'display:flex;align-items:center;justify-content:center',
+                        'background:#0d1117;flex-direction:column;gap:24px;padding:32px',
+                    ].join(';');
+                    document.body.appendChild(gate);
+                }
+                gate.style.display = 'flex';
+                gate.innerHTML = `
+                    <div style="text-align:center;max-width:440px">
+                        <div style="font-size:28px;font-weight:700;color:#58a6ff;letter-spacing:-0.5px;margin-bottom:20px">OpenVoiceUI</div>
+                        <div style="font-size:15px;font-weight:600;color:#f85149;margin-bottom:12px">Authentication Error</div>
+                        <div style="color:#8b949e;font-size:14px;line-height:1.7;margin-bottom:24px;white-space:pre-line">${message}</div>
+                        <button onclick="location.reload()" style="
+                            background:#238636;color:#fff;border:1px solid #2ea043;
+                            padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;
+                        ">Refresh Page</button>
+                    </div>
+                `;
             },
 
             _showWaitlistGate(user) {
@@ -3605,10 +3637,15 @@ inject();
                                     this.addSystemMessage('Session reset — next response may be slow.');
                                 }
 
-                                // Generic server error
+                                // Generic server error — surface prominently
                                 if (data.type === 'error') {
                                     console.error('Stream error:', data.error);
                                     ActionConsole.addEntry('error', data.error);
+                                    // Gateway connection errors should be visible to the user
+                                    if (data.error?.includes('connect') || data.error?.includes('Gateway') || data.error?.includes('Failed')) {
+                                        this.addSystemMessage('Agent connection error — retrying...');
+                                        StatusModule.update('thinking', 'RECONNECTING...');
+                                    }
                                 }
 
                                 // TTS-specific failure — response came through but audio failed
@@ -3675,7 +3712,39 @@ inject();
                         window.HaloSmokeFace?.setThinking(false);
                     } else {
                         console.error('Conversation error:', error);
-                        this.addSystemMessage(`Error: ${error.message}`);
+                        // Connection failure auto-retry: if the agent crashed/restarted,
+                        // retry the message up to 2 times with backoff instead of dying silently
+                        const isNetworkError = (
+                            error.message?.includes('fetch') ||
+                            error.message?.includes('network') ||
+                            error.message?.includes('Failed') ||
+                            error.message?.includes('API error: 5') ||  // 5xx server errors
+                            error instanceof TypeError  // fetch network failures
+                        );
+                        const retryCount = opts._retryCount || 0;
+                        if (isNetworkError && retryCount < 2 && this._voiceActive) {
+                            const delay = retryCount === 0 ? 5000 : 15000;
+                            console.warn(`[Conversation] Connection error, retrying in ${delay/1000}s (attempt ${retryCount + 1}/2)...`);
+                            this.addSystemMessage('Connection interrupted — reconnecting...');
+                            ActionConsole.addEntry('system', `Connection lost — retrying in ${delay/1000}s...`);
+                            StatusModule.update('thinking', 'RECONNECTING...');
+                            FaceModule.setMood('sad');
+                            TranscriptPanel.removeThinking();
+                            TranscriptPanel.finalizeStreaming(null);
+                            document.getElementById('thought-bubbles')?.classList.remove('active');
+                            window.HaloSmokeFace?.setThinking(false);
+                            // Clear _sending so the retry can proceed
+                            this._sending = false;
+                            if (_inactivityTimer) clearTimeout(_inactivityTimer);
+                            setTimeout(() => {
+                                if (!this._voiceActive) return; // call ended during wait
+                                FaceModule.setMood('thinking');
+                                StatusModule.update('thinking', 'RECONNECTING...');
+                                this.sendMessage(text, { ...opts, _retryCount: retryCount + 1, skipDisplay: true });
+                            }, delay);
+                            return; // skip finally block's safety net — retry will handle it
+                        }
+                        this.addSystemMessage('Connection lost. The agent may have restarted. Try talking again in a moment.');
                         ActionConsole.addEntry('error', `Error: ${error.message}`);
                         // Clear thinking state on error
                         FaceModule.setMood('sad');
