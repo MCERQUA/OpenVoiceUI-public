@@ -50,11 +50,16 @@ try {
 const fs = require('fs');
 fs.mkdirSync('openclaw-data', { recursive: true });
 const config = {
-  allowInsecureAuth: true,
-  dangerouslyDisableDeviceAuth: true,
-  thinkingDefault: 'off',
   trustedProxies: ['127.0.0.1', '172.0.0.0/8', '10.0.0.0/8'],
-  timeoutSeconds: 120
+  controlUi: {
+    allowInsecureAuth: true,
+    dangerouslyDisableDeviceAuth: true,
+  },
+  agents: {
+    defaults: {
+      thinkingDefault: 'off',
+    },
+  },
 };
 fs.writeFileSync('openclaw-data/openclaw.json', JSON.stringify(config, null, 2));
 console.log('openclaw-data/openclaw.json created');
