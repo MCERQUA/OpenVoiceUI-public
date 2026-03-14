@@ -7,7 +7,7 @@ module.exports = {
       params: {
         message: "docker compose -f docker-compose.yml -f docker-compose.pinokio.yml up",
         on: [{
-          event: "/Listening on|Running on|ready|Uvicorn running|started server/i",
+          event: "/Listening on.*\\d+|Running on http|Uvicorn running on/i",
           done: true,
         }],
       },
