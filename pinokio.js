@@ -4,7 +4,7 @@ module.exports = {
   description: "AI Voice Assistant — voice conversations, animated face, canvas, music generation, and more.",
   icon: "icon.png",
   menu: async (kernel, info) => {
-    let installed = info.exists("env")
+    let installed = info.exists("openclaw-data")
     let running = {
       install: info.running("install.js"),
       start: info.running("start.js"),

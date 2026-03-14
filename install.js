@@ -1,20 +1,19 @@
 module.exports = {
   run: [
-    // Step 1: Verify Docker is available and running
+    // Step 1: Verify Docker daemon is actually running (docker info fails if Desktop is not started)
     {
       method: "shell.run",
       params: {
-        message: "docker --version && docker compose version",
-        on: [{
-          event: "/error|not found|command not found/i",
-          done: true,
-          run: {
-            method: "notify",
-            params: {
-              html: "Docker is not installed or not running. Please install <a href='https://www.docker.com/products/docker-desktop/'>Docker Desktop</a> and start it, then try again."
-            }
-          }
-        }]
+        message: `node -e "
+const { execSync } = require('child_process');
+try {
+  execSync('docker info', { stdio: 'ignore' });
+  console.log('Docker is running');
+} catch(e) {
+  console.error('ERROR: Docker Desktop is not running. Open Docker Desktop, wait for it to fully start, then click Reinstall.');
+  process.exit(1);
+}
+"`,
       },
     },
 
